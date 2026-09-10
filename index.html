@@ -178,7 +178,7 @@
       <span><b>← →</b> 매달렸을 땐 그네 밀기, 공중에선 방향 조절</span>
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
-      <span><b>F</b> 고무고무 피스톨(20초) · <b>G</b> 엘리펀트 건(2분)</span>
+      <span><b>F</b> 고무고무 피스톨(20초) · <b>G</b> 엘리펀트 건(60초)</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작</span>
     </div>
     <button id="pauseBtn">❚❚ 일시정지</button>
@@ -215,7 +215,7 @@ const FIST_LIFE = 26;       // 뻗어 있는 프레임 (약 860px 사거리)
 const FIST_R    = 22;
 
 /* 고무고무 엘리펀트 건 — 묵직한 광역 한 방 */
-const GUN_CD    = 60*120;   // 재충전 2분
+const GUN_CD    = 60*60;    // 재충전 60초
 const GUN_R     = 150;      // 충격 반경
 const GUN_LIFE  = 34;       // 이펙트 지속 프레임
 
@@ -1972,7 +1972,7 @@ function draw(){
     centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 4배", H/2 + 12, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
     centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 36, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
     centerText("F키(화면에선 피스톨 버튼) — 고무고무 피스톨, 원거리 한 방 · 재충전 20초", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
-    centerText("G키(화면에선 건 버튼) — 고무고무 엘리펀트 건, 광역 강타 · 재충전 2분", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,79,208,.95)");
+    centerText("G키(화면에선 건 버튼) — 고무고무 엘리펀트 건, 광역 강타 · 재충전 60초", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,79,208,.95)");
     centerText("식인 물고기는 휘청이게 하고, 해왕류는 피스톨이나 엘리펀트 건으로 물리칠 수 있다", H/2 + 102, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
     centerText("클릭 또는 Space로 출항", H/2 + 128, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.OVER){

@@ -95,7 +95,7 @@ function swing(a, st){
   ok("피스톨이 보스 약점에 명중한다", hitOk, "보스 조우 프레임=" + met);
 }
 
-/* --- 고무고무 엘리펀트 건 (쿨타임 2분) --- */
+/* --- 고무고무 엘리펀트 건 (쿨타임 60초) --- */
 {
   const a = start();
   let s = a.peek();
@@ -103,7 +103,7 @@ function swing(a, st){
   a.fireGun(); H.step();
   s = a.peek();
   ok("발사되면 이펙트가 생긴다", !!s.gun);
-  ok("발사 후 쿨타임 진입 (2분 ≈ 7200프레임)", s.gunCd > 7100, "gunCd=" + Math.round(s.gunCd));
+  ok("발사 후 쿨타임 진입 (60초 ≈ 3600프레임)", s.gunCd > 3500, "gunCd=" + Math.round(s.gunCd));
   const before = s.gunCd;
   a.fireGun(); H.step();
   ok("쿨타임 중엔 재발사 불가", a.peek().gunCd <= before);
