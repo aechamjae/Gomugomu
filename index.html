@@ -101,6 +101,12 @@
       background:rgba(240,162,78,.24);border-color:rgba(240,162,78,.85);
     }
     .tskill.cool{opacity:.4;border-color:rgba(217,184,119,.3);background:rgba(244,236,217,.06);}
+    .tskill2{
+      position:absolute;left:3.5vw;bottom:41vh;
+      width:15vw;height:15vw;max-width:72px;max-height:72px;font-size:2.9vw;
+      background:rgba(143,79,208,.24);border-color:rgba(143,79,208,.85);
+    }
+    .tskill2.cool{opacity:.4;border-color:rgba(217,184,119,.3);background:rgba(244,236,217,.06);}
     .tpause{
       position:absolute;top:2vh;right:3vw;
       width:44px;height:34px;border-radius:6px;font-size:13px;
@@ -151,6 +157,7 @@
         <button class="tb" data-k="right">▶</button>
       </div>
       <button class="tb tskill" id="skillBtn" data-k="skill">피스톨</button>
+      <button class="tb tskill2" id="gunBtn" data-k="gun">건</button>
       <div class="tright">
         <button class="tb small" data-k="up">▲</button>
         <button class="tb big" data-k="grab">팔</button>
@@ -171,6 +178,7 @@
       <span><b>← →</b> 매달렸을 땐 그네 밀기, 공중에선 방향 조절</span>
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
+      <span><b>F</b> 고무고무 피스톨(20초) · <b>G</b> 엘리펀트 건(2분)</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작</span>
     </div>
     <button id="pauseBtn">❚❚ 일시정지</button>
@@ -201,10 +209,15 @@ const DIVE   = 0.30;
 const MAXV   = 27;
 
 /* 고무고무 피스톨 */
-const SKILL_CD  = 60*120;   // 재충전 2분 — 시작할 땐 충전된 상태
+const SKILL_CD  = 60*20;    // 재충전 20초 — 시작할 땐 충전된 상태
 const FIST_SPD  = 33;       // 주먹이 날아가는 속도
 const FIST_LIFE = 26;       // 뻗어 있는 프레임 (약 860px 사거리)
 const FIST_R    = 22;
+
+/* 고무고무 엘리펀트 건 — 묵직한 광역 한 방 */
+const GUN_CD    = 60*120;   // 재충전 2분
+const GUN_R     = 150;      // 충격 반경
+const GUN_LIFE  = 34;       // 이펙트 지속 프레임
 
 /* 잡몹 */
 const KING_H    = 300;      // 해왕류가 솟구치는 높이
@@ -233,7 +246,7 @@ let p, cam, anchors, coins, rope, state, dist, best = 0, treasure,
     lastAX, lastAY, holding, missAnim, bits, pops, overAt, time,
     airTime, deathReason, chain,
     boss, shots, nextBossAt, nextBigAt, bossKills, lastBossType, stun, iframes, grabCd, pPrevX, pPrevY,
-    mobs, lastKingX, skillCd, fist;
+    mobs, lastKingX, skillCd, fist, gunCd, gun;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -264,6 +277,9 @@ function reset(){
   lastKingX = 0;
   skillCd = 0;                 // 출발할 땐 충전되어 있다
   fist = null;
+  gunCd = 0;                   // 엘리펀트 건도 출발할 땐 충전
+  gun = null;
+  holding = false;              // 리셋 시 눌림 상태도 함께 초기화 (안 그러면 재시작 직후 팔이 안 걸릴 수 있다)
   pPrevX = p.x; pPrevY = p.y;
   anchors.push({ x:250, y:96, kind:0 });
   anchors.push({ x:470, y:108, kind:1 });
@@ -286,6 +302,12 @@ function syncHUD(){
     const cd = Math.max(0, skillCd || 0);
     sb.classList.toggle("cool", cd > 0);
     sb.textContent = cd > 0 ? Math.ceil(cd/60) + "초" : "피스톨";
+  }
+  const gb = document.getElementById("gunBtn");
+  if(gb){
+    const gcd = Math.max(0, gunCd || 0);
+    gb.classList.toggle("cool", gcd > 0);
+    gb.textContent = gcd > 0 ? Math.ceil(gcd/60) + "초" : "건";
   }
 }
 
@@ -399,7 +421,10 @@ function updateMobs(dt){
       /* ---- 해왕류 ---- */
       const gap = m.x - p.x;
       if(m.phase === 0){                       // 잠복 — 물 밑 그림자
-        if(gap < 660){ m.phase = 1; m.t = 0; }
+        if(gap < 660){
+          m.phase = 1; m.t = 0;
+          pops.push({ x:p.x, y:p.y-90, t:130, text:"⚠ 해왕류 접근! 피스톨/엘리펀트 건으로 물리쳐라", color:"#b03a34" });
+        }
       } else if(m.phase === 1){                // 경고 — 물이 끓는다
         if(m.t % 6 < 1) spark(m.x + (Math.random()-0.5)*70, SEA, "#8fd6d8");
         if(m.t > 46){ m.phase = 2; m.t = 0; }
@@ -524,6 +549,7 @@ window.addEventListener("keydown", (e)=>{
   else if(k === "ArrowDown" || k === "KeyS"){ e.preventDefault(); keys.down = true; }
   else if(k === "ArrowUp" || k === "KeyW"){ e.preventDefault(); release(true); }
   else if(k === "KeyF" || k === "KeyE" || k === "ShiftLeft" || k === "ShiftRight"){ e.preventDefault(); firePistol(); }
+  else if(k === "KeyG"){ e.preventDefault(); fireGun(); }
 }, {passive:false});
 
 window.addEventListener("keyup", (e)=>{
@@ -557,6 +583,7 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
     else if(k === "up"){ release(true); }
     else if(k === "grab"){ if(!holding) grab(); }
     else if(k === "skill"){ firePistol(); }
+    else if(k === "gun"){ fireGun(); }
     else if(k === "pause"){ togglePause(); }
   };
   const lift = (e)=>{
@@ -980,10 +1007,10 @@ function updateFist(dt){
     } else if(m.h > 30 && m.phase !== 4){
       const top = SEA - m.h;
       if(near(m.x, top - 26) < FIST_R + 74 || near(m.x, (top+SEA)/2) < FIST_R + KING_W){
-        m.phase = 4; m.t = 0;
-        treasure += 120;
-        pops.push({ x:m.x, y:top - 70, t:110, text:"해왕류를 밀어냈다 +120", color:"#d9b877" });
-        for(let k=0;k<24;k++) spark(m.x, top, "#8fd6d8");
+        m.gone = true;
+        treasure += 220;
+        pops.push({ x:m.x, y:top - 70, t:120, text:"해왕류를 물리쳤다 +220", color:"#d9b877" });
+        for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
         fist.back = true;
       }
     }
@@ -1001,6 +1028,40 @@ function updateFist(dt){
   }
 
   if(fist && fist.life <= 0) fist.back = true;
+}
+
+/* ---------- 고무고무 엘리펀트 건 ---------- */
+function fireGun(){
+  if(state !== STATE.PLAY || gunCd > 0 || stun > 0) return;
+  gunCd = GUN_CD;
+  const gx = p.x + 200*p.face, gy = p.y - 6;
+  gun = { x:gx, y:gy, t:GUN_LIFE };
+  pops.push({ x:p.x, y:p.y-34, t:70, text:"고무고무 엘리펀트 건", color:"#8f4fd0" });
+  for(let i=0;i<26;i++) spark(gx, gy, "#8f4fd0");
+
+  for(const m of mobs){
+    if(m.gone) continue;
+    if(m.kind === 0){
+      if(Math.hypot(m.x-gx, m.y-gy) < GUN_R){
+        m.gone = true; treasure += 15;
+        for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
+      }
+    } else if(m.h > 20 && m.phase !== 4){
+      const top = SEA - m.h;
+      if(Math.hypot(m.x-gx, (top-26)-gy) < GUN_R + 74){
+        m.gone = true; treasure += 260;
+        pops.push({ x:m.x, y:top-70, t:120, text:"해왕류를 물리쳤다 +260", color:"#d9b877" });
+        for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
+      }
+    }
+  }
+  if(boss && Math.hypot(boss.x-gx, boss.y-gy) < GUN_R + 40){
+    damageBoss(true, "엘리펀트 건");
+  }
+}
+
+function updateGun(dt){
+  if(gun){ gun.t -= dt; if(gun.t <= 0) gun = null; }
 }
 
 function update(dt){
@@ -1113,7 +1174,9 @@ function update(dt){
   if(boss) updateBoss(dt);
   updateShots(dt);
   if(skillCd > 0) skillCd -= dt;
+  if(gunCd > 0) gunCd -= dt;
   updateFist(dt);
+  updateGun(dt);
   updateMobs(dt);
   if(state !== STATE.PLAY) return;
 
@@ -1205,11 +1268,15 @@ function sky(){
 }
 
 function sea(){
+  // 빠르게 달릴 땐 cam.z가 살짝 줄어드는데, 이 사각형이 그 축소 변환 안에서
+  // 그려지다 보니 화면 가장자리가 안쪽으로 말려들어가 하늘이 비쳐 보였다.
+  // 화면 경계보다 넉넉히 크게 그려서 축소돼도 항상 끝까지 덮게 한다.
+  const MX = 200, MYB = 220;
   const g = ctx.createLinearGradient(0, SEA, 0, H);
   g.addColorStop(0, "#17505d");
   g.addColorStop(1, "#08202c");
   ctx.fillStyle = g;
-  ctx.fillRect(0, SEA, W, H-SEA);
+  ctx.fillRect(-MX, SEA, W + MX*2, (H-SEA) + MYB);
 
   ctx.strokeStyle = "rgba(180,230,230,0.18)";
   ctx.lineWidth = 2;
@@ -1217,7 +1284,7 @@ function sea(){
     const y = SEA + 13 + r*15;
     const off = (cam.x*(0.5+r*0.18) + time*(0.6+r*0.3)) % 140;
     ctx.beginPath();
-    for(let x=-140; x<W+140; x+=140){
+    for(let x=-140-MX; x<W+140+MX; x+=140){
       ctx.moveTo(x-off, y); ctx.lineTo(x-off+50, y);
     }
     ctx.stroke();
@@ -1720,6 +1787,20 @@ function drawFist(){
   ctx.beginPath(); ctx.arc(fx, fy, FIST_R - 5, 0, Math.PI*2); ctx.stroke();
 }
 
+function drawGun(){
+  if(!gun) return;
+  const k = 1 - Math.max(0, gun.t) / GUN_LIFE;
+  const gx = gun.x - cam.x, gy = gun.y;
+  const r = GUN_R * Math.min(1, k*2.4);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, gun.t / GUN_LIFE);
+  ctx.strokeStyle = "#8f4fd0"; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle = "rgba(143,79,208,0.26)";
+  ctx.beginPath(); ctx.arc(gx, gy, r*0.68, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
 function drawSkillGauge(){
   const cx = 46, cy = H - 46, r = 21;
   const ready = skillCd <= 0;
@@ -1742,6 +1823,31 @@ function drawSkillGauge(){
   ctx.fillStyle = "rgba(244,236,217,.5)";
   ctx.font = "400 10px 'Pretendard', system-ui, sans-serif";
   ctx.fillText("피스톨", cx, cy + r + 13);
+  ctx.restore();
+}
+
+function drawGunGauge(){
+  const cx = 46, cy = H - 100, r = 21;
+  const ready = gunCd <= 0;
+  ctx.save();
+  ctx.fillStyle = ready ? "rgba(143,79,208,.22)" : "rgba(13,27,38,.55)";
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = ready ? "rgba(143,79,208,.95)" : "rgba(217,184,119,.30)";
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+  if(!ready){
+    ctx.strokeStyle = "rgba(217,184,119,.8)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - gunCd/GUN_CD));
+    ctx.stroke();
+  }
+  ctx.textAlign = "center";
+  ctx.fillStyle = ready ? "#d9a8f0" : "rgba(244,236,217,.6)";
+  ctx.font = "700 11px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText(ready ? "G" : Math.ceil(gunCd/60) + "초", cx, cy + 4);
+  ctx.fillStyle = "rgba(244,236,217,.5)";
+  ctx.font = "400 10px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText("건", cx, cy + r + 13);
   ctx.restore();
 }
 
@@ -1804,6 +1910,7 @@ function draw(){
   drawShots();
   drawPlayer();
   drawFist();
+  drawGun();
 
   // 팔 재사용 대기 표시
   if(state === STATE.PLAY && grabCd > 0){
@@ -1834,6 +1941,7 @@ function draw(){
 
   if(boss && state === STATE.PLAY) drawBossBar();
   if(state === STATE.PLAY) drawSkillGauge();
+  if(state === STATE.PLAY) drawGunGauge();
 
   if(stun > 0 && state === STATE.PLAY){
     ctx.fillStyle = "rgba(176,58,52," + (0.10 + Math.sin(time*0.5)*0.05).toFixed(2) + ")";
@@ -1863,9 +1971,10 @@ function draw(){
     centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 16, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
     centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 4배", H/2 + 12, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
     centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 36, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
-    centerText("F키(화면에선 피스톨 버튼) — 고무고무 피스톨, 원거리 한 방 · 재충전 2분", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
-    centerText("식인 물고기는 휘청이게 하고, 해왕류에 닿으면 그대로 끝이다", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
-    centerText("클릭 또는 Space로 출항", H/2 + 108, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("F키(화면에선 피스톨 버튼) — 고무고무 피스톨, 원거리 한 방 · 재충전 20초", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
+    centerText("G키(화면에선 건 버튼) — 고무고무 엘리펀트 건, 광역 강타 · 재충전 2분", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,79,208,.95)");
+    centerText("식인 물고기는 휘청이게 하고, 해왕류는 피스톨이나 엘리펀트 건으로 물리칠 수 있다", H/2 + 102, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
+    centerText("클릭 또는 Space로 출항", H/2 + 128, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.OVER){
     ctx.fillStyle = "rgba(13,27,38,0.74)";
     ctx.fillRect(0,0,W,H);
@@ -1893,12 +2002,13 @@ document.addEventListener("visibilitychange", ()=>{
 
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
-                 mobs, skillCd, fist, deathReason }),
+                 mobs, skillCd, fist, gunCd, gun, deathReason }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
   pick: pickAnchor,
   fire: firePistol,
+  fireGun: fireGun,
   reset: reset,
   weak: () => (boss ? weakPoints(boss) : [])
 };

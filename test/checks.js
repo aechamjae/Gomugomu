@@ -53,7 +53,7 @@ function swing(a, st){
      "stun=" + stunned + " 사인=" + (s.deathReason || "없음"));
 }
 
-/* --- 고무고무 피스톨 --- */
+/* --- 고무고무 피스톨 (쿨타임 20초) --- */
 {
   const a = start();
   let s = a.peek();
@@ -61,7 +61,7 @@ function swing(a, st){
   a.fire(); H.step();
   s = a.peek();
   ok("발사되면 주먹이 생긴다", !!s.fist);
-  ok("발사 후 쿨타임 진입", s.skillCd > 7000, "skillCd=" + Math.round(s.skillCd));
+  ok("발사 후 쿨타임 진입 (20초 ≈ 1200프레임)", s.skillCd > 1100, "skillCd=" + Math.round(s.skillCd));
   const before = s.skillCd;
   a.fire(); H.step();
   ok("쿨타임 중엔 재발사 불가", a.peek().skillCd <= before);
@@ -72,9 +72,9 @@ function swing(a, st){
   s.mobs.length = 0;
   s.mobs.push({ kind:1, x:s.x + 420, y:s.SEA, phase:3, t:0, h:300, gone:false });
   a.fire();
-  let pushed = false;
-  run(a, 60, (st) => { st.mobs.forEach(m => { if(m.kind===1 && m.phase === 4) pushed = true; }); });
-  ok("피스톨이 해왕류를 물러나게 한다", pushed);
+  let killed = false;
+  run(a, 60, (st) => { if(!st.mobs.some(m => m.kind===1)) killed = true; });
+  ok("피스톨이 해왕류를 물리친다", killed);
 }
 {
   let hitOk = false, met = 0;
@@ -93,6 +93,53 @@ function swing(a, st){
     });
   }
   ok("피스톨이 보스 약점에 명중한다", hitOk, "보스 조우 프레임=" + met);
+}
+
+/* --- 고무고무 엘리펀트 건 (쿨타임 2분) --- */
+{
+  const a = start();
+  let s = a.peek();
+  ok("건도 시작할 때 충전됨", s.gunCd <= 0, "gunCd=" + Math.round(s.gunCd));
+  a.fireGun(); H.step();
+  s = a.peek();
+  ok("발사되면 이펙트가 생긴다", !!s.gun);
+  ok("발사 후 쿨타임 진입 (2분 ≈ 7200프레임)", s.gunCd > 7100, "gunCd=" + Math.round(s.gunCd));
+  const before = s.gunCd;
+  a.fireGun(); H.step();
+  ok("쿨타임 중엔 재발사 불가", a.peek().gunCd <= before);
+}
+{
+  const a = start();
+  const s = a.peek();
+  s.mobs.length = 0;
+  s.mobs.push({ kind:0, x:s.x + 200*1, y:s.y, vy:0, air:true, t:0, cool:0, gone:false });
+  s.mobs.push({ kind:1, x:s.x + 200, y:s.SEA, phase:3, t:0, h:300, gone:false });
+  a.fireGun();
+  let fishGone = false, kingGone = false;
+  run(a, 10, (st) => {
+    if(!st.mobs.some(m => m.kind===0)) fishGone = true;
+    if(!st.mobs.some(m => m.kind===1)) kingGone = true;
+  });
+  ok("엘리펀트 건이 근처 잡몹·해왕류를 광역 처치한다", fishGone && kingGone,
+     "물고기제거=" + fishGone + " 해왕류제거=" + kingGone);
+}
+{
+  let hitOk = false, met = 0;
+  for(let attempt=0; attempt<14 && !hitOk; attempt++){
+    const a = start();
+    let hpBefore = null;
+    run(a, 9000, (st) => {
+      swing(a, st);
+      if(st.boss){
+        met++;
+        if(hpBefore === null && st.gunCd <= 0 && st.boss.x > st.x && st.boss.x - st.x < 340){
+          hpBefore = st.boss.hp; a.fireGun();
+        }
+        if(hpBefore !== null && st.boss.hp < hpBefore) hitOk = true;
+      } else if(hpBefore !== null) hitOk = true;
+    });
+  }
+  ok("엘리펀트 건이 보스에게 명중한다", hitOk, "보스 조우 프레임=" + met);
 }
 
 /* --- 보스 약점 --- */
