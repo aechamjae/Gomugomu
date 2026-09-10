@@ -421,13 +421,13 @@ function updateMobs(dt){
       /* ---- 해왕류 ---- */
       const gap = m.x - p.x;
       if(m.phase === 0){                       // 잠복 — 물 밑 그림자
-        if(gap < 660){
+        if(gap < 2200){                        // 100m 앞에서 미리 경고 (예전 660px=30m는 너무 늦었다)
           m.phase = 1; m.t = 0;
-          pops.push({ x:p.x, y:p.y-90, t:130, text:"⚠ 해왕류 접근! 피스톨/엘리펀트 건으로 물리쳐라", color:"#b03a34" });
+          pops.push({ x:p.x, y:p.y-90, t:150, text:"⚠ 전방 100m — 해왕류! 피스톨/엘리펀트 건을 준비하라", color:"#b03a34" });
         }
-      } else if(m.phase === 1){                // 경고 — 물이 끓는다
-        if(m.t % 6 < 1) spark(m.x + (Math.random()-0.5)*70, SEA, "#8fd6d8");
-        if(m.t > 46){ m.phase = 2; m.t = 0; }
+      } else if(m.phase === 1){                // 경고 — 접근하는 동안 계속 이 상태. 가까워지면 물이 끓는다
+        if(gap < 500 && m.t % 6 < 1) spark(m.x + (Math.random()-0.5)*70, SEA, "#8fd6d8");
+        if(gap < 260){ m.phase = 2; m.t = 0; }   // 실제로 솟구치는 건 아주 가까워졌을 때
       } else if(m.phase === 2){                // 솟구침
         m.h += (KING_H - m.h) * 0.14 * dt;
         if(m.h > KING_H - 6){ m.phase = 3; m.t = 0; }
