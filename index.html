@@ -618,7 +618,7 @@ function spawnBoss(big){
   boss = { type, big:!!big, hp: big ? 8 : 2, maxHp: big ? 8 : 2,
            t:0, life: big ? 60*95 : 60*40, fire: big ? 90 : 90,
            invul:0, flash:0, x:p.x + 560, y:120, vy:0, air:false,
-           phase:0, sub:0, perch:null, tents:[], swing:0 };
+           phase:0, sub:0, perch:null, tents:[], swing:0, sink:0, dive:0 };
   if(type === 1) boss.y = SEA + 40;
   if(type === 2) boss.y = SEA - 8;
   if(type === 4){ boss.y = SEA - 40; boss.sub = 200; }
@@ -643,10 +643,11 @@ function weakPoints(b){
     }
 
   } else if(b.type === 2){
+    if(b.sink > 12) return out;              // 잠항 중엔 노려도 닿지 않는다
     // 화약통을 도르래로 올렸다 내렸다 한다
-    out.push({ x:b.x, y:SEA - 152 + Math.sin(b.t*0.022)*46, r:26, mark:"화약통" });
+    out.push({ x:b.x, y:SEA - 152 + Math.sin(b.t*0.022)*46 + b.sink, r:26, mark:"화약통" });
     // 갑판 뒤쪽 예비 화약통 — 낮아서 위험하지만 확실하다
-    out.push({ x:b.x - 74, y:SEA - 42, r:20, mark:"예비통" });
+    out.push({ x:b.x - 74, y:SEA - 42 + b.sink, r:20, mark:"예비통" });
 
   } else if(b.type === 3){
     out.push({ x:b.x, y:b.y, r:28, mark:"몸통" });
@@ -758,16 +759,35 @@ function updateBoss(dt){
     }
 
   } else if(b.type === 2){
+    b.y = SEA - 8;
+    if(b.dive === 1){                       // 가라앉는다
+      b.sink += 5.2*dt;
+      if(b.t % 3 < 1) spark(b.x + (Math.random()-0.5)*150, SEA, "#8fd6d8");
+      if(b.sink >= 168){ b.sink = 168; b.dive = 2; }
+
+    } else if(b.dive === 2){                // 물밑에서만 낼 수 있는 속도
+      // 플레이어보다 반드시 빨라야 한다 — 안 그러면 영영 못 따라잡고 떠오르지도 못한다
+      b.x += Math.max(17, Math.abs(p.vx) + 7) * dt;
+      if(b.t % 2 < 1) spark(b.x + (Math.random()-0.5)*90, SEA + 2, "#8fd6d8");
+      if(b.x > p.x + 360) b.dive = 3;
+
+    } else if(b.dive === 3){                // 다시 떠오른다
+      b.sink -= 4.4*dt;
+      if(b.t % 3 < 1) spark(b.x + (Math.random()-0.5)*120, SEA, "#efe2c4");
+      if(b.sink <= 0){ b.sink = 0; b.dive = 0; b.fire = 70; }
+    }
+    if(b.dive !== 0) return;                // 잠항 중엔 조준도 사격도 없다
+
     {
       const CAP = 8.0;
       const want = Math.min(p.vx, CAP*0.9) + ((p.x + 260) - b.x) * 0.022;
       b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
-    b.y = SEA - 8;
+    if(b.x < p.x - 200){ b.dive = 1; return; }   // 뒤처지면 잠항해서 따라붙는다
     b.fire -= dt;
     if(b.fire <= 0){
       b.fire = Math.max(66, 116 - bossKills*5);
-      const from = { x:b.x, y:SEA - 152 };
+      const from = { x:b.x, y:SEA - 152 + Math.sin(b.t*0.022)*46 };
       const T = 48, g = 0.16;
       const tx = p.x + p.vx*T*0.88;
       const ty = Math.max(40, Math.min(SEA-30, p.y + p.vy*T*0.40));
@@ -840,7 +860,7 @@ function updateBoss(dt){
   }
 
   // 완전히 뒤처지면 싸움이 성립하지 않으므로 앞쪽으로 다시 붙는다
-  if(b.type !== 3 && b.x < p.x - 240){
+  if(b.type !== 3 && b.type !== 2 && b.x < p.x - 240){
     for(let i=0;i<10;i++) spark(b.x, b.y, "#4a3a5a");
     b.x = p.x + 430;
     if(b.type === 1){ b.air = false; b.y = SEA + 40; b.fire = 60; }
@@ -1467,7 +1487,21 @@ function drawBoss(){
       ctx.restore();
     }
   } else if(b.type === 2){
-    // 포함
+    // 포함 — 잠항하면 통째로 가라앉는다
+    const sk = b.sink || 0;
+    if(sk > 6){
+      // 물살 자국
+      ctx.strokeStyle = "rgba(143,214,216," + Math.min(0.5, sk/200).toFixed(2) + ")";
+      ctx.lineWidth = 3;
+      for(let i=-2;i<=2;i++){
+        ctx.beginPath();
+        ctx.moveTo(x + i*46 - 40, SEA + 4 + Math.sin(time*0.1 + i)*3);
+        ctx.lineTo(x + i*46 + 26, SEA + 4 + Math.sin(time*0.1 + i)*3);
+        ctx.stroke();
+      }
+    }
+    ctx.save();
+    ctx.translate(0, sk);
     const deck = SEA - 6;
     ctx.fillStyle = hurt ? "#f4ecd9" : "#2a1a14";
     ctx.beginPath();
@@ -1497,6 +1531,7 @@ function drawBoss(){
     };
     barrel(x, wp, 17, 20);
     barrel(x - 74, SEA - 42, 14, 17);          // 갑판 뒤 예비통
+    ctx.restore();
 
   } else if(b.type === 3){
     // 밧줄 끊는 자 — 고리 위에 웅크리고 앉아 칼을 든다
