@@ -142,6 +142,87 @@ function swing(a, st){
   ok("엘리펀트 건이 보스에게 명중한다", hitOk, "보스 조우 프레임=" + met);
 }
 
+/* --- 베리어베리어 (쿨타임 90초, 짧게 완전 무적) --- */
+{
+  const a = start();
+  let s = a.peek();
+  ok("베리어도 시작할 때 충전됨", s.barrierCd <= 0, "barrierCd=" + Math.round(s.barrierCd));
+  a.fireBarrier(); H.step();
+  s = a.peek();
+  ok("발사되면 무적 상태가 된다", s.barrier > 0, "barrier=" + Math.round(s.barrier));
+  ok("발사 후 쿨타임 진입 (90초 ≈ 5400프레임)", s.barrierCd > 5300, "barrierCd=" + Math.round(s.barrierCd));
+  const before = s.barrierCd;
+  a.fireBarrier(); H.step();
+  ok("쿨타임 중엔 재발사 불가", a.peek().barrierCd <= before);
+}
+{
+  const a = start();
+  let s = a.peek();
+  s.mobs.length = 0;
+  s.mobs.push({ kind:1, x:s.x + 10, y:s.SEA, phase:3, t:0, h:300, gone:false });
+  a.fireBarrier();
+  s = run(a, 90, (st) => { st.mobs.forEach(m => { if(m.kind===1) m.phase = 3; }); a.keys.right = true; });
+  ok("베리어 중엔 해왕류에 닿아도 죽지 않는다", s.state !== 2, "state=" + s.state);
+}
+{
+  const a = start();
+  a.fireBarrier();
+  const P = T().P();
+  P.y = a.peek().SEA + 40;                 // 강제로 바다 밑에 위치시킨다
+  H.step();
+  ok("베리어 지속 중 바다에 빠져도 죽지 않는다", a.peek().state !== 2, "state=" + a.peek().state);
+}
+
+/* --- 돌진 (쿨타임 20초) --- */
+{
+  const a = start();
+  let s = a.peek();
+  ok("돌진도 시작할 때 충전됨", s.dashCd <= 0, "dashCd=" + Math.round(s.dashCd));
+  const vxBefore = s.vx;
+  a.fireDash(); H.step();
+  s = a.peek();
+  ok("돌진하면 잔상 이펙트가 생긴다", !!s.dash);
+  ok("돌진 후 쿨타임 진입 (20초 ≈ 1200프레임)", s.dashCd > 1100, "dashCd=" + Math.round(s.dashCd));
+  const before = s.dashCd;
+  a.fireDash(); H.step();
+  ok("쿨타임 중엔 재발사 불가", a.peek().dashCd <= before);
+}
+{
+  const a = start();
+  const s = a.peek();
+  s.mobs.length = 0;
+  s.mobs.push({ kind:0, x:s.x + 30, y:s.y, vy:0, air:true, t:0, cool:0, gone:false });
+  s.mobs.push({ kind:1, x:s.x + 30, y:s.SEA, phase:3, t:0, h:300, gone:false });
+  a.fireDash();
+  let fishGone = false, kingGone = false;
+  run(a, 10, (st) => {
+    if(!st.mobs.some(m => m.kind===0)) fishGone = true;
+    if(!st.mobs.some(m => m.kind===1)) kingGone = true;
+  });
+  ok("돌진이 근처 잡몹·해왕류를 쓸어버린다", fishGone && kingGone,
+     "물고기제거=" + fishGone + " 해왕류제거=" + kingGone);
+}
+{
+  let hitOk = false, met = 0;
+  for(let attempt=0; attempt<24 && !hitOk; attempt++){
+    const a = start();
+    let hpBefore = null;
+    run(a, 9000, (st) => {
+      swing(a, st);
+      if(st.boss){
+        met++;
+        // 실제 판정(DASH_R+40=130)과 같은 방식(2D 거리)으로 트리거해야 헛방을 줄인다
+        const d = Math.hypot(st.boss.x-st.x, st.boss.y-st.y);
+        if(hpBefore === null && st.dashCd <= 0 && st.boss.x > st.x && d < 120){
+          hpBefore = st.boss.hp; a.fireDash();
+        }
+        if(hpBefore !== null && st.boss.hp < hpBefore) hitOk = true;
+      } else if(hpBefore !== null) hitOk = true;
+    });
+  }
+  ok("돌진이 보스에게 명중한다", hitOk, "보스 조우 프레임=" + met);
+}
+
 /* --- 보스 약점 --- */
 {
   const a = start();
