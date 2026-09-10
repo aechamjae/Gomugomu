@@ -421,10 +421,7 @@ function updateMobs(dt){
       /* ---- 해왕류 ---- */
       const gap = m.x - p.x;
       if(m.phase === 0){                       // 잠복 — 물 밑 그림자
-        if(gap < 2200){                        // 100m 앞에서 미리 경고 (예전 660px=30m는 너무 늦었다)
-          m.phase = 1; m.t = 0;
-          pops.push({ x:p.x, y:p.y-90, t:150, text:"⚠ 전방 100m — 해왕류! 피스톨/엘리펀트 건을 준비하라", color:"#b03a34" });
-        }
+        if(gap < 2200){ m.phase = 1; m.t = 0; }  // 100m 앞에서 경고 시작 (화면 상단 배너는 drawKingWarning 참고)
       } else if(m.phase === 1){                // 경고 — 접근하는 동안 계속 이 상태. 가까워지면 물이 끓는다
         if(gap < 500 && m.t % 6 < 1) spark(m.x + (Math.random()-0.5)*70, SEA, "#8fd6d8");
         if(gap < 260){ m.phase = 2; m.t = 0; }   // 실제로 솟구치는 건 아주 가까워졌을 때
@@ -1875,6 +1872,35 @@ function drawBossBar(){
   ctx.fillText(BOSSES[b.type].tag + " · 속도 32 이상으로 부딪쳐라", W/2, by + 20);
 }
 
+// 화면 상단에 크게 뜨는 해왕류 경고 배너. 여러 마리가 동시에 접근 중이면 가장 가까운 것 기준.
+function drawKingWarning(){
+  let nearest = null, nd = 1e9;
+  for(const m of mobs){
+    if(m.kind === 1 && m.phase === 1){
+      const d = m.x - p.x;
+      if(d > -80 && d < nd){ nd = d; nearest = m; }
+    }
+  }
+  if(!nearest) return;
+  const meters = Math.max(0, Math.round(nd/22));
+  const bw = 380, bx = (W-bw)/2, by = boss ? 68 : 22;
+  const pulse = 0.55 + Math.sin(time*0.22)*0.35;
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,0.82)";
+  ctx.fillRect(bx-14, by-18, bw+28, 42);
+  ctx.strokeStyle = "rgba(176,58,52," + pulse.toFixed(2) + ")";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(bx-14, by-18, bw+28, 42);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "700 19px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "#ffd7d2";
+  ctx.fillText("⚠ 해왕류 접근 중 — 전방 " + meters + "m", W/2, by - 3);
+  ctx.font = "400 12px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "rgba(244,236,217,.75)";
+  ctx.fillText("피스톨(F) · 엘리펀트 건(G)으로 미리 물리쳐라", W/2, by + 15);
+  ctx.restore();
+}
+
 function centerText(t, y, font, color, alpha){
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = font; ctx.fillStyle = color;
@@ -1942,6 +1968,7 @@ function draw(){
   if(boss && state === STATE.PLAY) drawBossBar();
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
+  if(state === STATE.PLAY) drawKingWarning();
 
   if(stun > 0 && state === STATE.PLAY){
     ctx.fillStyle = "rgba(176,58,52," + (0.10 + Math.sin(time*0.5)*0.05).toFixed(2) + ")";
