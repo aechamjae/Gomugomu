@@ -35,12 +35,23 @@ function swing(a, st){
 
 /* --- 잡몹 --- */
 {
+  // 보스는 닿아도 안 죽는데 해왕류만 즉사하는 건 형평에 안 맞아서, 즉사 대신
+  // 아주 강한 스턴(knockKing)으로 바꿨다 — 죽지는 않고, 대신 크게 휘청인다
   const a = start();
   let s = a.peek();
   s.mobs.length = 0;
   s.mobs.push({ kind:1, x:s.x + 300, y:s.SEA, phase:3, t:0, h:300, gone:false });
-  s = run(a, 400, (st) => { st.mobs.forEach(m => { if(m.kind===1) m.phase = 3; }); a.keys.right = true; });
-  ok("해왕류에 닿으면 즉사", s.state === 2 && s.deathReason === "해왕류", "사인=" + s.deathReason);
+  let sawHardStun = false;
+  s = run(a, 400, (st) => {
+    st.mobs.forEach(m => { if(m.kind===1) m.phase = 3; });
+    a.keys.right = true;
+    if(st.stun > 40) sawHardStun = true;
+  });
+  // 강한 스턴으로 속도를 잃고 그 뒤에 바다에 빠질 순 있지만(자연스러운 후폭풍),
+  // 접촉 자체가 즉사로 이어지진 않아야 한다 — deathReason이 "해왕류"가 아니면 통과
+  ok("해왕류에 닿으면 죽지 않고 아주 강한 스턴만 걸린다",
+     sawHardStun && s.deathReason !== "해왕류",
+     "강한스턴목격=" + sawHardStun + " 사인=" + (s.deathReason || "없음"));
 }
 {
   const a = start();
@@ -61,7 +72,7 @@ function swing(a, st){
   a.fire(); H.step();
   s = a.peek();
   ok("발사되면 주먹이 생긴다", !!s.fist);
-  ok("발사 후 쿨타임 진입 (20초 ≈ 1200프레임)", s.skillCd > 1100, "skillCd=" + Math.round(s.skillCd));
+  ok("발사 후 쿨타임 진입 (5초 ≈ 300프레임)", s.skillCd > 280, "skillCd=" + Math.round(s.skillCd));
   const before = s.skillCd;
   a.fire(); H.step();
   ok("쿨타임 중엔 재발사 불가", a.peek().skillCd <= before);
@@ -103,7 +114,7 @@ function swing(a, st){
   a.fireGun(); H.step();
   s = a.peek();
   ok("발사되면 이펙트가 생긴다", !!s.gun);
-  ok("발사 후 쿨타임 진입 (60초 ≈ 3600프레임)", s.gunCd > 3500, "gunCd=" + Math.round(s.gunCd));
+  ok("발사 후 쿨타임 진입 (15초 ≈ 900프레임)", s.gunCd > 850, "gunCd=" + Math.round(s.gunCd));
   const before = s.gunCd;
   a.fireGun(); H.step();
   ok("쿨타임 중엔 재발사 불가", a.peek().gunCd <= before);
@@ -150,7 +161,7 @@ function swing(a, st){
   a.fireBarrier(); H.step();
   s = a.peek();
   ok("발사되면 무적 상태가 된다", s.barrier > 0, "barrier=" + Math.round(s.barrier));
-  ok("발사 후 쿨타임 진입 (90초 ≈ 5400프레임)", s.barrierCd > 5300, "barrierCd=" + Math.round(s.barrierCd));
+  ok("발사 후 쿨타임 진입 (22.5초 ≈ 1350프레임)", s.barrierCd > 1300, "barrierCd=" + Math.round(s.barrierCd));
   const before = s.barrierCd;
   a.fireBarrier(); H.step();
   ok("쿨타임 중엔 재발사 불가", a.peek().barrierCd <= before);
@@ -182,7 +193,7 @@ function swing(a, st){
   a.fireDash(); H.step();
   s = a.peek();
   ok("돌진하면 잔상 이펙트가 생긴다", !!s.dash);
-  ok("돌진 후 쿨타임 진입 (20초 ≈ 1200프레임)", s.dashCd > 1100, "dashCd=" + Math.round(s.dashCd));
+  ok("돌진 후 쿨타임 진입 (5초 ≈ 300프레임)", s.dashCd > 280, "dashCd=" + Math.round(s.dashCd));
   const before = s.dashCd;
   a.fireDash(); H.step();
   ok("쿨타임 중엔 재발사 불가", a.peek().dashCd <= before);
