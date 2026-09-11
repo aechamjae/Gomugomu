@@ -469,9 +469,9 @@ function updateMobs(dt){
       } else if(m.phase === 2){                // 솟구침
         m.h += (KING_H - m.h) * 0.14 * dt;
         if(m.h > KING_H - 6){ m.phase = 3; m.t = 0; }
-      } else if(m.phase === 3){                // 버티고 서 있다
+      } else if(m.phase === 3){                // 버티고 서 있다 — 물리치거나 지나칠 때까지 계속 버틴다
         m.h = KING_H + Math.sin(m.t*0.05)*10;
-        if(m.t > 150 || gap < -260){ m.phase = 4; m.t = 0; }
+        if(gap < -260){ m.phase = 4; m.t = 0; }
       } else {                                 // 잠수
         m.h += (0 - m.h) * 0.10 * dt;
         if(m.h < 6) m.gone = true;
@@ -687,7 +687,7 @@ function spawnBoss(big){
     lastBossType = type;
   }
   boss = { type, big:!!big, hp: big ? 8 : 2, maxHp: big ? 8 : 2,
-           t:0, life: big ? 60*95 : 60*40, fire: big ? 90 : 90,
+           t:0, life: big ? 60*95 : Infinity, fire: big ? 90 : 90,
            invul:0, flash:0, x:p.x + 560, y:120, vy:0, air:false,
            phase:0, sub:0, perch:null, tents:[], swing:0, sink:0, dive:0 };
   if(type === 1) boss.y = SEA + 40;
