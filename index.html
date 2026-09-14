@@ -701,6 +701,7 @@ function spawnBoss(big){
 // 약점은 여러 개이고, 대부분 움직인다. 같은 자리만 노려선 안 되도록.
 function weakPoints(b){
   const out = [];
+  if(b.dive) return out;                     // 자리를 다시 잡는 동안엔 어느 보스도 약점이 없다
   if(b.type === 0){
     // 기구는 위, 곡예사는 그 아래에서 좌우로 흔들린다
     out.push({ x:b.x + Math.sin(b.t*0.045)*30, y:b.y - 58, r:30, mark:"기구" });
@@ -812,37 +813,72 @@ function updateBoss(dt){
   if(b.invul > 0) b.invul -= dt;
 
   if(b.type === 0){
+    // 너무 뒤처지면 기구가 높이 떠올라 시야 밖으로 흘러가 앞쪽에서 다시 내려온다
+    if(b.dive === 0 && b.x < p.x - 240) b.dive = 1;
+    if(b.dive === 1){                                   // 하늘 높이 떠오른다
+      b.y += (-170 - b.y) * 0.05 * dt;
+      b.swing *= 0.9;
+      if(b.t % 4 < 1) spark(b.x, b.y, "#efe2c4");
+      if(b.y <= -150) b.dive = 2;
+    } else if(b.dive === 2){                            // 바람을 타고 빠르게 흘러간다
+      b.x += 21 * dt;
+      if(b.x > p.x + 380) b.dive = 3;
+    } else if(b.dive === 3){                            // 다시 내려와 자리를 잡는다
+      const settleY = 100 + Math.sin(b.t*0.028)*36;
+      b.y += (settleY - b.y) * 0.06 * dt;
+      if(Math.abs(b.y - settleY) < 6){ b.dive = 0; b.fire = 70; }
+    }
+
     {
       const CAP = 8.8;                                   // 곡예사 최고 속도
       const want = Math.min(p.vx, CAP*0.9) + ((p.x + 300) - b.x) * 0.030;
-      b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+      if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
-    b.y = 100 + Math.sin(b.t*0.028)*36;
-    b.swing = Math.sin(b.t*0.045 - 0.85)*34;      // 기구 아래에서 진자처럼 흔들린다
-    b.fire -= dt;
-    if(b.fire <= 0){
-      b.fire = Math.max(62, 112 - bossKills*4);
-      for(let i=-1;i<=1;i++) aimShot({x:b.x + b.swing, y:b.y}, 6.6, i*0.21, 0, 9);
+    if(b.dive === 0){
+      b.y = 100 + Math.sin(b.t*0.028)*36;
+      b.swing = Math.sin(b.t*0.045 - 0.85)*34;      // 기구 아래에서 진자처럼 흔들린다
+      b.fire -= dt;
+      if(b.fire <= 0){
+        b.fire = Math.max(62, 112 - bossKills*4);
+        for(let i=-1;i<=1;i++) aimShot({x:b.x + b.swing, y:b.y}, 6.6, i*0.21, 0, 9);
+      }
     }
 
   } else if(b.type === 1){
+    // 너무 뒤처지면 물속 깊이 파고들어 앞질러 나간 뒤 다시 떠오른다
+    if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.air = false; }
+    if(b.dive === 1){                                   // 깊이 파고든다
+      b.y += ((SEA + 170) - b.y) * 0.08 * dt;
+      if(b.t % 3 < 1) spark(b.x + (Math.random()-0.5)*60, SEA + 10, "#8fd6d8");
+      if(b.y >= SEA + 165) b.dive = 2;
+    } else if(b.dive === 2){                            // 물밑에서 앞질러 나간다
+      b.x += 19 * dt;
+      if(b.t % 2 < 1) spark(b.x + (Math.random()-0.5)*90, SEA + 30, "#8fd6d8");
+      if(b.x > p.x + 360) b.dive = 3;
+    } else if(b.dive === 3){                            // 다시 얕은 곳으로 떠오른다
+      b.y += ((SEA + 40) - b.y) * 0.08 * dt;
+      if(Math.abs(b.y - (SEA + 40)) < 4){ b.dive = 0; b.y = SEA + 40; b.fire = 70; }
+    }
+
     {
       const CAP = 9.6;
       const want = Math.min(p.vx, CAP*0.9) + ((p.x + 120 + p.vx*16) - b.x) * 0.030;
-      b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+      if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
-    if(b.air){
-      b.vy += 0.235*dt;
-      b.y += b.vy*dt;
-      if(b.y >= SEA + 40){
-        b.y = SEA + 40; b.air = false; b.vy = 0;
-        b.fire = Math.max(64, 104 - bossKills*5);
-        for(let i=0;i<14;i++) spark(b.x, SEA, "#8fd6d8");
+    if(b.dive === 0){
+      if(b.air){
+        b.vy += 0.235*dt;
+        b.y += b.vy*dt;
+        if(b.y >= SEA + 40){
+          b.y = SEA + 40; b.air = false; b.vy = 0;
+          b.fire = Math.max(64, 104 - bossKills*5);
+          for(let i=0;i<14;i++) spark(b.x, SEA, "#8fd6d8");
+        }
+      } else {
+        b.y = SEA + 40;
+        b.fire -= dt;
+        if(b.fire <= 0){ b.air = true; b.vy = -16.8; }
       }
-    } else {
-      b.y = SEA + 40;
-      b.fire -= dt;
-      if(b.fire <= 0){ b.air = true; b.vy = -16.8; }
     }
 
   } else if(b.type === 2){
@@ -900,33 +936,51 @@ function updateBoss(dt){
 
   } else {
     // 크라켄
+    // 너무 뒤처지면 완전히 잠수해 앞질러 나간 뒤 다시 떠오른다
+    if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.tents = []; }
+    if(b.dive === 1){                                   // 몸을 완전히 숨긴다
+      b.y += ((SEA + 220) - b.y) * 0.06 * dt;
+      if(b.t % 3 < 1) spark(b.x + (Math.random()-0.5)*150, SEA, "#5a2f6b");
+      if(b.y >= SEA + 210) b.dive = 2;
+    } else if(b.dive === 2){                            // 물밑에서 빠르게 앞질러 나간다
+      b.x += 23 * dt;
+      if(b.t % 2 < 1) spark(b.x + (Math.random()-0.5)*120, SEA + 40, "#5a2f6b");
+      if(b.x > p.x + 380) b.dive = 3;
+    } else if(b.dive === 3){                            // 다시 떠올라 눈을 드러낸다
+      b.y += ((SEA - 46) - b.y) * 0.06 * dt;
+      if(Math.abs(b.y - (SEA - 46)) < 6){ b.dive = 0; b.phase = 0; b.sub = 200; b.fire = 60; }
+    }
+
     {
       const CAP = 9.8;                                   // 크라켄은 조금 더 빠르다
       const want = Math.min(p.vx, CAP*0.9) + ((p.x + 290) - b.x) * 0.030;
-      b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+      if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
-    b.sub -= dt;
-    const rage = b.hp <= 3 ? 0.66 : 1;
 
-    if(b.phase === 0){                       // 떠오름 — 눈이 약점
-      b.y += ((SEA - 46) - b.y) * 0.07 * dt;
-      b.fire -= dt;
-      if(b.fire <= 0){
-        b.fire = 74 * rage;
-        for(let i=-1;i<=1;i++) aimShot({x:b.x, y:b.y-40}, 5.6, i*0.26, 1, 13);
+    if(b.dive === 0){
+      b.sub -= dt;
+      const rage = b.hp <= 3 ? 0.66 : 1;
+
+      if(b.phase === 0){                       // 떠오름 — 눈이 약점
+        b.y += ((SEA - 46) - b.y) * 0.07 * dt;
+        b.fire -= dt;
+        if(b.fire <= 0){
+          b.fire = 74 * rage;
+          for(let i=-1;i<=1;i++) aimShot({x:b.x, y:b.y-40}, 5.6, i*0.26, 1, 13);
+        }
+        if(b.sub <= 0){ b.phase = 1; b.sub = 210 * rage; }
+      } else {                                 // 잠수 — 촉수가 올라온다
+        b.y += ((SEA + 120) - b.y) * 0.07 * dt;
+        b.fire -= dt;
+        if(b.fire <= 0){
+          b.fire = 74 * rage;
+          const tx = p.x + 200 + Math.random()*320;
+          b.tents.push({ x:tx, t:0, h:0, hmax: 190 + Math.random()*150, life: 130 });
+          // 촉수가 근처 고리를 끊는다
+          for(const a of anchors) if(Math.abs(a.x - tx) < 62) a.cut = 80;
+        }
+        if(b.sub <= 0){ b.phase = 0; b.sub = 260; b.fire = 40; }
       }
-      if(b.sub <= 0){ b.phase = 1; b.sub = 210 * rage; }
-    } else {                                 // 잠수 — 촉수가 올라온다
-      b.y += ((SEA + 120) - b.y) * 0.07 * dt;
-      b.fire -= dt;
-      if(b.fire <= 0){
-        b.fire = 74 * rage;
-        const tx = p.x + 200 + Math.random()*320;
-        b.tents.push({ x:tx, t:0, h:0, hmax: 190 + Math.random()*150, life: 130 });
-        // 촉수가 근처 고리를 끊는다
-        for(const a of anchors) if(Math.abs(a.x - tx) < 62) a.cut = 80;
-      }
-      if(b.sub <= 0){ b.phase = 0; b.sub = 260; b.fire = 40; }
     }
 
     for(let i=b.tents.length-1;i>=0;i--){
@@ -944,14 +998,6 @@ function updateBoss(dt){
         if(Math.min(near(p.x,p.y), near(pPrevX,pPrevY), near(mx,my)) < 26 + 13) knock(true);
       }
     }
-  }
-
-  // 완전히 뒤처지면 싸움이 성립하지 않으므로 앞쪽으로 다시 붙는다
-  if(b.type !== 3 && b.type !== 2 && b.x < p.x - 240){
-    for(let i=0;i<10;i++) spark(b.x, b.y, "#4a3a5a");
-    b.x = p.x + 430;
-    if(b.type === 1){ b.air = false; b.y = SEA + 40; b.fire = 60; }
-    for(let i=0;i<10;i++) spark(b.x, b.y, "#4a3a5a");
   }
 
   // 끊긴 고리는 시간이 지나면 복구
