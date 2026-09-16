@@ -131,6 +131,12 @@
     }
     .mhud b{font-size:5vw;}
     .mhud span{display:block;font-size:2.6vw;font-weight:400;color:#d9b877;}
+    .mhud b#mspd{
+      display:inline-block;margin-left:2vw;font-size:3.6vw;color:#d9b877;font-weight:600;
+    }
+    .mhud b#mspd.onfire{
+      color:#f0a24e;text-shadow:0 0 8px rgba(240,162,78,.95);
+    }
   }
   @media (pointer:coarse) and (orientation:portrait){
     .rotate{
@@ -163,7 +169,7 @@
     <canvas id="game" tabindex="0" aria-label="해적선 스윙 게임"></canvas>
 
     <div class="touch">
-      <div class="mhud"><b id="mdist">0</b><span id="mtre">보물 0</span></div>
+      <div class="mhud"><b id="mdist">0</b><b id="mspd">0</b><span id="mtre">보물 0</span></div>
       <button class="tpause" data-k="pause">❚❚</button>
       <div class="tleft">
         <button class="tb" data-k="left">◀</button>
@@ -332,6 +338,12 @@ function syncHUD(){
   const md = document.getElementById("mdist"), mt = document.getElementById("mtre");
   if(md) md.textContent = Math.floor(dist) + "m";
   if(mt) mt.textContent = "보물 " + Math.floor(treasure) + " · 최고 " + Math.floor(best) + "m";
+  const ms = document.getElementById("mspd");
+  if(ms){
+    const spd = Math.round(Math.hypot(p.vx, p.vy) * 4);
+    ms.textContent = (fire > 0 ? "🔥" : "⚡") + spd;
+    ms.classList.toggle("onfire", fire > 0);
+  }
   const sb = document.getElementById("skillBtn");
   if(sb){
     const cd = Math.max(0, skillCd || 0);
@@ -2283,6 +2295,16 @@ function draw(){
   if(state === STATE.PLAY) drawBarrierGauge();
   if(state === STATE.PLAY) drawDashGauge();
   if(state === STATE.PLAY) drawKingWarning();
+
+  if(fire > 0 && state === STATE.PLAY){
+    // 화면 가장자리를 은은히 태워, 캐릭터가 작게 보이는 화면에서도 불붙은 걸 놓치지 않게 한다
+    const a = Math.min(0.4, fire/70) * (0.75 + Math.sin(time*0.5)*0.25);
+    const vg = ctx.createRadialGradient(W/2, H/2, H*0.32, W/2, H/2, H*0.76);
+    vg.addColorStop(0, "rgba(240,100,30,0)");
+    vg.addColorStop(1, "rgba(240,60,20," + a.toFixed(2) + ")");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0,0,W,H);
+  }
 
   if(stun > 0 && state === STATE.PLAY){
     ctx.fillStyle = "rgba(176,58,52," + (0.10 + Math.sin(time*0.5)*0.05).toFixed(2) + ")";
