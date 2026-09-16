@@ -48,6 +48,7 @@
   .hud b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;}
   .hud .tr b{color:var(--rope);}
   .hud .sp b{color:var(--sun);}
+  .hud .sp b.onfire{color:#f0a24e;text-shadow:0 0 9px rgba(240,162,78,.9);}
   .stage{
     margin-top:12px;border:1px solid rgba(217,184,119,.3);
     border-radius:4px;overflow:hidden;background:#0a1620;touch-action:none;
@@ -222,6 +223,9 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
+/* 불붙기 — 속도가 최고 속도(108)를 순간적으로 넘으면 잠깐 불이 붙는다 */
+const FIRE_DUR = 100;    // 불이 붙어 있는 시간(프레임)
+
 /* 고무고무 피스톨 */
 const SKILL_CD  = 60*5;     // 재충전 5초 (20초의 1/4) — 시작할 땐 충전된 상태
 const FIST_SPD  = 33;       // 주먹이 날아가는 속도
@@ -271,7 +275,7 @@ let p, cam, anchors, coins, rope, state, dist, best = 0, treasure,
     airTime, deathReason, chain,
     boss, shots, nextBossAt, nextBigAt, bossKills, lastBossType, stun, iframes, grabCd, pPrevX, pPrevY,
     mobs, lastKingX, skillCd, fist, gunCd, gun,
-    barrierCd, barrier, dashCd, dash;
+    barrierCd, barrier, dashCd, dash, fire;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -308,6 +312,7 @@ function reset(){
   barrier = 0;
   dashCd = 0;
   dash = null;
+  fire = 0;
   holding = false;              // 리셋 시 눌림 상태도 함께 초기화 (안 그러면 재시작 직후 팔이 안 걸릴 수 있다)
   pPrevX = p.x; pPrevY = p.y;
   anchors.push({ x:250, y:96, kind:0 });
@@ -320,6 +325,7 @@ function reset(){
 function syncHUD(){
   distEl.textContent = Math.floor(dist);
   spdEl.textContent = Math.round(Math.hypot(p.vx, p.vy) * 4);
+  spdEl.classList.toggle("onfire", fire > 0);
   styleEl.textContent = Math.floor(treasure);
   bestEl.textContent = Math.floor(best);
   pauseBtn.textContent = state === STATE.PAUSE ? "▶ 계속하기" : "❚❚ 일시정지";
@@ -354,11 +360,11 @@ function syncHUD(){
 
 /* ---------- 지형 ---------- */
 function anchorBaseY(atDist){
-  const t = Math.min(1, atDist / 1300);
+  const t = Math.min(1, atDist / 3200);       // 예전보다 훨씬 천천히 낮아진다 (1300 → 3200)
   return 96 + t * 118;                        // 처음엔 높게, 갈수록 낮게
 }
 function gapFor(atDist){
-  const t = Math.min(1, atDist / 1500);
+  const t = Math.min(1, atDist / 3400);       // 간격이 벌어지는 속도도 함께 늦췄다 (1500 → 3400)
   const base = 176 + t * 104;
   return Math.min(340, base + Math.random() * (62 + t*26));
 }
@@ -452,9 +458,16 @@ function updateMobs(dt){
       if(m.air && stun <= 0 && iframes <= 0){
         const d = distOriginToSeg(pPrevX - m.x, pPrevY - m.y, p.x - m.x, p.y - m.y);
         if(d < 15 + 13){
-          knock(false, true);
-          m.gone = true;
-          for(let k=0;k<10;k++) spark(m.x, m.y, "#b03a34");
+          if(fire > 0){
+            // 불붙은 동안엔 부딪혀도 다치지 않고, 오히려 몹에게 데미지를 준다
+            m.gone = true;
+            pops.push({ x:m.x, y:m.y-20, t:40, text:"불꽃 데미지 1", color:"#f0a24e" });
+            for(let k=0;k<10;k++) spark(m.x, m.y, "#f0a24e");
+          } else {
+            knock(false, true);
+            m.gone = true;
+            for(let k=0;k<10;k++) spark(m.x, m.y, "#b03a34");
+          }
         }
       }
 
@@ -742,6 +755,7 @@ function weakPoints(b){
 function knock(hard, mild){
   if(barrier > 0) return;                  // 베리어 중엔 휘청이지도 않는다
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
+  if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 방어력이 올라 웬만한 충격은 가볍게 넘긴다
   stun = hard ? 42 : mild ? 20 : 30;       // mild = 잡몹에 스친 정도
   iframes = mild ? 60 : 78;
   rope = null;
@@ -756,6 +770,14 @@ function knock(hard, mild){
 function knockKing(){
   if(barrier > 0) return;
   if(stun > 0 || iframes > 0) return;
+  if(fire > 0){                            // 불붙은 동안엔 해왕류의 일격도 가볍게 버텨낸다
+    stun = 36; iframes = 50;
+    p.vx *= 0.55;
+    p.vy = Math.min(p.vy, -4.2);
+    pops.push({ x:p.x, y:p.y-28, t:50, text:"불타는 몸으로 버텼다!", color:"#f0a24e" });
+    for(let i=0;i<14;i++) spark(p.x, p.y, "#f0a24e");
+    return;
+  }
   stun = 70;
   iframes = 90;
   rope = null;
@@ -1286,6 +1308,8 @@ function update(dt){
   p.vx *= Math.pow(0.9996, dt);
 
   const sp = Math.hypot(p.vx, p.vy);
+  if(sp > MAXV) fire = FIRE_DUR;         // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다
+  else if(fire > 0) fire -= dt;
   if(sp > MAXV){ p.vx = p.vx/sp*MAXV; p.vy = p.vy/sp*MAXV; }
 
   p.x += p.vx*dt;
@@ -1961,6 +1985,22 @@ function drawGun(){
   ctx.restore();
 }
 
+function drawFire(){
+  if(fire <= 0) return;
+  const x = p.x - cam.x, y = p.y;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, fire / 20) * (0.6 + Math.sin(time*0.6)*0.2);
+  for(let i=0;i<3;i++){
+    const wob = Math.sin(time*0.5 + i*2.1) * 6;
+    ctx.fillStyle = i === 0 ? "#f0a24e" : i === 1 ? "#f4c46a" : "#b03a34";
+    ctx.beginPath();
+    ctx.ellipse(x + wob - p.vx*1.4, y + 6 - i*4, 15 - i*3, 20 - i*4, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+  if(Math.random() < 0.6) spark(p.x + (Math.random()-0.5)*20, p.y + (Math.random()-0.5)*20, "#f0a24e");
+}
+
 function drawBarrier(){
   if(barrier <= 0) return;
   const x = p.x - cam.x, y = p.y;
@@ -2172,6 +2212,7 @@ function draw(){
   drawMobs();
   drawShots();
   drawPlayer();
+  drawFire();
   drawFist();
   drawGun();
   drawBarrier();
