@@ -48,6 +48,7 @@
   .hud b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:22px;font-weight:700;}
   .hud .tr b{color:var(--rope);}
   .hud .sp b{color:var(--sun);}
+  .hud .sp b.onfire{color:#f0a24e;text-shadow:0 0 9px rgba(240,162,78,.9);}
   .stage{
     margin-top:12px;border:1px solid rgba(217,184,119,.3);
     border-radius:4px;overflow:hidden;background:#0a1620;touch-action:none;
@@ -118,6 +119,12 @@
     }
     .mhud b{font-size:5vw;}
     .mhud span{display:block;font-size:2.6vw;font-weight:400;color:#d9b877;}
+    .mhud b#mspd{
+      display:inline-block;margin-left:2vw;font-size:3.6vw;color:#d9b877;font-weight:600;
+    }
+    .mhud b#mspd.onfire{
+      color:#f0a24e;text-shadow:0 0 8px rgba(240,162,78,.95);
+    }
   }
   @media (pointer:coarse) and (orientation:portrait){
     .rotate{
@@ -150,7 +157,7 @@
     <canvas id="game" tabindex="0" aria-label="해적선 스윙 게임"></canvas>
 
     <div class="touch">
-      <div class="mhud"><b id="mdist">0</b><span id="mtre">보물 0</span></div>
+      <div class="mhud"><b id="mdist">0</b><b id="mspd">0</b><span id="mtre">보물 0</span></div>
       <button class="tpause" data-k="pause">❚❚</button>
       <div class="tleft">
         <button class="tb" data-k="left">◀</button>
@@ -208,6 +215,9 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
+/* 불붙기 — 속도가 최고 속도(108)를 순간적으로 넘으면 잠깐 불이 붙는다 */
+const FIRE_DUR = 100;    // 불이 붙어 있는 시간(프레임)
+
 /* 고무고무 피스톨 */
 const SKILL_CD  = 60*5;     // 재충전 5초 (20초의 1/4) — 시작할 땐 충전된 상태
 const FIST_SPD  = 33;       // 주먹이 날아가는 속도
@@ -246,7 +256,7 @@ let p, cam, anchors, coins, rope, state, dist, best = 0, treasure,
     lastAX, lastAY, holding, missAnim, bits, pops, overAt, time,
     airTime, deathReason, chain,
     boss, shots, nextBossAt, nextBigAt, bossKills, stun, iframes, grabCd, pPrevX, pPrevY,
-    mobs, lastKingX, skillCd, fist, gunCd, gun;
+    mobs, lastKingX, skillCd, fist, gunCd, gun, fire;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -278,6 +288,7 @@ function reset(){
   fist = null;
   gunCd = 0;                   // 엘리펀트 건도 출발할 땐 충전
   gun = null;
+  fire = 0;
   holding = false;              // 리셋 시 눌림 상태도 함께 초기화 (안 그러면 재시작 직후 팔이 안 걸릴 수 있다)
   pPrevX = p.x; pPrevY = p.y;
   anchors.push({ x:250, y:96, kind:0 });
@@ -290,12 +301,19 @@ function reset(){
 function syncHUD(){
   distEl.textContent = Math.floor(dist);
   spdEl.textContent = Math.round(Math.hypot(p.vx, p.vy) * 4);
+  spdEl.classList.toggle("onfire", fire > 0);
   styleEl.textContent = Math.floor(treasure);
   bestEl.textContent = Math.floor(best);
   pauseBtn.textContent = state === STATE.PAUSE ? "▶ 계속하기" : "❚❚ 일시정지";
   const md = document.getElementById("mdist"), mt = document.getElementById("mtre");
   if(md) md.textContent = Math.floor(dist) + "m";
   if(mt) mt.textContent = "보물 " + Math.floor(treasure) + " · 최고 " + Math.floor(best) + "m";
+  const ms = document.getElementById("mspd");
+  if(ms){
+    const spd = Math.round(Math.hypot(p.vx, p.vy) * 4);
+    ms.textContent = (fire > 0 ? "🔥" : "⚡") + spd;
+    ms.classList.toggle("onfire", fire > 0);
+  }
   const sb = document.getElementById("skillBtn");
   if(sb){
     const cd = Math.max(0, skillCd || 0);
@@ -312,11 +330,11 @@ function syncHUD(){
 
 /* ---------- 지형 ---------- */
 function anchorBaseY(atDist){
-  const t = Math.min(1, atDist / 1300);
+  const t = Math.min(1, atDist / 3200);       // 예전보다 훨씬 천천히 낮아진다 (1300 → 3200)
   return 96 + t * 118;                        // 처음엔 높게, 갈수록 낮게
 }
 function gapFor(atDist){
-  const t = Math.min(1, atDist / 1500);
+  const t = Math.min(1, atDist / 3400);       // 간격이 벌어지는 속도도 함께 늦췄다 (1500 → 3400)
   const base = 176 + t * 104;
   return Math.min(340, base + Math.random() * (62 + t*26));
 }
@@ -410,9 +428,16 @@ function updateMobs(dt){
       if(m.air && stun <= 0 && iframes <= 0){
         const d = distOriginToSeg(pPrevX - m.x, pPrevY - m.y, p.x - m.x, p.y - m.y);
         if(d < 15 + 13){
-          knock(false, true);
-          m.gone = true;
-          for(let k=0;k<10;k++) spark(m.x, m.y, "#b03a34");
+          if(fire > 0){
+            // 불붙은 동안엔 부딪혀도 다치지 않고, 오히려 몹에게 데미지를 준다
+            m.gone = true;
+            pops.push({ x:m.x, y:m.y-20, t:40, text:"불꽃 데미지 1", color:"#f0a24e" });
+            for(let k=0;k<10;k++) spark(m.x, m.y, "#f0a24e");
+          } else {
+            knock(false, true);
+            m.gone = true;
+            for(let k=0;k<10;k++) spark(m.x, m.y, "#b03a34");
+          }
         }
       }
 
@@ -650,6 +675,7 @@ function spawnBoss(big){
 // 약점은 여러 개이고, 대부분 움직인다. 같은 자리만 노려선 안 되도록.
 function weakPoints(b){
   const out = [];
+  if(b.dive) return out;                     // 자리를 다시 잡는 동안엔 어느 보스도 약점이 없다
   if(b.type === 0){
     // 기구는 위, 곡예사는 그 아래에서 좌우로 흔들린다
     out.push({ x:b.x + Math.sin(b.t*0.045)*30, y:b.y - 58, r:30, mark:"기구" });
@@ -689,6 +715,7 @@ function weakPoints(b){
 
 function knock(hard, mild){
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
+  if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 방어력이 올라 웬만한 충격은 가볍게 넘긴다
   stun = hard ? 42 : mild ? 20 : 30;       // mild = 잡몹에 스친 정도
   iframes = mild ? 60 : 78;
   rope = null;
@@ -702,6 +729,14 @@ function knock(hard, mild){
 // 해왕류 접촉 — 보스 근접 피격(knock hard: stun 42)보다 훨씬 세지만, 즉사는 아니다
 function knockKing(){
   if(stun > 0 || iframes > 0) return;
+  if(fire > 0){                            // 불붙은 동안엔 해왕류의 일격도 가볍게 버텨낸다
+    stun = 36; iframes = 50;
+    p.vx *= 0.55;
+    p.vy = Math.min(p.vy, -4.2);
+    pops.push({ x:p.x, y:p.y-28, t:50, text:"불타는 몸으로 버텼다!", color:"#f0a24e" });
+    for(let i=0;i<14;i++) spark(p.x, p.y, "#f0a24e");
+    return;
+  }
   stun = 70;
   iframes = 90;
   rope = null;
@@ -759,37 +794,72 @@ function updateBoss(dt){
   if(b.invul > 0) b.invul -= dt;
 
   if(b.type === 0){
+    // 너무 뒤처지면 기구가 높이 떠올라 시야 밖으로 흘러가 앞쪽에서 다시 내려온다
+    if(b.dive === 0 && b.x < p.x - 240) b.dive = 1;
+    if(b.dive === 1){                                   // 하늘 높이 떠오른다
+      b.y += (-170 - b.y) * 0.05 * dt;
+      b.swing *= 0.9;
+      if(b.t % 4 < 1) spark(b.x, b.y, "#efe2c4");
+      if(b.y <= -150) b.dive = 2;
+    } else if(b.dive === 2){                            // 바람을 타고 빠르게 흘러간다
+      b.x += 21 * dt;
+      if(b.x > p.x + 380) b.dive = 3;
+    } else if(b.dive === 3){                            // 다시 내려와 자리를 잡는다
+      const settleY = 100 + Math.sin(b.t*0.028)*36;
+      b.y += (settleY - b.y) * 0.06 * dt;
+      if(Math.abs(b.y - settleY) < 6){ b.dive = 0; b.fire = 70; }
+    }
+
     {
       const CAP = 8.8;                                   // 곡예사 최고 속도
       const want = Math.min(p.vx, CAP*0.9) + ((p.x + 300) - b.x) * 0.030;
-      b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+      if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
-    b.y = 100 + Math.sin(b.t*0.028)*36;
-    b.swing = Math.sin(b.t*0.045 - 0.85)*34;      // 기구 아래에서 진자처럼 흔들린다
-    b.fire -= dt;
-    if(b.fire <= 0){
-      b.fire = Math.max(62, 112 - bossKills*4);
-      for(let i=-1;i<=1;i++) aimShot({x:b.x + b.swing, y:b.y}, 6.6, i*0.21, 0, 9);
+    if(b.dive === 0){
+      b.y = 100 + Math.sin(b.t*0.028)*36;
+      b.swing = Math.sin(b.t*0.045 - 0.85)*34;      // 기구 아래에서 진자처럼 흔들린다
+      b.fire -= dt;
+      if(b.fire <= 0){
+        b.fire = Math.max(62, 112 - bossKills*4);
+        for(let i=-1;i<=1;i++) aimShot({x:b.x + b.swing, y:b.y}, 6.6, i*0.21, 0, 9);
+      }
     }
 
   } else if(b.type === 1){
+    // 너무 뒤처지면 물속 깊이 파고들어 앞질러 나간 뒤 다시 떠오른다
+    if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.air = false; }
+    if(b.dive === 1){                                   // 깊이 파고든다
+      b.y += ((SEA + 170) - b.y) * 0.08 * dt;
+      if(b.t % 3 < 1) spark(b.x + (Math.random()-0.5)*60, SEA + 10, "#8fd6d8");
+      if(b.y >= SEA + 165) b.dive = 2;
+    } else if(b.dive === 2){                            // 물밑에서 앞질러 나간다
+      b.x += 19 * dt;
+      if(b.t % 2 < 1) spark(b.x + (Math.random()-0.5)*90, SEA + 30, "#8fd6d8");
+      if(b.x > p.x + 360) b.dive = 3;
+    } else if(b.dive === 3){                            // 다시 얕은 곳으로 떠오른다
+      b.y += ((SEA + 40) - b.y) * 0.08 * dt;
+      if(Math.abs(b.y - (SEA + 40)) < 4){ b.dive = 0; b.y = SEA + 40; b.fire = 70; }
+    }
+
     {
       const CAP = 9.6;
       const want = Math.min(p.vx, CAP*0.9) + ((p.x + 120 + p.vx*16) - b.x) * 0.030;
-      b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+      if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
-    if(b.air){
-      b.vy += 0.235*dt;
-      b.y += b.vy*dt;
-      if(b.y >= SEA + 40){
-        b.y = SEA + 40; b.air = false; b.vy = 0;
-        b.fire = Math.max(64, 104 - bossKills*5);
-        for(let i=0;i<14;i++) spark(b.x, SEA, "#8fd6d8");
+    if(b.dive === 0){
+      if(b.air){
+        b.vy += 0.235*dt;
+        b.y += b.vy*dt;
+        if(b.y >= SEA + 40){
+          b.y = SEA + 40; b.air = false; b.vy = 0;
+          b.fire = Math.max(64, 104 - bossKills*5);
+          for(let i=0;i<14;i++) spark(b.x, SEA, "#8fd6d8");
+        }
+      } else {
+        b.y = SEA + 40;
+        b.fire -= dt;
+        if(b.fire <= 0){ b.air = true; b.vy = -16.8; }
       }
-    } else {
-      b.y = SEA + 40;
-      b.fire -= dt;
-      if(b.fire <= 0){ b.air = true; b.vy = -16.8; }
     }
 
   } else if(b.type === 2){
@@ -847,33 +917,51 @@ function updateBoss(dt){
 
   } else {
     // 크라켄
+    // 너무 뒤처지면 완전히 잠수해 앞질러 나간 뒤 다시 떠오른다
+    if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.tents = []; }
+    if(b.dive === 1){                                   // 몸을 완전히 숨긴다
+      b.y += ((SEA + 220) - b.y) * 0.06 * dt;
+      if(b.t % 3 < 1) spark(b.x + (Math.random()-0.5)*150, SEA, "#5a2f6b");
+      if(b.y >= SEA + 210) b.dive = 2;
+    } else if(b.dive === 2){                            // 물밑에서 빠르게 앞질러 나간다
+      b.x += 23 * dt;
+      if(b.t % 2 < 1) spark(b.x + (Math.random()-0.5)*120, SEA + 40, "#5a2f6b");
+      if(b.x > p.x + 380) b.dive = 3;
+    } else if(b.dive === 3){                            // 다시 떠올라 눈을 드러낸다
+      b.y += ((SEA - 46) - b.y) * 0.06 * dt;
+      if(Math.abs(b.y - (SEA - 46)) < 6){ b.dive = 0; b.phase = 0; b.sub = 200; b.fire = 60; }
+    }
+
     {
       const CAP = 9.8;                                   // 크라켄은 조금 더 빠르다
       const want = Math.min(p.vx, CAP*0.9) + ((p.x + 290) - b.x) * 0.030;
-      b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+      if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
-    b.sub -= dt;
-    const rage = b.hp <= 3 ? 0.66 : 1;
 
-    if(b.phase === 0){                       // 떠오름 — 눈이 약점
-      b.y += ((SEA - 46) - b.y) * 0.07 * dt;
-      b.fire -= dt;
-      if(b.fire <= 0){
-        b.fire = 74 * rage;
-        for(let i=-1;i<=1;i++) aimShot({x:b.x, y:b.y-40}, 5.6, i*0.26, 1, 13);
+    if(b.dive === 0){
+      b.sub -= dt;
+      const rage = b.hp <= 3 ? 0.66 : 1;
+
+      if(b.phase === 0){                       // 떠오름 — 눈이 약점
+        b.y += ((SEA - 46) - b.y) * 0.07 * dt;
+        b.fire -= dt;
+        if(b.fire <= 0){
+          b.fire = 74 * rage;
+          for(let i=-1;i<=1;i++) aimShot({x:b.x, y:b.y-40}, 5.6, i*0.26, 1, 13);
+        }
+        if(b.sub <= 0){ b.phase = 1; b.sub = 210 * rage; }
+      } else {                                 // 잠수 — 촉수가 올라온다
+        b.y += ((SEA + 120) - b.y) * 0.07 * dt;
+        b.fire -= dt;
+        if(b.fire <= 0){
+          b.fire = 74 * rage;
+          const tx = p.x + 200 + Math.random()*320;
+          b.tents.push({ x:tx, t:0, h:0, hmax: 190 + Math.random()*150, life: 130 });
+          // 촉수가 근처 고리를 끊는다
+          for(const a of anchors) if(Math.abs(a.x - tx) < 62) a.cut = 80;
+        }
+        if(b.sub <= 0){ b.phase = 0; b.sub = 260; b.fire = 40; }
       }
-      if(b.sub <= 0){ b.phase = 1; b.sub = 210 * rage; }
-    } else {                                 // 잠수 — 촉수가 올라온다
-      b.y += ((SEA + 120) - b.y) * 0.07 * dt;
-      b.fire -= dt;
-      if(b.fire <= 0){
-        b.fire = 74 * rage;
-        const tx = p.x + 200 + Math.random()*320;
-        b.tents.push({ x:tx, t:0, h:0, hmax: 190 + Math.random()*150, life: 130 });
-        // 촉수가 근처 고리를 끊는다
-        for(const a of anchors) if(Math.abs(a.x - tx) < 62) a.cut = 80;
-      }
-      if(b.sub <= 0){ b.phase = 0; b.sub = 260; b.fire = 40; }
     }
 
     for(let i=b.tents.length-1;i>=0;i--){
@@ -891,14 +979,6 @@ function updateBoss(dt){
         if(Math.min(near(p.x,p.y), near(pPrevX,pPrevY), near(mx,my)) < 26 + 13) knock(true);
       }
     }
-  }
-
-  // 완전히 뒤처지면 싸움이 성립하지 않으므로 앞쪽으로 다시 붙는다
-  if(b.type !== 3 && b.type !== 2 && b.x < p.x - 240){
-    for(let i=0;i<10;i++) spark(b.x, b.y, "#4a3a5a");
-    b.x = p.x + 430;
-    if(b.type === 1){ b.air = false; b.y = SEA + 40; b.fire = 60; }
-    for(let i=0;i<10;i++) spark(b.x, b.y, "#4a3a5a");
   }
 
   // 끊긴 고리는 시간이 지나면 복구
@@ -1128,6 +1208,8 @@ function update(dt){
   p.vx *= Math.pow(0.9996, dt);
 
   const sp = Math.hypot(p.vx, p.vy);
+  if(sp > MAXV) fire = FIRE_DUR;         // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다
+  else if(fire > 0) fire -= dt;
   if(sp > MAXV){ p.vx = p.vx/sp*MAXV; p.vy = p.vy/sp*MAXV; }
 
   p.x += p.vx*dt;
@@ -1799,6 +1881,54 @@ function drawGun(){
   ctx.restore();
 }
 
+function drawFire(){
+  if(fire <= 0) return;
+  const x = p.x - cam.x, y = p.y;
+  const k = Math.min(1, fire / 14);          // 꺼지기 직전 잠깐만 사그라든다 — 그 전엔 항상 활활
+  const jt = time*0.5;
+  const wob = Math.sin(jt)*7 - p.vx*0.9;
+  const lick = Math.sin(jt*1.7)*5;
+
+  ctx.save();
+
+  // 가산 혼합으로 은은하게 번지는 열기(발광)만 먼저
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = k * 0.85;
+  const glow = ctx.createRadialGradient(x, y - 10, 4, x, y - 10, 60);
+  glow.addColorStop(0, "rgba(255,224,140,0.85)");
+  glow.addColorStop(0.55, "rgba(240,120,40,0.35)");
+  glow.addColorStop(1, "rgba(240,120,40,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y - 10, 60, 0, Math.PI*2); ctx.fill();
+
+  // 불길 몸통은 일반 혼합으로 그려 색이 또렷이 보이도록 (겹쳐도 하얗게 뭉개지지 않게)
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = k;
+
+  const flame = (cx, cy, w, h, color) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + h*0.5);
+    ctx.bezierCurveTo(cx - w, cy + h*0.05, cx - w*0.5, cy - h*0.8, cx, cy - h);
+    ctx.bezierCurveTo(cx + w*0.5, cy - h*0.8, cx + w, cy + h*0.05, cx, cy + h*0.5);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  // 바깥에서 안쪽으로: 붉은색 → 주황 → 노랑 → 밝은 코어, 겹쳐 그리면 실루엣이 뚜렷한 불길이 된다
+  flame(x + wob,                 y - 6,  26, 46, "#b03a34");
+  flame(x + wob*0.7 + lick*0.3,  y - 8,  19, 36, "#f0a24e");
+  flame(x + wob*0.4,             y - 10, 12, 25, "#ffdd88");
+  flame(x + wob*0.2,             y - 12, 6,  13, "#fff3c4");
+
+  ctx.restore();
+
+  const n = 2 + Math.floor(Math.random()*3);
+  for(let i=0;i<n;i++){
+    spark(p.x + (Math.random()-0.5)*26, p.y - 10 - Math.random()*34, Math.random() < 0.5 ? "#f0a24e" : "#ffdd88");
+  }
+}
+
 function drawSkillGauge(){
   const cx = 46, cy = H - 46, r = 21;
   const ready = skillCd <= 0;
@@ -1936,6 +2066,7 @@ function draw(){
   drawMobs();
   drawShots();
   drawPlayer();
+  drawFire();
   drawFist();
   drawGun();
 
@@ -1970,6 +2101,16 @@ function draw(){
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
   if(state === STATE.PLAY) drawKingWarning();
+
+  if(fire > 0 && state === STATE.PLAY){
+    // 화면 가장자리를 은은히 태워, 캐릭터가 작게 보이는 화면에서도 불붙은 걸 놓치지 않게 한다
+    const a = Math.min(0.4, fire/70) * (0.75 + Math.sin(time*0.5)*0.25);
+    const vg = ctx.createRadialGradient(W/2, H/2, H*0.32, W/2, H/2, H*0.76);
+    vg.addColorStop(0, "rgba(240,100,30,0)");
+    vg.addColorStop(1, "rgba(240,60,20," + a.toFixed(2) + ")");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0,0,W,H);
+  }
 
   if(stun > 0 && state === STATE.PLAY){
     ctx.fillStyle = "rgba(176,58,52," + (0.10 + Math.sin(time*0.5)*0.05).toFixed(2) + ")";
