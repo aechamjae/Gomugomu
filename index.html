@@ -1988,17 +1988,49 @@ function drawGun(){
 function drawFire(){
   if(fire <= 0) return;
   const x = p.x - cam.x, y = p.y;
+  const k = Math.min(1, fire / 14);          // 꺼지기 직전 잠깐만 사그라든다 — 그 전엔 항상 활활
+  const jt = time*0.5;
+  const wob = Math.sin(jt)*7 - p.vx*0.9;
+  const lick = Math.sin(jt*1.7)*5;
+
   ctx.save();
-  ctx.globalAlpha = Math.min(1, fire / 20) * (0.6 + Math.sin(time*0.6)*0.2);
-  for(let i=0;i<3;i++){
-    const wob = Math.sin(time*0.5 + i*2.1) * 6;
-    ctx.fillStyle = i === 0 ? "#f0a24e" : i === 1 ? "#f4c46a" : "#b03a34";
+
+  // 가산 혼합으로 은은하게 번지는 열기(발광)만 먼저
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = k * 0.85;
+  const glow = ctx.createRadialGradient(x, y - 10, 4, x, y - 10, 60);
+  glow.addColorStop(0, "rgba(255,224,140,0.85)");
+  glow.addColorStop(0.55, "rgba(240,120,40,0.35)");
+  glow.addColorStop(1, "rgba(240,120,40,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y - 10, 60, 0, Math.PI*2); ctx.fill();
+
+  // 불길 몸통은 일반 혼합으로 그려 색이 또렷이 보이도록 (겹쳐도 하얗게 뭉개지지 않게)
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = k;
+
+  const flame = (cx, cy, w, h, color) => {
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.ellipse(x + wob - p.vx*1.4, y + 6 - i*4, 15 - i*3, 20 - i*4, 0, 0, Math.PI*2);
+    ctx.moveTo(cx, cy + h*0.5);
+    ctx.bezierCurveTo(cx - w, cy + h*0.05, cx - w*0.5, cy - h*0.8, cx, cy - h);
+    ctx.bezierCurveTo(cx + w*0.5, cy - h*0.8, cx + w, cy + h*0.05, cx, cy + h*0.5);
+    ctx.closePath();
     ctx.fill();
-  }
+  };
+
+  // 바깥에서 안쪽으로: 붉은색 → 주황 → 노랑 → 밝은 코어, 겹쳐 그리면 실루엣이 뚜렷한 불길이 된다
+  flame(x + wob,                 y - 6,  26, 46, "#b03a34");
+  flame(x + wob*0.7 + lick*0.3,  y - 8,  19, 36, "#f0a24e");
+  flame(x + wob*0.4,             y - 10, 12, 25, "#ffdd88");
+  flame(x + wob*0.2,             y - 12, 6,  13, "#fff3c4");
+
   ctx.restore();
-  if(Math.random() < 0.6) spark(p.x + (Math.random()-0.5)*20, p.y + (Math.random()-0.5)*20, "#f0a24e");
+
+  const n = 2 + Math.floor(Math.random()*3);
+  for(let i=0;i<n;i++){
+    spark(p.x + (Math.random()-0.5)*26, p.y - 10 - Math.random()*34, Math.random() < 0.5 ? "#f0a24e" : "#ffdd88");
+  }
 }
 
 function drawBarrier(){
