@@ -96,7 +96,9 @@ function swing(a, st){
       swing(a, st);
       if(st.boss){
         met++;
-        if(hpBefore === null && st.skillCd <= 0 && st.boss.x > st.x && st.boss.x - st.x < 620){
+        // 피스톨의 보스 사거리가 460px로 제한되어 있어(원거리 스나이핑 방지),
+        // 약점 오프셋을 감안해 더 가까운 거리에서 쏜다
+        if(hpBefore === null && st.skillCd <= 0 && st.boss.x > st.x && st.boss.x - st.x < 380){
           hpBefore = st.boss.hp; a.fire();
         }
         if(hpBefore !== null && st.boss.hp < hpBefore) hitOk = true;
