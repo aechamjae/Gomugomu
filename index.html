@@ -701,9 +701,9 @@ function spawnBoss(big){
   if(big) type = 4;
   else type = Math.floor(Math.random()*4);
   boss = { type, big:!!big, hp: big ? 8 : 2, maxHp: big ? 8 : 2,
-           t:0, fire: big ? 90 : 90,
+           t:0, fire: big ? 90 : 90, harpoon: 70,
            invul:0, flash:0, x:p.x + 560, y:120, vy:0, air:false,
-           phase:0, sub:0, perch:null, tents:[], swing:0, sink:0, dive:0 };
+           phase:0, sub:0, perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 };
   if(type === 1) boss.y = SEA + 40;
   if(type === 2) boss.y = SEA - 8;
   if(type === 4){ boss.y = SEA - 40; boss.sub = 200; }
@@ -753,10 +753,10 @@ function weakPoints(b){
   return out;
 }
 
-function knock(hard, mild){
+function knock(hard, mild, mult){
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 방어력이 올라 웬만한 충격은 가볍게 넘긴다
-  stun = hard ? 42 : mild ? 20 : 30;       // mild = 잡몹에 스친 정도
+  stun = (hard ? 42 : mild ? 20 : 30) * (mult || 1);       // mild = 잡몹에 스친 정도
   iframes = mild ? 60 : 78;
   rope = null;
   chain = 0;
@@ -886,7 +886,7 @@ function updateBoss(dt){
       if(b.x > p.x + 360) b.dive = 3;
     } else if(b.dive === 3){                            // 다시 얕은 곳으로 떠오른다
       b.y += ((SEA + 40) - b.y) * 0.08 * dt;
-      if(Math.abs(b.y - (SEA + 40)) < 4){ b.dive = 0; b.y = SEA + 40; b.fire = 70; }
+      if(Math.abs(b.y - (SEA + 40)) < 4){ b.dive = 0; b.y = SEA + 40; b.fire = 70; b.harpoon = 70; }
     }
 
     {
@@ -901,11 +901,19 @@ function updateBoss(dt){
         if(b.y >= SEA + 40){
           b.y = SEA + 40; b.air = false; b.vy = 0;
           b.fire = Math.max(64, 104 - bossKills*5);
+          b.harpoon = Math.max(50, 90 - bossKills*4);
           for(let i=0;i<14;i++) spark(b.x, SEA, "#8fd6d8");
         }
       } else {
         b.y = SEA + 40;
         b.fire -= dt;
+        // 물속에 잠긴 동안 가만히 있지 않고 작살을 던진다 — 예전엔 잠수 중엔 완전히 무해했다
+        b.harpoon -= dt;
+        if(b.harpoon <= 0){
+          b.harpoon = Math.max(50, 90 - bossKills*4);
+          aimShot({x:b.x, y:SEA - 10}, 7.2, 0, 2, 8);
+          for(let i=0;i<8;i++) spark(b.x, SEA, "#8fd6d8");
+        }
         if(b.fire <= 0){ b.air = true; b.vy = -16.8; }
       }
     }
@@ -938,27 +946,35 @@ function updateBoss(dt){
     if(b.x < p.x - 200){ b.dive = 1; return; }   // 뒤처지면 잠항해서 따라붙는다
     b.fire -= dt;
     if(b.fire <= 0){
-      b.fire = Math.max(66, 116 - bossKills*5);
+      // 더 자주, 한 번에 여러 발을 연달아 쏜다(예전엔 116~66프레임마다 한 발뿐)
+      b.fire = Math.max(38, 72 - bossKills*4);
       const from = { x:b.x, y:SEA - 152 + Math.sin(b.t*0.022)*46 };
-      const T = 48, g = 0.16;
-      const tx = p.x + p.vx*T*0.88;
-      const ty = Math.max(40, Math.min(SEA-30, p.y + p.vy*T*0.40));
-      shots.push({ x:from.x, y:from.y, vx:(tx-from.x)/T, vy:(ty-from.y)/T - 0.5*g*T,
-                   g, r:11, kind:1, spin:0 });
+      const g = 0.16;
+      for(const T of [42, 52, 62]){
+        const tx = p.x + p.vx*T*0.88;
+        const ty = Math.max(40, Math.min(SEA-30, p.y + p.vy*T*0.40));
+        shots.push({ x:from.x, y:from.y, vx:(tx-from.x)/T, vy:(ty-from.y)/T - 0.5*g*T,
+                     g, r:11, kind:1, spin:0 });
+      }
     }
 
   } else if(b.type === 3){
-    // 앞쪽 고리에 올라앉아 밧줄을 끊어 둔다
+    // 앞쪽 고리 두 개를 한꺼번에 끊어 둔다 — 하나만 끊으면 REACH 안에서 다음 고리로
+    // 그냥 넘어가져서 사실상 무해했다. 두 개를 연달아 끊어야 제대로 펌핑해서
+    // 타이밍 맞춰 건너뛰어야 하는 위협이 된다
     b.fire -= dt;
     const valid = anchors.filter(a => a.x > p.x + 40).sort((u,v)=>u.x-v.x);
-    // 바로 다음 고리에 앉아 버틴다 — 지나쳐 가야만 자리를 옮긴다
+    // 바로 다음 고리 두 개에 앉아 버틴다 — 지나쳐 가야만 자리를 옮긴다
     if(!b.perch || b.perch.x < p.x - 40 || b.fire <= 0){
       if(b.perch) b.perch.cut = 0;
+      if(b.perch2) b.perch2.cut = 0;
       b.perch = valid[0] || null;
-      b.fire = 300;
+      b.perch2 = valid[1] || null;
+      b.fire = 260;
     }
     if(b.perch){
       b.perch.cut = 1;
+      if(b.perch2) b.perch2.cut = 1;
       b.x += ((b.perch.x) - b.x) * 0.22 * dt;
       b.y += ((b.perch.y - 16) - b.y) * 0.22 * dt;
     }
@@ -1003,7 +1019,9 @@ function updateBoss(dt){
         b.fire -= dt;
         if(b.fire <= 0){
           b.fire = 74 * rage;
-          const tx = p.x + 200 + Math.random()*320;
+          // 예전엔 플레이어보다 한참 앞(200~520px)에서만 솟아올라서, 가만히 있으면
+          // 영원히 촉수에 안 맞았다 — 플레이어를 조준해서 솟아오르게 바꿈
+          const tx = p.x + p.vx*14 + (Math.random()-0.5)*90;
           b.tents.push({ x:tx, t:0, h:0, hmax: 190 + Math.random()*150, life: 130 });
           // 촉수가 근처 고리를 끊는다
           for(const a of anchors) if(Math.abs(a.x - tx) < 62) a.cut = 80;
@@ -1016,6 +1034,7 @@ function updateBoss(dt){
       const tt = b.tents[i];
       tt.t += dt; tt.life -= dt;
       tt.h += ((tt.life > 60 ? tt.hmax : 0) - tt.h) * 0.10 * dt;
+      tt.x += (p.x - tt.x) * 0.012 * dt;   // 다 자란 뒤에도 플레이어를 따라 살금살금 움직인다
       if(tt.life <= 0){ b.tents.splice(i,1); continue; }
       if(stun <= 0 && tt.h > 26){
         const top = SEA - tt.h;
@@ -1061,7 +1080,7 @@ function updateShots(dt){
     q.spin += 0.22*dt;
     if(stun <= 0){
       const d = distOriginToSeg(px0 - pPrevX, py0 - pPrevY, q.x - p.x, q.y - p.y);
-      if(d < q.r + 13){ shots.splice(i,1); knock(false); continue; }
+      if(d < q.r + 13){ const dagger = q.kind === 0; shots.splice(i,1); knock(false, false, dagger ? 2 : 1); continue; }
     }
     if(q.y > SEA + 12 || q.x < cam.x - 140 || q.x > cam.x + W + 260 || q.y < -260){
       shots.splice(i,1);
@@ -1633,6 +1652,14 @@ function drawShots(){
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#b03a34";
       ctx.fillRect(-11, -2.6, 6, 5.2);
+    } else if(q.kind === 2){
+      // 작살잡이의 작살
+      ctx.rotate(Math.atan2(q.vy, q.vx));
+      ctx.strokeStyle = "#54331f"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-16,0); ctx.lineTo(10,0); ctx.stroke();
+      ctx.fillStyle = "#8fd6d8";
+      ctx.beginPath();
+      ctx.moveTo(10,0); ctx.lineTo(2,-6); ctx.lineTo(2,6); ctx.closePath(); ctx.fill();
     } else {
       ctx.fillStyle = "#1b1218";
       ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill();
