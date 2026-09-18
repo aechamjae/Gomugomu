@@ -217,12 +217,20 @@ const MAXV   = 27;
 
 /* 불붙기 — 속도가 최고 속도(108)를 순간적으로 넘으면 잠깐 불이 붙는다 */
 const FIRE_DUR = 100;    // 불이 붙어 있는 시간(프레임)
+const FIRE_MAX_DIST = 2000;  // 이 거리 이후로는 과속해도 불이 붙지 않는다 — 후반부까지 무적기로 밀고 가지 못하게
 
 /* 고무고무 피스톨 */
 const SKILL_CD  = 60*5;     // 재충전 5초 (20초의 1/4) — 시작할 땐 충전된 상태
 const FIST_SPD  = 33;       // 주먹이 날아가는 속도
 const FIST_LIFE = 26;       // 뻗어 있는 프레임 (약 860px 사거리)
 const FIST_R    = 22;
+const PISTOL_BOSS_RANGE = 460;  // 이 거리 밖에서는 보스 약점을 조준·명중시킬 수 없다 — 매달려서 멀리서 스나이핑하지 못하게
+
+/* 정체 페널티 — 너무 오래 제자리에 머물면 뒤에서 밀려온다 */
+const STALL_RESET_DX = 90;   // 이만큼 전진하면 정체 타이머 리셋
+const STALL_WARN_T   = 240;  // 4초 정체 시 경고 표시
+const STALL_PUSH_T   = 330;  // 5.5초 정체 시 카메라가 실제로 밀고 들어오기 시작
+const STALL_PUSH_SPD = 0.85; // 밀려나는 속도(px/프레임)
 
 /* 고무고무 엘리펀트 건 — 묵직한 광역 한 방 */
 const GUN_CD    = 60*15;    // 재충전 15초 (60초의 1/4)
@@ -256,7 +264,8 @@ let p, cam, anchors, coins, rope, state, dist, best = 0, treasure,
     lastAX, lastAY, holding, missAnim, bits, pops, overAt, time,
     airTime, deathReason, chain,
     boss, shots, nextBossAt, nextBigAt, bossKills, stun, iframes, grabCd, pPrevX, pPrevY,
-    mobs, lastKingX, skillCd, fist, gunCd, gun, fire;
+    mobs, lastKingX, skillCd, fist, gunCd, gun, fire, stallX, stallT,
+    lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -289,6 +298,9 @@ function reset(){
   gunCd = 0;                   // 엘리펀트 건도 출발할 땐 충전
   gun = null;
   fire = 0;
+  stallX = p.x;
+  stallT = 0;
+  newTitle = null;
   holding = false;              // 리셋 시 눌림 상태도 함께 초기화 (안 그러면 재시작 직후 팔이 안 걸릴 수 있다)
   pPrevX = p.x; pPrevY = p.y;
   anchors.push({ x:250, y:96, kind:0 });
@@ -652,6 +664,34 @@ const BOSSES = [
   { name:"심해의 크라켄", tag:"눈이 드러난 순간에만 통한다", big:true }
 ];
 
+/* 보스 처치 칭호 — 누적 처치 수 기준, 약한 순서로 나열 (마지막으로 만족하는 게 현재 칭호) */
+const TITLES = [
+  { id:"novice",   name:"풋내기 사냥꾼",     need:(s) => s.boss >= 1 },
+  { id:"hunter",   name:"현상금 사냥꾼",     need:(s) => s.boss >= 10 },
+  { id:"kraken1",  name:"크라켄 슬레이어",   need:(s) => s.kraken >= 1 },
+  { id:"veteran",  name:"그랑 라인의 폭풍",  need:(s) => s.boss >= 30 },
+  { id:"kraken3",  name:"심해의 재앙",       need:(s) => s.kraken >= 3 },
+  { id:"kraken10", name:"해왕을 넘어선 자",  need:(s) => s.kraken >= 10 }
+];
+
+function currentTitleName(){
+  let name = null;
+  for(const t of TITLES) if(unlockedTitles.has(t.id)) name = t.name;
+  return name;
+}
+
+function checkTitles(){
+  const stats = { boss: lifeBossKills, kraken: lifeKrakenKills };
+  let unlocked = null;
+  for(const t of TITLES){
+    if(!unlockedTitles.has(t.id) && t.need(stats)){
+      unlockedTitles.add(t.id);
+      unlocked = t;
+    }
+  }
+  return unlocked;
+}
+
 function clearCuts(){
   for(const a of anchors) a.cut = 0;
 }
@@ -767,6 +807,14 @@ function damageBoss(ranged, mark){
     pops.push({ x:b.x, y:b.y-40, t:130, text:"격침 +" + bounty, color:"#d9b877" });
     for(let i=0;i<40;i++) spark(b.x, b.y, "#d9b877");
     bossKills++;
+    lifeBossKills++;
+    if(b.big) lifeKrakenKills++;
+    const unlocked = checkTitles();
+    if(unlocked){
+      newTitle = unlocked.name;
+      pops.push({ x:b.x, y:b.y-70, t:160, text:"칭호 획득: " + unlocked.name, color:"#ffd76a" });
+    }
+    saveTitles();
     if(b.big){ nextBigAt = Math.max(nextBigAt + 2000, dist + 900); nextBossAt = dist + 500; }
     else nextBossAt = dist + 500;
     clearCuts();
@@ -1030,7 +1078,9 @@ function pistolAim(){
     const d = Math.hypot(tx - p.x, ty - p.y);
     if(d < bd && d < 860){ bd = d; best = { x:tx, y:ty }; }
   };
-  if(boss) for(const wp of weakPoints(boss)) consider(wp.x, wp.y);
+  if(boss) for(const wp of weakPoints(boss)){
+    if(Math.hypot(wp.x - p.x, wp.y - p.y) < PISTOL_BOSS_RANGE) consider(wp.x, wp.y);
+  }
   for(const m of mobs){
     if(m.kind === 0 && m.air) consider(m.x, m.y);
     if(m.kind === 1 && m.h > 30) consider(m.x, SEA - m.h - 26);
@@ -1094,9 +1144,10 @@ function updateFist(dt){
     }
   }
 
-  // 보스 — 속도 조건 없이 약점에 그대로 꽂힌다
+  // 보스 — 속도 조건은 없지만, 약점에서 너무 멀리 떨어져 있으면(원거리 스나이핑) 닿지 않는다
   if(boss && boss.invul <= 0){
     for(const wp of weakPoints(boss)){
+      if(Math.hypot(wp.x - p.x, wp.y - p.y) > PISTOL_BOSS_RANGE) continue;
       if(near(wp.x, wp.y) < FIST_R + wp.r){
         damageBoss(true, wp.mark);
         fist.back = true;
@@ -1208,7 +1259,7 @@ function update(dt){
   p.vx *= Math.pow(0.9996, dt);
 
   const sp = Math.hypot(p.vx, p.vy);
-  if(sp > MAXV) fire = FIRE_DUR;         // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다
+  if(sp > MAXV && dist < FIRE_MAX_DIST) fire = FIRE_DUR;   // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다 — 2000m까지만
   else if(fire > 0) fire -= dt;
   if(sp > MAXV){ p.vx = p.vx/sp*MAXV; p.vy = p.vy/sp*MAXV; }
 
@@ -1260,14 +1311,23 @@ function update(dt){
   updateMobs(dt);
   if(state !== STATE.PLAY) return;
 
-  cam.x += ((p.x - W*0.32) - cam.x) * 0.13 * dt;
+  if(Math.abs(p.x - stallX) > STALL_RESET_DX){ stallX = p.x; stallT = 0; }
+  else stallT += dt;
+
+  if(stallT > STALL_PUSH_T){
+    // 스프링 추적을 끊고 그냥 계속 전진시킨다 — 추적식이면 정지한 플레이어 기준으로
+    // 평형점에서 멈춰버려 영원히 따라잡지 못한다 (실제로 그렇게 멈추는 걸 테스트로 확인함)
+    cam.x += STALL_PUSH_SPD * dt;
+  } else {
+    cam.x += ((p.x - W*0.32) - cam.x) * 0.13 * dt;
+  }
   if(cam.x < 0) cam.x = 0;
   cam.z += ((1 - Math.min(0.11, sp/250)) - cam.z) * 0.05 * dt;
   generate();
   syncHUD();
 
   if(p.y > SEA - 14) return die("바다");
-  if(p.x < cam.x - 50) return die("뒤처짐");
+  if(p.x < cam.x - 50) return die(stallT > STALL_PUSH_T ? "정체" : "뒤처짐");
 }
 
 /* ---------- 저장 ---------- */
@@ -1287,6 +1347,32 @@ async function saveBest(){
   const v = String(Math.floor(best));
   try{ if(window.storage){ await window.storage.set("swing:best", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:best", v); }catch(e){}
+}
+
+function applyTitleRecord(v){
+  try{
+    const r = JSON.parse(v);
+    lifeBossKills = r.boss || 0;
+    lifeKrakenKills = r.kraken || 0;
+    unlockedTitles = new Set(r.unlocked || []);
+  }catch(e){}
+}
+async function loadTitles(){
+  try{
+    if(window.storage){
+      const r = await window.storage.get("swing:titles");
+      if(r && r.value){ applyTitleRecord(r.value); return; }
+    }
+  }catch(e){}
+  try{
+    const v = window.localStorage && localStorage.getItem("swing:titles");
+    if(v) applyTitleRecord(v);
+  }catch(e){}
+}
+async function saveTitles(){
+  const v = JSON.stringify({ boss: lifeBossKills, kraken: lifeKrakenKills, unlocked: [...unlockedTitles] });
+  try{ if(window.storage){ await window.storage.set("swing:titles", v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem("swing:titles", v); }catch(e){}
 }
 
 /* ---------- 그리기 ---------- */
@@ -2014,7 +2100,7 @@ function drawKingWarning(){
   }
   if(!nearest) return;
   const meters = Math.max(0, Math.round(nd/22));
-  const bw = 380, bx = (W-bw)/2, by = boss ? 68 : 22;
+  const bw = 380, bx = (W-bw)/2, by = warnY; warnY += 50;
   const pulse = 0.55 + Math.sin(time*0.22)*0.35;
   ctx.save();
   ctx.fillStyle = "rgba(13,27,38,0.82)";
@@ -2029,6 +2115,27 @@ function drawKingWarning(){
   ctx.font = "400 12px 'Pretendard', system-ui, sans-serif";
   ctx.fillStyle = "rgba(244,236,217,.75)";
   ctx.fillText("피스톨(Q) · 엘리펀트 건(W)으로 미리 물리쳐라", W/2, by + 15);
+  ctx.restore();
+}
+
+function drawStallWarning(){
+  if(stallT <= STALL_WARN_T) return;
+  const bw = 380, bx = (W-bw)/2, by = warnY; warnY += 50;
+  const pulse = 0.55 + Math.sin(time*0.3)*0.35;
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,0.82)";
+  ctx.fillRect(bx-14, by-18, bw+28, 42);
+  ctx.strokeStyle = "rgba(217,184,119," + pulse.toFixed(2) + ")";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(bx-14, by-18, bw+28, 42);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const pushing = stallT > STALL_PUSH_T;
+  ctx.font = "700 19px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = pushing ? "#ffd7d2" : "#ffe9b0";
+  ctx.fillText(pushing ? "⚠ 선단이 따라잡고 있다!" : "⚠ 너무 오래 멈춰 있다", W/2, by - 3);
+  ctx.font = "400 12px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "rgba(244,236,217,.75)";
+  ctx.fillText("계속 전진해야 뒤처지지 않는다", W/2, by + 15);
   ctx.restore();
 }
 
@@ -2100,7 +2207,9 @@ function draw(){
   if(boss && state === STATE.PLAY) drawBossBar();
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
+  warnY = boss ? 68 : 22;
   if(state === STATE.PLAY) drawKingWarning();
+  if(state === STATE.PLAY) drawStallWarning();
 
   if(fire > 0 && state === STATE.PLAY){
     // 화면 가장자리를 은은히 태워, 캐릭터가 작게 보이는 화면에서도 불붙은 걸 놓치지 않게 한다
@@ -2143,12 +2252,25 @@ function draw(){
     centerText("Q 피스톨(5초) · W 엘리펀트 건(15초) — 원거리 공격, 해왕류·잡몹 처치", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
     centerText("식인 물고기는 휘청이게 하고, 해왕류는 원거리 스킬로 물리칠 수 있다", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
     centerText("클릭 또는 Space로 출항", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    const readyTitle = currentTitleName();
+    if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
   } else if(state === STATE.OVER){
     ctx.fillStyle = "rgba(13,27,38,0.74)";
     ctx.fillRect(0,0,W,H);
-    centerText(deathReason === "바다" ? "바다에 빠졌다" : "선단에 뒤처졌다", H/2 - 40, "700 29px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    const reasonText = deathReason === "바다" ? "바다에 빠졌다"
+      : deathReason === "정체" ? "너무 오래 멈춰 있어 선단에 뒤처졌다"
+      : "선단에 뒤처졌다";
+    centerText(reasonText, H/2 - 40, "700 29px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), H/2 + 2, "600 17px 'Pretendard', system-ui, sans-serif", "#d9b877");
-    centerText("클릭 · Space · R로 다시", H/2 + 40, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    let overY = H/2 + 40;
+    if(newTitle){
+      centerText("★ 새 칭호 획득: " + newTitle, overY, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a");
+      overY += 24;
+    } else {
+      const overTitle = currentTitleName();
+      if(overTitle){ centerText("현재 칭호: " + overTitle, overY, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)"); overY += 22; }
+    }
+    centerText("클릭 · Space · R로 다시", overY + 4, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   }
 }
 
@@ -2182,6 +2304,7 @@ window.__swing = {
 
 reset();
 loadBest();
+loadTitles();
 try{ canvas.focus({preventScroll:true}); }catch(e){}
 requestAnimationFrame(loop);
 
