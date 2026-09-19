@@ -215,6 +215,8 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
+const STUN_FRAMES = 45;  // 모든 휘청(스턴) 시간을 통일 — 세기(hard/mild)에 따른 넉백·무적시간 차이는 유지
+
 /* 불붙기 — 속도가 최고 속도(108)를 순간적으로 넘으면 잠깐 불이 붙는다 */
 const FIRE_DUR = 100;    // 불이 붙어 있는 시간(프레임)
 const FIRE_MAX_DIST = 2000;  // 이 거리 이후로는 과속해도 불이 붙지 않는다 — 후반부까지 무적기로 밀고 가지 못하게
@@ -753,10 +755,10 @@ function weakPoints(b){
   return out;
 }
 
-function knock(hard, mild, mult){
+function knock(hard, mild){
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 방어력이 올라 웬만한 충격은 가볍게 넘긴다
-  stun = (hard ? 42 : mild ? 20 : 30) * (mult || 1);       // mild = 잡몹에 스친 정도
+  stun = STUN_FRAMES;                      // mild = 잡몹에 스친 정도 — 넉백 세기만 다르고 스턴 시간은 전부 동일
   iframes = mild ? 60 : 78;
   rope = null;
   chain = 0;
@@ -766,18 +768,18 @@ function knock(hard, mild, mult){
   for(let i=0;i<12;i++) spark(p.x, p.y, "#b03a34");
 }
 
-// 해왕류 접촉 — 보스 근접 피격(knock hard: stun 42)보다 훨씬 세지만, 즉사는 아니다
+// 해왕류 접촉 — 보스 근접 피격보다 훨씬 세지만(넉백·무적시간), 즉사는 아니다. 스턴 시간은 다른 피격과 동일
 function knockKing(){
   if(stun > 0 || iframes > 0) return;
   if(fire > 0){                            // 불붙은 동안엔 해왕류의 일격도 가볍게 버텨낸다
-    stun = 36; iframes = 50;
+    stun = STUN_FRAMES; iframes = 50;
     p.vx *= 0.55;
     p.vy = Math.min(p.vy, -4.2);
     pops.push({ x:p.x, y:p.y-28, t:50, text:"불타는 몸으로 버텼다!", color:"#f0a24e" });
     for(let i=0;i<14;i++) spark(p.x, p.y, "#f0a24e");
     return;
   }
-  stun = 70;
+  stun = STUN_FRAMES;
   iframes = 90;
   rope = null;
   chain = 0;
@@ -1094,7 +1096,7 @@ function updateShots(dt){
     q.spin += 0.22*dt;
     if(stun <= 0){
       const d = distOriginToSeg(px0 - pPrevX, py0 - pPrevY, q.x - p.x, q.y - p.y);
-      if(d < q.r + 13){ const dagger = q.kind === 0; shots.splice(i,1); knock(false, false, dagger ? 2 : 1); continue; }
+      if(d < q.r + 13){ shots.splice(i,1); knock(false); continue; }
     }
     if(q.y > SEA + 12 || q.x < cam.x - 140 || q.x > cam.x + W + 260 || q.y < -260){
       shots.splice(i,1);
