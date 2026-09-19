@@ -215,7 +215,8 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const STUN_FRAMES = 45;  // 모든 휘청(스턴) 시간을 통일 — 세기(hard/mild)에 따른 넉백·무적시간 차이는 유지
+const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
+const STUN_STRONG  = 60; // 해왕류·크라켄(촉수)에 맞았을 때만 이 시간
 
 /* 불붙기 — 속도가 최고 속도(108)를 순간적으로 넘으면 잠깐 불이 붙는다 */
 const FIRE_DUR = 100;    // 불이 붙어 있는 시간(프레임)
@@ -757,8 +758,10 @@ function weakPoints(b){
 
 function knock(hard, mild){
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
-  if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 방어력이 올라 웬만한 충격은 가볍게 넘긴다
-  stun = STUN_FRAMES;                      // mild = 잡몹에 스친 정도 — 넉백 세기만 다르고 스턴 시간은 전부 동일
+  // hard는 오직 크라켄 촉수 피격에서만 true로 들어온다 — 그때만 스턴이 더 길다
+  const base = hard ? STUN_STRONG : STUN_FRAMES;
+  stun = fire > 0 ? base / 2 : base;       // 불꽃 효과 = 스턴 시간 절반
+  if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 넉백·무적시간도 가볍게 넘긴다(스턴 시간은 위에서 이미 반영)
   iframes = mild ? 60 : 78;
   rope = null;
   chain = 0;
@@ -768,18 +771,18 @@ function knock(hard, mild){
   for(let i=0;i<12;i++) spark(p.x, p.y, "#b03a34");
 }
 
-// 해왕류 접촉 — 보스 근접 피격보다 훨씬 세지만(넉백·무적시간), 즉사는 아니다. 스턴 시간은 다른 피격과 동일
+// 해왕류 접촉 — 크라켄 촉수와 같은 강한 스턴(STUN_STRONG). 즉사는 아니다
 function knockKing(){
   if(stun > 0 || iframes > 0) return;
-  if(fire > 0){                            // 불붙은 동안엔 해왕류의 일격도 가볍게 버텨낸다
-    stun = STUN_FRAMES; iframes = 50;
+  if(fire > 0){                            // 불붙은 동안엔 해왕류의 일격도 가볍게 버텨낸다(스턴 시간도 절반)
+    stun = STUN_STRONG / 2; iframes = 50;
     p.vx *= 0.55;
     p.vy = Math.min(p.vy, -4.2);
     pops.push({ x:p.x, y:p.y-28, t:50, text:"불타는 몸으로 버텼다!", color:"#f0a24e" });
     for(let i=0;i<14;i++) spark(p.x, p.y, "#f0a24e");
     return;
   }
-  stun = STUN_FRAMES;
+  stun = STUN_STRONG;
   iframes = 90;
   rope = null;
   chain = 0;
