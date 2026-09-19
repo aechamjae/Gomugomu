@@ -217,6 +217,7 @@ const MAXV   = 27;
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류·크라켄(촉수)에 맞았을 때만 이 시간
+const STUN_MOB     = 15; // 식인 물고기에 스쳤을 때만 이 시간
 
 /* 불붙기 — 속도가 최고 속도(108)를 순간적으로 넘으면 잠깐 불이 붙는다 */
 const FIRE_DUR = 100;    // 불이 붙어 있는 시간(프레임)
@@ -758,8 +759,8 @@ function weakPoints(b){
 
 function knock(hard, mild){
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
-  // hard는 오직 크라켄 촉수 피격에서만 true로 들어온다 — 그때만 스턴이 더 길다
-  const base = hard ? STUN_STRONG : STUN_FRAMES;
+  // hard는 오직 크라켄 촉수, mild는 오직 식인 물고기 피격에서만 들어온다
+  const base = hard ? STUN_STRONG : mild ? STUN_MOB : STUN_FRAMES;
   stun = fire > 0 ? base / 2 : base;       // 불꽃 효과 = 스턴 시간 절반
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 넉백·무적시간도 가볍게 넘긴다(스턴 시간은 위에서 이미 반영)
   iframes = mild ? 60 : 78;
