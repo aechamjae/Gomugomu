@@ -264,7 +264,7 @@ window.addEventListener("resize", fit);
 
 const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3 };
 
-let p, cam, anchors, coins, rope, state, dist, best = 0, treasure,
+let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     lastAX, lastAY, holding, missAnim, bits, pops, overAt, time,
     airTime, deathReason, chain,
     boss, shots, nextBossAt, nextBigAt, bossKills, stun, iframes, grabCd, pPrevX, pPrevY,
@@ -279,6 +279,7 @@ function reset(){
   rope = null;
   state = STATE.READY;
   dist = 0;
+  distOffset = 0;
   treasure = 0;
   chain = 0;
   bits = [];
@@ -1322,7 +1323,11 @@ function update(dt){
   if(p.vx > 0.3) p.face = 1; else if(p.vx < -0.3) p.face = -1;
   if(p.y < -220){ p.y = -220; p.vy = Math.abs(p.vy)*0.35; }
 
-  if(!boss) dist = Math.max(dist, p.x / 22);   // 보스가 떠 있는 동안은 그냥 앞으로 가도 거리가 안 늘어난다 — 물리쳐야 진행됨
+  // 보스가 떠 있는 동안은 앞으로 가도 거리가 안 늘어난다. 그냥 멈추기만 하면 보스를
+  // 잡자마자 그동안 이동한 거리가 한꺼번에 뛰어올랐는데, 이제는 격파 시점부터
+  // 새로 늘어난 만큼만 반영되도록 distOffset에 "안 쳐주는 몫"을 계속 누적해 둔다
+  if(boss) distOffset = p.x / 22 - dist;
+  else dist = Math.max(dist, p.x / 22 - distOffset);
 
   for(const c of coins){
     if(c.got) continue;
