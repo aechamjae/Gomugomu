@@ -245,6 +245,73 @@ function swing(a, st){
      "40번 시도 중 보호막 목격=" + sawShieldReward);
 }
 
+/* --- 본게임 / 연습 모드 --- */
+{
+  const a = start();   // start()는 practiceMode를 건드리지 않는 reset()만 호출한다 — 이 시점엔 아직 아무 연습도 선택 안 됨
+  ok("본게임으로 시작하면 practiceMode가 없다", !a.peek().practiceMode,
+     "practiceMode=" + JSON.stringify(a.peek().practiceMode));
+}
+{
+  let sawType2 = false, sawOtherType = false, sawMob = false, metFrames = 0;
+  for(let attempt=0; attempt<6 && !sawType2; attempt++){
+    const a = A();
+    a.startPractice(2);   // 포함 흑조호(type 2) 연습
+    H.step();
+    a.hold(true); H.step(); a.hold(false);
+    run(a, 2000, (st) => {
+      swing(a, st);
+      if(st.mobs && st.mobs.length) sawMob = true;
+      if(st.boss){
+        metFrames++;
+        if(st.boss.type === 2) sawType2 = true; else sawOtherType = true;
+      }
+    });
+  }
+  ok("보스 연습 — 지정한 보스만 등장한다", sawType2 && !sawOtherType,
+     "지정타입목격=" + sawType2 + " 다른타입목격=" + sawOtherType + " 조우프레임=" + metFrames);
+  ok("보스 연습 — 잡몹은 나오지 않는다", !sawMob, "잡몹목격=" + sawMob);
+}
+{
+  let kingCount = 0, sawBoss = false, sawFish = false;
+  for(let attempt=0; attempt<6 && kingCount < 20; attempt++){
+    const a = A();
+    a.startPractice(6);   // 해왕류 폭주 연습 (PRACTICE_OPTIONS의 마지막 항목)
+    H.step();
+    a.hold(true); H.step(); a.hold(false);
+    run(a, 2000, (st) => {
+      swing(a, st);
+      if(st.boss) sawBoss = true;
+      for(const m of (st.mobs || [])){ if(m.kind === 1) kingCount++; else sawFish = true; }
+    });
+  }
+  ok("해왕류 폭주 연습 — 일반 보스는 나오지 않는다", !sawBoss, "보스목격=" + sawBoss);
+  ok("해왕류 폭주 연습 — 물고기 없이 해왕류만 아주 자주 나온다", !sawFish && kingCount >= 20,
+     "물고기목격=" + sawFish + " 해왕류연인원=" + kingCount);
+}
+{
+  const a = A();
+  a.startPractice(0);
+  const before = T().lifeStats();
+  const P = T().P();
+  T().setBoss({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon:70, fishSkill:200,
+                invul:0, flash:0, x:P.x+50, y:P.y, vy:0, air:false, phase:0, sub:0,
+                perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 });
+  T().dmg(true, "test");
+  const after = T().lifeStats();
+  ok("연습 모드에서 격파해도 누적 처치 기록(칭호 진행도)이 오르지 않는다",
+     after.boss === before.boss && after.kraken === before.kraken,
+     "이전=" + JSON.stringify(before) + " 이후=" + JSON.stringify(after));
+  a.startMain();   // 이후 테스트에 영향 없도록 본게임으로 복귀
+}
+{
+  const a = A();
+  a.startPractice(0);
+  a.toMenu();
+  ok("메뉴로 돌아가면 state가 MENU가 된다", a.peek().state === 4, "state=" + a.peek().state);
+  a.startMain();   // 이후 테스트에 영향 없도록 본게임으로 복귀, practiceMode도 초기화
+  ok("본게임으로 복귀하면 practiceMode가 다시 없다", !a.peek().practiceMode);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
