@@ -160,8 +160,9 @@ function swing(a, st){
   const a = start();
   const P = T().P();
   const res = {};
-  for(const t of [0,1,2,3,4]){
-    const b = { type:t, big:t===4, hp:2, maxHp:2, t:0, life:9999, fire:90, invul:0, flash:0,
+  // 0~4 중간보스 5종, 5 크라켄(대형) — 돌풍술사(4) 추가로 크라켄이 4에서 5로 밀림
+  for(const t of [0,1,2,3,4,5]){
+    const b = { type:t, big:t===5, hp:2, maxHp:2, t:0, life:9999, fire:90, invul:0, flash:0,
                 x:P.x+400, y:120, vy:-3, air:true, phase:0, sub:200, perch:null, tents:[],
                 swing:12, sink:0, dive:0 };
     let mx = 0, pos = new Set();
@@ -173,9 +174,75 @@ function swing(a, st){
     }
     res[t] = { 개수:mx, 위치:pos.size };
   }
-  ok("중간보스 4종 모두 약점이 2개", [0,1,2,3].every(t => res[t].개수 === 2),
+  ok("중간보스 5종 모두 약점이 2개", [0,1,2,3,4].every(t => res[t].개수 === 2),
      JSON.stringify(res));
-  ok("약점이 고정되어 있지 않다", [0,2,3,4].every(t => res[t].위치 > 10));
+  ok("약점이 고정되어 있지 않다", [0,2,3,4,5].every(t => res[t].위치 > 10));
+
+  const b4 = { type:4, big:false, hp:2, maxHp:2, t:37, life:9999, fire:90, invul:0, flash:0,
+               x:P.x+400, y:120, vy:-3, air:true, phase:0, sub:200, perch:null, tents:[],
+               swing:12, sink:0, dive:0 };
+  const marks = T().wp(b4).map(w => w.mark);
+  ok("돌풍술사 약점 이름 확인", marks.includes("돌풍술사") && marks.includes("지팡이 끝"), marks.join(","));
+}
+
+/* --- 보호막(보스 격파 보상) --- */
+{
+  const a = start();
+  T().setShield(1);
+  let s = a.peek();
+  s.mobs.length = 0;
+  s.mobs.push({ kind:0, x:s.x + 40, y:s.y, vy:0, air:true, t:0, cool:0, gone:false });
+  let usedShield = false, stunned = false;
+  const res = run(a, 90, (st) => {
+    if(st.shield === 0) usedShield = true;
+    if(st.stun > 0) stunned = true;
+  });
+  ok("보호막이 첫 피격을 대신 막아 스턴 없이 소비된다",
+     usedShield && !stunned, "shield소진=" + usedShield + " 스턴발생=" + stunned);
+}
+
+/* --- 돌풍술사의 돌풍 (궤적만 밀어내고 스턴은 없음) --- */
+{
+  const a = start();
+  const s0 = a.peek();
+  const vxBefore = s0.vx;
+  T().pushShot({ x: s0.x + 20, y: s0.y, vx: -1, vy: 0, g: 0, r: 34, kind: 3, spin: 0, windPush: 8.5 });
+  let stunned = false, pushed = false;
+  const res = run(a, 20, (st) => {
+    if(st.stun > 0) stunned = true;
+    if(st.vx > vxBefore + 3) pushed = true;
+  });
+  ok("돌풍은 스턴 없이 궤적만 밀어낸다", pushed && !stunned,
+     "밀림=" + pushed + " 스턴=" + stunned);
+}
+
+/* --- 콤보(연속 스윙) 스타일 점수 --- */
+{
+  const a = start();
+  a.hold(true);                 // 누르고 있으면 재사용 가능해지는 즉시 자동으로 걸린다(선입력)
+  run(a, 30, () => {});
+  T().setChain(3);
+  let s = a.peek();
+  ok("콤보 설정 직후엔 유지된다", s.chain === 3, "chain=" + s.chain);
+  const res = run(a, 250, () => {});   // CHAIN_DECAY_T(200프레임)보다 더 오래 대기
+  ok("일정 시간 안에 못 이으면 콤보가 끊긴다", res.chain === 0 && res.state !== 2,
+     "chain=" + res.chain + " state=" + res.state);
+}
+
+/* --- 보스 격파 랜덤 보상 --- */
+{
+  let sawShieldReward = false;
+  for(let attempt=0; attempt<40 && !sawShieldReward; attempt++){
+    const a = start();
+    const P = T().P();
+    T().setBoss({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon:70, fishSkill:200,
+                  invul:0, flash:0, x:P.x+50, y:P.y, vy:0, air:false, phase:0, sub:0,
+                  perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 });
+    T().dmg(true, "test");
+    if(a.peek().shield >= 1) sawShieldReward = true;
+  }
+  ok("보스를 격파하면 랜덤 보상(보호막 포함) 중 하나가 나온다", sawShieldReward,
+     "40번 시도 중 보호막 목격=" + sawShieldReward);
 }
 
 /* --- 흑조호 잠항 (순간이동 금지) --- */
