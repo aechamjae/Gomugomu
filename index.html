@@ -186,7 +186,7 @@
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
       <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초)</span>
-      <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작</span>
+      <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
     </div>
     <button id="pauseBtn">❚❚ 일시정지</button>
   </div>
@@ -266,7 +266,65 @@ function fit(){
 fit();
 window.addEventListener("resize", fit);
 
-const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3 };
+const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5 };
+
+// 연습 모드 선택 — { type:"boss", bossType:N } 또는 { type:"king" }, 본게임은 null.
+// reset()으로 초기화되지 않는다 — R로 재시작해도 같은 연습 내용을 유지하기 위함.
+let practiceMode = null;
+
+/* 연습 대상 목록 — 인덱스는 BOSSES 배열과 동일, 마지막은 해왕류 폭주 */
+const PRACTICE_OPTIONS = [
+  { type:"boss", bossType:0, label:"곡예사 선장 연습" },
+  { type:"boss", bossType:1, label:"작살잡이 연습" },
+  { type:"boss", bossType:2, label:"포함 흑조호 연습" },
+  { type:"boss", bossType:3, label:"밧줄 끊는 자 연습" },
+  { type:"boss", bossType:4, label:"돌풍술사 연습" },
+  { type:"boss", bossType:5, label:"심해의 크라켄 연습 (대형)" },
+  { type:"king", label:"해왕류 폭주 연습" }
+];
+
+function practiceLabel(){
+  if(!practiceMode) return "";
+  if(practiceMode.type === "boss") return BOSSES[practiceMode.bossType].name + " 연습";
+  if(practiceMode.type === "king") return "해왕류 폭주 연습";
+  return "";
+}
+
+function startMainGame(){
+  practiceMode = null;
+  reset();
+}
+function startPractice(idx){
+  const opt = PRACTICE_OPTIONS[idx];
+  if(!opt) return;
+  practiceMode = opt.type === "king" ? { type:"king" } : { type:"boss", bossType:opt.bossType };
+  reset();
+}
+
+// MENU/PRACTICE_SELECT 화면의 선택지 — 그리기와 클릭·숫자키 판정이 이 배열 하나를 같이 본다
+function menuRows(){
+  if(state === STATE.MENU){
+    return [
+      { y: H/2 - 10, label: "1) 본게임", action: startMainGame },
+      { y: H/2 + 34, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } }
+    ];
+  }
+  if(state === STATE.PRACTICE_SELECT){
+    const top = H/2 - 160, rowH = 34;
+    const rows = PRACTICE_OPTIONS.map((o, i) => ({
+      y: top + i*rowH, label: (i+1) + ") " + o.label, action: () => startPractice(i)
+    }));
+    rows.push({ y: top + PRACTICE_OPTIONS.length*rowH + 14, label: (PRACTICE_OPTIONS.length+1) + ") ← 뒤로가기",
+                action: () => { state = STATE.MENU; } });
+    return rows;
+  }
+  return [];
+}
+
+function canvasPos(e){
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+}
 
 let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     lastAX, lastAY, holding, missAnim, bits, pops, overAt, time,
@@ -299,6 +357,13 @@ function reset(){
   shots = [];
   nextBossAt = 500;
   nextBigAt = 2000;
+  if(practiceMode && practiceMode.type === "boss"){
+    // 연습 대상만 빨리, 반복해서 나오도록 — 크라켄(5)은 대형 슬롯, 나머지는 중간보스 슬롯
+    if(practiceMode.bossType === 5){ nextBigAt = 30; nextBossAt = Infinity; }
+    else { nextBossAt = 30; nextBigAt = Infinity; }
+  } else if(practiceMode && practiceMode.type === "king"){
+    nextBossAt = Infinity; nextBigAt = Infinity;   // 폭주 연습 중엔 일반 보스는 끈다
+  }
   bossKills = 0;
   stun = 0;
   iframes = 0;
@@ -391,6 +456,16 @@ function generate(){
 /* ---------- 잡몹 ---------- */
 // 두 고리 사이 구간(x0~x1)에 잡몹을 뿌린다
 function spawnMobs(x0, x1){
+  if(practiceMode && practiceMode.type === "boss") return;   // 보스 연습 중엔 잡몹 없이 그 보스만 상대한다
+  if(practiceMode && practiceMode.type === "king"){
+    // 해왕류 폭주 연습 — 최소 거리 제한 없이, 훨씬 자주·훨씬 촘촘하게 쏟아낸다
+    if(x1 - lastKingX > 480 && Math.random() < 0.85){
+      lastKingX = x1;
+      mobs.push({ kind:1, x: x1 + 120 + Math.random()*160, y: SEA, phase:0, t:0, h:0, gone:false });
+    }
+    return;   // 폭주 연습 중엔 식인 물고기는 끈다 — 오직 해왕류만
+  }
+
   const dm = x1 / 22;                          // 이 구간의 m 환산 거리
 
   // 식인 물고기 — 떼로 다니고, 지나갈 때 물 밖으로 튀어오른다
@@ -522,6 +597,7 @@ function togglePause(){
 }
 
 function grab(){
+  if(state === STATE.MENU || state === STATE.PRACTICE_SELECT) return;   // 메뉴 선택은 클릭·숫자키로만
   if(state === STATE.PAUSE){ togglePause(); return; }
   if(state === STATE.READY) state = STATE.PLAY;
   if(state === STATE.OVER){
@@ -585,6 +661,17 @@ function keyName(e){
 
 window.addEventListener("keydown", (e)=>{
   const k = keyName(e);
+  if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); state = STATE.MENU; syncHUD(); return; }
+  if(state === STATE.MENU || state === STATE.PRACTICE_SELECT){
+    if(k === "Escape"){ e.preventDefault(); if(state === STATE.PRACTICE_SELECT) state = STATE.MENU; return; }
+    const m = /^Digit([1-9])$/.exec(k);
+    if(m){
+      e.preventDefault();
+      const idx = parseInt(m[1], 10) - 1, rows = menuRows();
+      if(rows[idx]) rows[idx].action();
+    }
+    return;
+  }
   if(k === "KeyP" || k === "Escape"){ e.preventDefault(); togglePause(); return; }
   if(k === "KeyR"){ reset(); return; }
   if(state === STATE.PAUSE){
@@ -613,6 +700,13 @@ let canvasHold = false;
 canvas.addEventListener("pointerdown", (e)=>{
   e.preventDefault();
   try{ window.focus(); canvas.focus({preventScroll:true}); }catch(err){}
+  if(state === STATE.MENU || state === STATE.PRACTICE_SELECT){
+    const pos = canvasPos(e);
+    for(const row of menuRows()){
+      if(pos.y > row.y - 16 && pos.y < row.y + 20){ row.action(); break; }
+    }
+    return;
+  }
   canvasHold = true;
   grab();
 });
@@ -664,8 +758,10 @@ function die(reason){
   state = STATE.OVER;
   deathReason = reason;
   overAt = performance.now();
-  if(dist > best){ best = dist; saveBest(); }
-  if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
+  if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
+    if(dist > best){ best = dist; saveBest(); }
+    if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
+  }
   syncHUD();
   for(let i=0;i<26;i++) spark(p.x, p.y, reason === "바다" ? "#8fd6d8" : "#f0a24e");
 }
@@ -748,7 +844,8 @@ function clearCuts(){
 
 function spawnBoss(big){
   let type;
-  if(big) type = 5;
+  if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
+  else if(big) type = 5;
   else type = Math.floor(Math.random()*5);
   boss = { type, big:!!big, hp: big ? 8 : 2, maxHp: big ? 8 : 2,
            t:0, fire: big ? 90 : 90, harpoon: 70, fishSkill: 200,
@@ -878,16 +975,22 @@ function damageBoss(ranged, mark){
     pops.push({ x:b.x, y:b.y-40, t:130, text:"격침 +" + bounty, color:"#d9b877" });
     for(let i=0;i<40;i++) spark(b.x, b.y, "#d9b877");
     bossKills++;
-    lifeBossKills++;
-    if(b.big) lifeKrakenKills++;
-    const unlocked = checkTitles();
-    if(unlocked){
-      newTitle = unlocked.name;
-      pops.push({ x:b.x, y:b.y-70, t:160, text:"칭호 획득: " + unlocked.name, color:"#ffd76a" });
+    if(!practiceMode){        // 연습 모드에서 무한 반복 격파해도 칭호·기록은 오염되지 않게
+      lifeBossKills++;
+      if(b.big) lifeKrakenKills++;
+      const unlocked = checkTitles();
+      if(unlocked){
+        newTitle = unlocked.name;
+        pops.push({ x:b.x, y:b.y-70, t:160, text:"칭호 획득: " + unlocked.name, color:"#ffd76a" });
+      }
+      saveTitles();
     }
-    saveTitles();
     applyBossReward(b);
-    if(b.big){ nextBigAt = Math.max(nextBigAt + 2000, dist + 900); nextBossAt = dist + 500; }
+    if(practiceMode && practiceMode.type === "boss"){
+      // 연습 대상만 짧은 간격으로 계속 반복 등장
+      if(b.big){ nextBigAt = dist + 60; nextBossAt = Infinity; }
+      else { nextBossAt = dist + 60; nextBigAt = Infinity; }
+    } else if(b.big){ nextBigAt = Math.max(nextBigAt + 2000, dist + 900); nextBossAt = dist + 500; }
     else nextBossAt = dist + 500;
     clearCuts();
     boss = null;
@@ -2496,13 +2599,14 @@ function draw(){
   } else if(state === STATE.READY){
     ctx.fillStyle = "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
+    if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 54, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 16, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
-    centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 4배", H/2 + 12, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
+    centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 " + CHAIN_CAP + "배", H/2 + 12, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
     centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 36, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
     centerText("Q 피스톨(5초) · W 엘리펀트 건(15초) — 원거리 공격, 해왕류·잡몹 처치", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
     centerText("식인 물고기는 휘청이게 하고, 해왕류는 원거리 스킬로 물리칠 수 있다", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
-    centerText("클릭 또는 Space로 출항", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("클릭 또는 Space로 출항 · M 메뉴로", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     const readyTitle = currentTitleName();
     if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.8)");
@@ -2512,6 +2616,7 @@ function draw(){
     const reasonText = deathReason === "바다" ? "바다에 빠졌다"
       : deathReason === "정체" ? "너무 오래 멈춰 있어 선단에 뒤처졌다"
       : "선단에 뒤처졌다";
+    if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 68, "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     centerText(reasonText, H/2 - 40, "700 29px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), H/2 + 2, "600 17px 'Pretendard', system-ui, sans-serif", "#d9b877");
     let overY = H/2 + 40;
@@ -2528,7 +2633,19 @@ function draw(){
       const overTitle = currentTitleName();
       if(overTitle){ centerText("현재 칭호: " + overTitle, overY, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)"); overY += 22; }
     }
-    centerText("클릭 · Space · R로 다시", overY + 4, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("클릭 · Space · R로 다시 · M 메뉴로", overY + 4, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+  } else if(state === STATE.MENU){
+    ctx.fillStyle = "rgba(13,27,38,0.72)";
+    ctx.fillRect(0,0,W,H);
+    centerText("고무팔 · 대항해", H/2 - 90, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
+    centerText("숫자 키 또는 클릭으로 선택", H/2 + 96, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+  } else if(state === STATE.PRACTICE_SELECT){
+    ctx.fillStyle = "rgba(13,27,38,0.78)";
+    ctx.fillRect(0,0,W,H);
+    centerText("연습 모드 — 연습할 항목을 고르세요", H/2 - 196, "700 21px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    for(const row of menuRows()) centerText(row.label, row.y, "500 16px 'Pretendard', system-ui, sans-serif", "#d9b877");
+    centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H/2 + 118, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   }
 }
 
@@ -2549,7 +2666,8 @@ document.addEventListener("visibilitychange", ()=>{
 
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
-                 mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield }),
+                 mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
+                 practiceMode }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
@@ -2557,10 +2675,14 @@ window.__swing = {
   fire: firePistol,
   fireGun: fireGun,
   reset: reset,
-  weak: () => (boss ? weakPoints(boss) : [])
+  weak: () => (boss ? weakPoints(boss) : []),
+  startMain: startMainGame,
+  startPractice: startPractice,
+  toMenu: () => { state = STATE.MENU; }
 };
 
 reset();
+state = STATE.MENU;      // 첫 화면은 본게임/연습 모드 선택 메뉴
 loadBest();
 loadBestChain();
 loadTitles();
