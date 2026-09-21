@@ -1090,12 +1090,15 @@ function updateBoss(dt){
       b.y = 110 + Math.sin(b.t*0.03)*30;
       b.fire -= dt;
       if(b.fire <= 0){
-        b.fire = Math.max(58, 100 - bossKills*4);
-        // 궤적을 흔드는 돌풍 — 스턴 대신 순간적인 강한 옆바람으로 스윙을 흐트러뜨린다
+        b.fire = Math.max(29, 50 - bossKills*2);   // 쿨타임 절반
+        // 궤적을 흔드는 돌풍 3발을 부채꼴로 — 스턴 대신 순간적인 강한 옆바람으로 스윙을 흐트러뜨린다
         const dir = p.x >= b.x ? 1 : -1;
-        shots.push({ x:b.x, y:b.y + 20, vx: dir*10.5, vy:0, g:0, r:34,
-                     kind:3, spin:0, windPush: dir * 8.5 });
-        for(let i=0;i<10;i++) spark(b.x, b.y+20, "#c7ecec");
+        for(let i=-1;i<=1;i++){
+          const spread = i * 0.22;
+          shots.push({ x:b.x, y:b.y + 20, vx: Math.cos(spread)*dir*10.5, vy: Math.sin(spread)*10.5,
+                       g:0, r:34, kind:3, spin:0, windPush: dir * 8.5 });
+        }
+        for(let i=0;i<16;i++) spark(b.x, b.y+20, "#c7ecec");
       }
     }
 
