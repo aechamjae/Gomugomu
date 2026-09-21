@@ -244,6 +244,7 @@ const STALL_PUSH_SPD = 0.85; // 밀려나는 속도(px/프레임)
 const GUN_CD    = 60*15;    // 재충전 15초 (60초의 1/4)
 const GUN_R     = 150;      // 충격 반경
 const GUN_LIFE  = 34;       // 이펙트 지속 프레임
+const GUN_KNOCK = 9.5;      // 발사 반동 — 쏘는 순간 이동 방향의 반대로 밀려난다
 
 /* 잡몹 */
 const KING_H    = 300;      // 해왕류가 솟구치는 높이
@@ -1328,19 +1329,29 @@ function updateShots(dt){
 
 /* ---------- 고무고무 피스톨 ---------- */
 function pistolAim(){
-  // 보스가 앞에 있으면 약점을, 없으면 가장 가까운 잡몹을 노린다
-  let best = null, bd = 1e9;
-  const consider = (tx, ty) => {
-    if(tx < p.x - 60) return;
+  // 보스(또는 해왕류)가 있으면 최우선으로 그쪽을 노린다 — 겹쳐 있어서
+  // 목표가 등 뒤로 잡혀도(뒤처짐 판정 때문에 놓치는 일이 없도록) 가까우면 방향과 무관하게 조준한다
+  let bestBoss = null, bdBoss = 1e9;
+  const considerBoss = (tx, ty) => {
     const d = Math.hypot(tx - p.x, ty - p.y);
-    if(d < bd && d < 860){ bd = d; best = { x:tx, y:ty }; }
+    if(tx < p.x - 60 && d > 90) return;   // 멀리 뒤에 있을 때만 걸러낸다 — 겹친 상태는 통과
+    if(d < bdBoss){ bdBoss = d; bestBoss = { x:tx, y:ty }; }
   };
   if(boss) for(const wp of weakPoints(boss)){
-    if(Math.hypot(wp.x - p.x, wp.y - p.y) < PISTOL_BOSS_RANGE) consider(wp.x, wp.y);
+    if(Math.hypot(wp.x - p.x, wp.y - p.y) < PISTOL_BOSS_RANGE) considerBoss(wp.x, wp.y);
   }
   for(const m of mobs){
-    if(m.kind === 0 && m.air) consider(m.x, m.y);
-    if(m.kind === 1 && m.h > 30) consider(m.x, SEA - m.h - 26);
+    if(m.kind === 1 && m.h > 30) considerBoss(m.x, SEA - m.h - 26);
+  }
+  if(bestBoss) return Math.atan2(bestBoss.y - p.y, bestBoss.x - p.x);
+
+  // 보스가 없을 때만 잡몹(식인 물고기)을 노린다
+  let best = null, bd = 1e9;
+  for(const m of mobs){
+    if(m.kind !== 0 || !m.air) continue;
+    if(m.x < p.x - 60) continue;
+    const d = Math.hypot(m.x - p.x, m.y - p.y);
+    if(d < bd && d < 860){ bd = d; best = { x:m.x, y:m.y }; }
   }
   if(best) return Math.atan2(best.y - p.y, best.x - p.x);
   return p.face > 0 ? -0.10 : Math.PI + 0.10;      // 목표가 없으면 정면으로
@@ -1422,6 +1433,16 @@ function fireGun(){
   gunCd = GUN_CD;
   const gx = p.x + 200*p.face, gy = p.y - 6;
   gun = { x:gx, y:gy, t:GUN_LIFE };
+
+  // 발사 반동 — 이동 방향의 반대로 튕겨나간다. 낙하하며 쏘면 반동으로 다시 솟구칠 수 있다
+  const spd = Math.hypot(p.vx, p.vy);
+  if(spd > 0.4){
+    p.vx -= (p.vx/spd) * GUN_KNOCK;
+    p.vy -= (p.vy/spd) * GUN_KNOCK;
+  } else {
+    p.vy -= GUN_KNOCK;         // 거의 멈춰 있으면 위로 튕겨 올린다
+  }
+
   pops.push({ x:p.x, y:p.y-34, t:70, text:"고무고무 엘리펀트 건", color:"#8f4fd0" });
   for(let i=0;i<26;i++) spark(gx, gy, "#8f4fd0");
 
