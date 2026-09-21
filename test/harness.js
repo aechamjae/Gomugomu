@@ -59,7 +59,7 @@ vm.createContext(sandbox);
 const html = fs.readFileSync(process.env.GAME || path.join(__dirname, "..", "index.html"), "utf8");
 const src  = html.split("<script>")[1].split("</script>")[0];
 // 게임 전체가 IIFE로 감싸여 있으므로 훅을 그 안쪽에 끼워 넣는다
-const HOOK = '\nwindow.__test = { setBoss:(b)=>{ boss = b; }, wp:(b)=>weakPoints(b), P:()=>p, anchors:()=>anchors, reset:()=>reset() };\n';
+const HOOK = '\nwindow.__test = { setBoss:(b)=>{ boss = b; }, wp:(b)=>weakPoints(b), P:()=>p, anchors:()=>anchors, reset:()=>reset(), setShield:(v)=>{ shield = v; }, setChain:(v)=>{ chain = v; chainTimer = 0; }, pushShot:(s)=>{ shots.push(s); }, dmg:(r,m)=>{ damageBoss(r,m); } };\n';
 const i = src.lastIndexOf("})();");
 const wired = i < 0 ? src + HOOK : src.slice(0, i) + HOOK + src.slice(i);
 vm.runInContext(wired, sandbox, { filename:"game.js" });
