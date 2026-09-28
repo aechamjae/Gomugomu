@@ -576,6 +576,18 @@ function swing(a, st){
   ok("본게임 코스는 매번 다르다", m1 !== m2);
 }
 
+/* --- 오늘의 항해 고스트 --- */
+{
+  const a = A();
+  a.startDaily(); H.step();
+  a.hold(true); H.step(); a.hold(false);
+  const s = run(a, 6000, (st) => swing(a, st));
+  const g = a.ghost();
+  ok("오늘의 항해 기록을 세우면 고스트 궤적이 남는다", s.state === 2 && g.best && g.best.length > 20,
+     "궤적 점=" + (g.best ? g.best.length/2 : 0));
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

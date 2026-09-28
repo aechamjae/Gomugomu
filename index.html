@@ -407,6 +407,9 @@ let practiceMode = null;
 
 // 오늘의 항해 — 날짜를 시드로 지형·잡몹·아이템·미션을 고정한다. practiceMode처럼 R로 재시작해도 유지
 let dailyMode = false, dailyBest = 0, dailyDate = "";
+// 고스트 — 오늘의 항해 최고 기록 판의 궤적. GHOST_STEP 프레임마다 [x, y]를 이어 붙인 배열
+const GHOST_STEP = 4;
+let ghostBest = null, ghostRec = [], playT = 0;
 let genRand = Math.random;
 function mulberry32(a){
   return function(){
@@ -538,6 +541,7 @@ function reset(){
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
   runBounty = 0; newBountyRecord = false; newDailyRecord = false;
+  ghostRec = []; playT = 0;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
   rope = null;
@@ -1187,8 +1191,8 @@ function die(reason){
     bank += Math.floor(treasure);
     saveShop();
     if(dailyMode){
-      if(dailyDate !== todayKey()){ dailyDate = todayKey(); dailyBest = 0; }
-      if(dist > dailyBest){ dailyBest = dist; newDailyRecord = true; }
+      if(dailyDate !== todayKey()){ dailyDate = todayKey(); dailyBest = 0; ghostBest = null; }
+      if(dist > dailyBest){ dailyBest = dist; newDailyRecord = true; ghostBest = ghostRec.slice(); }
       saveDaily();
     }
   }
@@ -1941,6 +1945,8 @@ function update(dt){
   if(state !== STATE.PLAY) return;
 
   pPrevX = p.x; pPrevY = p.y;
+  playT += dt;
+  if(dailyMode) while(ghostRec.length / 2 * GHOST_STEP <= playT) ghostRec.push(Math.round(p.x), Math.round(p.y));
 
   // 누르고 있으면 쿨타임이 끝나는 순간 자동으로 걸린다 (입력 선입력)
   if(holding && !rope && grabCd <= 0 && stun <= 0 && pickAnchor()) grab();
@@ -2179,10 +2185,10 @@ async function loadDaily(){
   let v = null;
   try{ if(window.storage){ const r = await window.storage.get("swing:daily"); if(r && r.value) v = r.value; } }catch(e){}
   try{ if(!v && window.localStorage) v = localStorage.getItem("swing:daily"); }catch(e){}
-  try{ if(v){ const r = JSON.parse(v); dailyDate = r.date || ""; dailyBest = r.best || 0; } }catch(e){}
+  try{ if(v){ const r = JSON.parse(v); dailyDate = r.date || ""; dailyBest = r.best || 0; ghostBest = Array.isArray(r.ghost) ? r.ghost : null; } }catch(e){}
 }
 async function saveDaily(){
-  const v = JSON.stringify({ date: dailyDate, best: Math.floor(dailyBest) });
+  const v = JSON.stringify({ date: dailyDate, best: Math.floor(dailyBest), ghost: ghostBest || [] });
   try{ if(window.storage){ await window.storage.set("swing:daily", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:daily", v); }catch(e){}
 }
@@ -2540,6 +2546,27 @@ function drawBarrel(b){
   ctx.font = "700 11px 'Pretendard', system-ui, sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText("$", 2, 0);
+  ctx.restore();
+}
+
+function drawGhost(){
+  if(!dailyMode || !ghostBest || dailyDate !== todayKey() || state !== STATE.PLAY) return;
+  const f = playT / GHOST_STEP, i = Math.floor(f);
+  if((i + 1) * 2 + 1 >= ghostBest.length) return;      // 고스트의 판은 여기서 끝났다
+  const k = f - i;
+  const gx = ghostBest[i*2] + (ghostBest[i*2+2] - ghostBest[i*2]) * k;
+  const gy = ghostBest[i*2+1] + (ghostBest[i*2+3] - ghostBest[i*2+1]) * k;
+  const x = gx - cam.x;
+  if(x < -40 || x > W/cam.z + 40) return;
+  ctx.save();
+  ctx.globalAlpha = 0.38;
+  ctx.fillStyle = "#bfe8ea";
+  ctx.beginPath(); ctx.ellipse(x, gy + 4, 11, 14, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, gy - 11, 9, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 0.7;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "600 10px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText("오늘 최고", x, gy - 30);
   ctx.restore();
 }
 
@@ -3497,6 +3524,7 @@ function draw(){
   if(boss) drawBoss();
   drawMobs();
   drawShots();
+  drawGhost();
   drawFusen();
   drawReleaseCue();
   drawGearAura();
@@ -3702,7 +3730,8 @@ window.__swing = {
   shop: () => ({ bank, upgrades, buy: (i) => buyUpgrade(UPGRADES[i]), setBank: (v) => { bank = v; }, reach: reach(), pistolCd: pistolCd(),
                  skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]) }),
   toShop: () => { state = STATE.SHOP; },
-  startDaily: startDaily
+  startDaily: startDaily,
+  ghost: () => ({ best: ghostBest, rec: ghostRec })
 };
 
 reset();
