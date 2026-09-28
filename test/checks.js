@@ -777,6 +777,20 @@ function swing(a, st){
      Object.keys(cnt).length === 6 && cnt.shield < cnt.treasure * 0.6, JSON.stringify(cnt));
 }
 
+/* --- 보물섬 해역 --- */
+{
+  const a = start();
+  T().teleport(1200 * 22 + 10);
+  T().setFusen(2);
+  const st = a.peek();
+  run(a, 20, (s) => swing(a, s));
+  const s = a.peek();
+  const zoneMobs = s.mobs.concat(s.gulls).filter(m => m.x / 22 > 1205 && m.x / 22 < 1300).length;
+  const arcCoins = s.coins.filter(c => c.arc && c.x / 22 > 1205 && c.x / 22 < 1300).length;
+  ok("보물섬 해역에 들어가면 배너가 뜨고 잡몹 없이 금화 줄이 깔린다", s.bonusOn && zoneMobs === 0 && arcCoins >= 7,
+     "bonusOn=" + s.bonusOn + " 잡몹=" + zoneMobs + " 아치금화=" + arcCoins);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

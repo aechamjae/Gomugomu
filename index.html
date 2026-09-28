@@ -349,6 +349,14 @@ const PARROT_UNLOCK = 3;
 const PARROT_RANGE  = 190;   // 이 거리 안의 금화만 노린다
 const PARROT_CD     = 70;    // 한 번 물어 온 뒤 쉬는 시간
 
+/* 보물섬 해역 — 1200m부터 1500m마다 110m. 잡몹 없이 금화 줄·황금 고리가 쏟아지는 쉼표 구간.
+   지형 좌표(월드 x/22) 기준이라 보스전으로 거리 표시가 밀려도 같은 자리에 생긴다 */
+const BONUS_FIRST = 1200, BONUS_EVERY = 1500, BONUS_LEN = 110;
+function inBonus(m){
+  if(practiceMode || m < BONUS_FIRST) return false;
+  return (m - BONUS_FIRST) % BONUS_EVERY < BONUS_LEN;
+}
+
 /* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
 const GEAR_MAX  = 100;
 const GEAR_T    = 300;
@@ -550,7 +558,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -567,6 +575,7 @@ function reset(){
   gullHits = 0;
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
+  bonusOn = false; bonusVisits = 0;
   parrot = { x:150 - 30, y:110, vx:0, vy:0, target:null, cd:60, t:0 };
   fusen = upLv("fusen");      // 비상식량 업그레이드 — 풍선 하나를 들고 출발
   fusenAnim = 0;
@@ -720,17 +729,29 @@ function updateRot(dt){
   }
 }
 
+function updateBonus(){
+  const now = inBonus(p.x / 22);
+  if(now && !bonusOn){
+    bonusOn = true; bonusVisits++;
+    missionFlash = { text: "보물섬 해역! 잡몹 없이 금화가 쏟아진다", reward:0, t:150, bonus:true };
+    for(let i=0;i<24;i++) spark(p.x, p.y, "#ffd76a");
+  } else if(!now && bonusOn){
+    bonusOn = false;
+    pops.push({ x:p.x, y:p.y-50, t:70, text:"보물섬 해역을 벗어났다", color:"#ffd76a" });
+  }
+}
+
 function updateWeather(dt){
   if(flash > 0) flash -= 0.06*dt;
   if(weather){
     if(weather.type === "storm" && Math.random() < 0.005*dt) flash = 1;
     // 보스전 중엔 거리가 멈추니, 그대로 두면 날씨가 보스전 내내 이어진다 — 보스가 뜨면 걷힌다
-    if(dist > weather.to || boss){
+    if(dist > weather.to || boss || bonusOn){
       pops.push({ x:p.x, y:p.y-50, t:70, text: weather.type === "storm" ? "폭풍을 빠져나왔다" : "바람이 잦아든다", color:"#8fd6d8" });
       weather = null;
       nextWeatherAt = dist + 500 + weatherRand()*400;
     }
-  } else if(!practiceMode && !boss && dist >= nextWeatherAt){
+  } else if(!practiceMode && !boss && !bonusOn && dist >= nextWeatherAt){
     const type = weatherRand() < 0.5 ? "wind" : "storm";
     weather = { type, from: dist, to: dist + WEATHER_LEN };
     missionFlash = { text: type === "wind" ? "순풍이 분다! →" : "폭풍 구간 — 금화 2배", reward:0, t:150, weather:type };
@@ -888,11 +909,12 @@ function generate(){
     const jitter = (genRand() - 0.5) * 96;
     const y = Math.max(64, Math.min(268, baseY*0.68 + lastAY*0.32 + jitter));
     const an = { x, y, kind: genRand() < 0.62 ? 0 : 1 };   // 0 돛대, 1 바위 기둥
-    if(!practiceMode && x/22 > 60 && genRand() < GOLD_CHANCE) an.gold = true;
+    const bz = inBonus(x / 22);
+    if(!practiceMode && x/22 > 60 && genRand() < (bz ? 0.3 : GOLD_CHANCE)) an.gold = true;
     else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && genRand() < ROT_CHANCE) an.rot = true;
     anchors.push(an);
 
-    if(x/22 > 40 && genRand() < ARC_CHANCE){
+    if(x/22 > 40 && (genRand() < ARC_CHANCE || bz)){
       // 두 고리 사이의 스윙 궤적을 흉내 낸 아치 — 가운데가 가장 높다
       const id = ++arcSeq;
       const base = Math.min(SEA - 100, (lastAY + y)/2 + 150 + genRand()*40);
@@ -916,7 +938,7 @@ function generate(){
     if(!practiceMode && x/22 > BARREL_FROM && genRand() < BARREL_CHANCE){
       barrels.push({ x: lastAX + gap*(0.3 + genRand()*0.4), gone:false });
     }
-    spawnMobs(lastAX, x);
+    if(!bz) spawnMobs(lastAX, x);        // 보물섬 해역엔 잡몹이 없다
     lastAX = x; lastAY = y;
   }
   anchors = anchors.filter(a => a.x > cam.x - 320);
@@ -2402,6 +2424,7 @@ function update(dt){
     if(d < BARREL_R + 14) breakBarrel(b, "몸통 박치기");
   }
   if(fusenAnim > 0) fusenAnim -= dt;
+  updateBonus();
   updateWeather(dt);
   updateSkim(dt, sp);
   updateRot(dt);
@@ -3684,6 +3707,17 @@ function drawSpeedLines(){
   ctx.restore();
 }
 
+function drawBonusZone(){
+  if(!bonusOn) return;
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.35, W/2, H/2, H*0.8);
+  vg.addColorStop(0, "rgba(255,215,106,0)");
+  vg.addColorStop(1, "rgba(255,200,80," + (0.16 + Math.sin(time*0.08)*0.04).toFixed(2) + ")");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+  const zoneEnd = BONUS_FIRST + Math.floor((p.x/22 - BONUS_FIRST) / BONUS_EVERY) * BONUS_EVERY + BONUS_LEN;
+  centerText("보물섬 해역 — 남은 " + Math.max(0, Math.ceil(zoneEnd - p.x/22)) + "m", H - 18, "700 13px 'Pretendard', system-ui, sans-serif", "#ffd76a", 0.9);
+}
+
 function drawWeather(){
   if(!weather) return;
   ctx.save();
@@ -3749,10 +3783,11 @@ function drawMissionFlash(){
   ctx.globalAlpha = a;
   ctx.fillStyle = "rgba(13,27,38,0.78)";
   ctx.fillRect(W/2 - 170, y - 20, 340, 40);
-  ctx.strokeStyle = missionFlash.gear ? "#ff8fa0" : missionFlash.weather ? "#8fd6d8" : missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
+  ctx.strokeStyle = missionFlash.bonus ? "#ffd76a" : missionFlash.gear ? "#ff8fa0" : missionFlash.weather ? "#8fd6d8" : missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
   ctx.strokeRect(W/2 - 170, y - 20, 340, 40);
   ctx.restore();
-  if(missionFlash.gear) centerText(missionFlash.text, y, "700 19px 'Pretendard', system-ui, sans-serif", "#ff8fa0", a);
+  if(missionFlash.bonus) centerText(missionFlash.text, y, "700 16px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
+  else if(missionFlash.gear) centerText(missionFlash.text, y, "700 19px 'Pretendard', system-ui, sans-serif", "#ff8fa0", a);
   else if(missionFlash.weather) centerText(missionFlash.text, y, "700 18px 'Pretendard', system-ui, sans-serif", missionFlash.weather === "wind" ? "#f4ecd9" : "#b8c8e8", a);
   else if(missionFlash.record) centerText("★ " + missionFlash.text + " ★", y, "700 18px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
   else centerText("미션 완료 · " + missionFlash.text + "  +" + missionFlash.reward, y, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0", a);
@@ -3994,6 +4029,7 @@ function draw(){
   ctx.restore();
 
   if(state === STATE.PLAY || state === STATE.PAUSE) drawWeather();
+  if(state === STATE.PLAY) drawBonusZone();
   if(state === STATE.PLAY) drawSpeedLines();
   if(boss && state === STATE.PLAY) drawBossBar();
   if(state === STATE.PLAY) drawSkillGauge();
@@ -4179,7 +4215,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
