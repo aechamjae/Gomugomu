@@ -411,7 +411,7 @@ function fit(){
 fit();
 window.addEventListener("resize", fit);
 
-const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8 };
+const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8, REVIVE:9 };
 const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG || state === STATE.SETTINGS;
 
 /* 설정 — 멀미·광과민을 위한 연출 끄기. 기기에 저장 */
@@ -765,6 +765,7 @@ function reset(){
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
   runBounty = 0; newBountyRecord = false; newDailyRecord = false;
+  reviveUsed = false; reviveT = 0;
   runXp = 0;
   ghostRec = []; playT = 0;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
@@ -1485,6 +1486,7 @@ function togglePause(){
 
 function grab(){
   if(inMenu()) return;   // 메뉴 선택은 클릭·숫자키로만
+  if(state === STATE.REVIVE) return;   // 부활 여부는 버튼·Space·Esc로만
   if(state === STATE.PAUSE){ togglePause(); return; }
   if(state === STATE.READY) state = STATE.PLAY;
   if(state === STATE.OVER){
@@ -1623,6 +1625,13 @@ window.addEventListener("keydown", (e)=>{
     }
     return;
   }
+  if(state === STATE.REVIVE){
+    e.preventDefault();
+    if(e.repeat) return;   // 팔 걸려고 누르고 있던 Space의 자동 반복으로 부활을 수락하지 않게
+    if(k === "Space" || k === "Enter" || k === "KeyK") revive();
+    else if(k === "Escape" || k === "KeyN") declineRevive();
+    return;
+  }
   if(k === "KeyP" || k === "Escape"){ e.preventDefault(); togglePause(); return; }
   if(k === "KeyR"){ reset(); return; }
   if(k === "KeyC" && state === STATE.OVER){ e.preventDefault(); shareResult(); return; }
@@ -1653,6 +1662,12 @@ let canvasHold = false;
 canvas.addEventListener("pointerdown", (e)=>{
   e.preventDefault();
   try{ window.focus(); canvas.focus({preventScroll:true}); }catch(err){}
+  if(state === STATE.REVIVE){
+    const pos = canvasPos(e), inB = (B) => pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h;
+    if(inB(REVIVE_BTN)) revive();
+    else if(inB(GIVEUP_BTN)) declineRevive();
+    return;
+  }
   if(state === STATE.OVER){
     const pos = canvasPos(e), B = SHARE_BTN;
     if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ shareResult(); return; }
@@ -1712,7 +1727,40 @@ function spark(x, y, color){
   bits.push({ x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s - 1.2, life:1, color });
 }
 
+/* 보물로 부활 — 본게임에서 바다에 빠질 때 한 번, 창고 보물로 이어 간다 */
+const REVIVE_COST = 500, REVIVE_T = 200;
+let reviveUsed = false, reviveReason = "", reviveT = 0;
+const REVIVE_BTN = { x: W/2 - 150, y: H/2 + 20, w: 140, h: 44 };
+const GIVEUP_BTN = { x: W/2 + 10, y: H/2 + 20, w: 140, h: 44 };
+function canRevive(reason){
+  return reason === "바다" && !reviveUsed && !practiceMode && !dailyMode && !blitzMode && !rushMode && bank >= REVIVE_COST;
+}
+function revive(){
+  if(state !== STATE.REVIVE) return;
+  bank -= REVIVE_COST; saveShop();
+  reviveUsed = true;
+  state = STATE.PLAY;
+  last = performance.now();
+  rope = null; stun = 0; iframes = 100;
+  p.y = SEA - 30; p.vy = -15.5; p.vx = Math.max(Math.abs(p.vx), 8);
+  stallX = p.x; stallT = 0;
+  fusenAnim = 46;
+  pops.push({ x:p.x, y:p.y-50, t:90, text:"부활! 창고 보물 -" + REVIVE_COST, color:"#ffd76a" });
+  for(let i=0;i<30;i++) spark(p.x, SEA, i % 2 ? "#ffd76a" : "#8fd6d8");
+  addShake(5, 12);
+}
+function declineRevive(){
+  if(state !== STATE.REVIVE) return;
+  reviveUsed = true;
+  state = STATE.PLAY;
+  die(reviveReason);
+}
+
 function die(reason){
+  if(canRevive(reason)){
+    state = STATE.REVIVE; reviveReason = reason; reviveT = REVIVE_T;
+    return;
+  }
   state = STATE.OVER;
   deathReason = reason;
   overAt = performance.now();
@@ -2780,6 +2828,11 @@ function update(dt){
   if(shakeT > 0){ shakeT -= dt; if(shakeT <= 0){ shakeT = 0; shakeMag = 0; } }
   if(bossIntro){ bossIntro.t += dt; if(bossIntro.t > INTRO_T) bossIntro = null; }
   if(sinkBanner){ sinkBanner.t += dt; if(sinkBanner.t > 90) sinkBanner = null; }
+  if(state === STATE.REVIVE){
+    reviveT -= dt;
+    if(reviveT <= 0) declineRevive();
+    return;
+  }
 
   if(state !== STATE.PLAY) return;
 
@@ -5146,6 +5199,23 @@ function draw(){
     const readyTitle = currentTitleName();
     if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.8)");
+  } else if(state === STATE.REVIVE){
+    ctx.fillStyle = "rgba(13,27,38,0.62)";
+    ctx.fillRect(0,0,W,H);
+    centerText("바다에 빠졌다!", H/2 - 70, "900 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("창고 보물 " + REVIVE_COST + "으로 부활할까? (판당 한 번 · 가진 보물 " + Math.floor(bank) + ")", H/2 - 32, "600 15px 'Pretendard', system-ui, sans-serif", "#ffd76a");
+    const k = Math.max(0, reviveT / REVIVE_T);
+    ctx.fillStyle = "rgba(244,236,217,.15)"; ctx.fillRect(W/2 - 150, H/2 - 8, 300, 6);
+    ctx.fillStyle = "#ffd76a"; ctx.fillRect(W/2 - 150, H/2 - 8, 300 * k, 6);
+    const btn = (B, text, col) => {
+      ctx.fillStyle = "rgba(13,27,38,.7)"; ctx.fillRect(B.x, B.y, B.w, B.h);
+      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(B.x, B.y, B.w, B.h);
+      ctx.fillStyle = col; ctx.font = "700 15px 'Pretendard', system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(text, B.x + B.w/2, B.y + B.h/2 + 1);
+    };
+    btn(REVIVE_BTN, "부활 (Space)", "#ffd76a");
+    btn(GIVEUP_BTN, "포기 (Esc)", "rgba(244,236,217,.7)");
   } else if(state === STATE.OVER){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
@@ -5306,6 +5376,7 @@ window.__swing = {
   startDaily: startDaily,
   startBlitz: startBlitz,
   startRush: startRush,
+  revive: () => revive(), decline: () => declineRevive(),
   log: () => lifeLog,
   level: () => levelOf(lifeLog.xp || 0),
   hints: () => ({ seen: [...hintsSeen], now: hintNow }),

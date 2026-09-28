@@ -18,12 +18,15 @@ function start(){
   a.keys.right = false; a.keys.down = false;
   return a;
 }
+// 부활 제안(state 9)은 기본적으로 거절한다 — 부활 자체는 따로 검사한다
 function run(a, n, fn){
   for(let i=0;i<n;i++){
+    if(a.peek().state === 9) a.decline();
     if(fn) fn(a.peek(), i);
     if(a.peek().state === 2) return a.peek();
     H.step();
   }
+  if(a.peek().state === 9) a.decline();
   return a.peek();
 }
 // 실제 플레이에 가까운 스윙 정책
@@ -1151,6 +1154,34 @@ function swing(a, st){
   ok("칭호를 따면 칭호 보상 스킨을 공짜로 장착한다", sh().pickSkin(4) === true && sh().skin === "kraken");
   if(!had) U.delete("kraken1");
   sh().pickSkin(0);
+}
+
+/* --- 보물로 부활 --- */
+{
+  const a = start();
+  const sh = a.shop;
+  sh().setBank(800);
+  a.hold(false); T().setFusen(0);
+  T().P().y = a.peek().SEA + 10;
+  H.step();
+  ok("창고 보물이 있으면 바다에 빠질 때 부활을 묻는다", a.peek().state === 9);
+  a.revive();
+  const s1 = a.peek();
+  ok("부활하면 보물 500을 쓰고 튕겨 올라 이어 간다", s1.state === 1 && s1.vy < 0 && sh().bank === 300, "창고=" + sh().bank);
+  T().P().y = a.peek().SEA + 10;
+  for(let k = 0; k < 3; k++) H.step();
+  ok("부활은 판당 한 번뿐", a.peek().state === 2, "state=" + a.peek().state);
+  sh().setBank(0);
+}
+{
+  const a = A();
+  a.shop().setBank(800);
+  a.startDaily(); H.step(); a.hold(true); H.step(); a.hold(false);
+  T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  for(let k = 0; k < 3; k++) H.step();
+  ok("오늘의 항해에선 부활이 없다", a.peek().state === 2);
+  a.shop().setBank(0);
+  a.startMain();
 }
 
 /* --- 흑조호 잠항 (순간이동 금지) --- */
