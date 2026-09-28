@@ -1699,6 +1699,9 @@ function die(reason){
   deathReason = reason;
   overAt = performance.now();
   runBounty = computeBounty();
+  runGrade = practiceMode ? null : computeGrade();
+  newGradeRecord = false;
+  if(runGrade && GRADE_ORDER.indexOf(runGrade[0]) > GRADE_ORDER.indexOf(bestGrade || "")){ bestGrade = runGrade[0]; newGradeRecord = true; }
   if(!practiceMode && runBounty > bestBounty){ bestBounty = runBounty; newBountyRecord = true; }
   if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
     if(dist > best){ best = dist; saveBest(); }
@@ -3070,6 +3073,7 @@ function applyShopRecord(v){
     mapPieces = r.mapPieces || 0; mapsDone = r.mapsDone || 0;
     blitzBest = r.blitz || 0;
     rushBest = r.rush || 0;
+    bestGrade = r.grade || "";
   }catch(e){}
 }
 async function loadShop(){
@@ -3085,7 +3089,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -4722,7 +4726,7 @@ function resultText(){
   const lines = [
     "🏴‍☠️ 고무팔 · 대항해 — " + mode,
     blitzMode ? "보물 " + Math.floor(treasure) : Math.floor(dist) + "m · 보물 " + Math.floor(treasure),
-    "현상금 ฿ " + commas(runBounty) + (title ? " · '" + title + "'" : "")
+    "현상금 ฿ " + commas(runBounty) + (runGrade ? " · 등급 " + runGrade[0] : "") + (title ? " · '" + title + "'" : "")
   ];
   const extra = [];
   if(perfects) extra.push("PERFECT " + perfects);
@@ -4822,6 +4826,29 @@ function drawRecentChart(x, y, w, h){
   ctx.restore();
 }
 
+function drawGradeStamp(x, y){
+  const g = runGrade;
+  const t = Math.min(1, (performance.now() - overAt) / 400);
+  const sc = 1 + (1 - t) * 1.2;
+  ctx.save();
+  ctx.globalAlpha = t;
+  ctx.translate(x, y);
+  ctx.rotate(-0.12);
+  ctx.scale(sc, sc);
+  ctx.strokeStyle = g[2]; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(0, 0, 42, 0, Math.PI*2); ctx.stroke();
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI*2); ctx.stroke();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = g[2];
+  ctx.font = "900 44px Georgia, 'Times New Roman', serif";
+  ctx.fillText(g[0], 0, 2);
+  ctx.font = "700 11px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText("항해 등급", 0, 56);
+  if(newGradeRecord && t >= 1){ ctx.fillStyle = "#ffd76a"; ctx.fillText("★ 최고 등급", 0, 72); }
+  ctx.restore();
+}
+
 function drawShareButton(){
   const B = SHARE_BTN;
   ctx.save();
@@ -4850,6 +4877,20 @@ function leftText(t, x, y, font, color){
   ctx.font = font; ctx.fillStyle = color;
   ctx.fillText(t, x, y);
 }
+
+// 항해 등급 — 거리 대비 보물을 얼마나 알차게 모았나. 봇 기준 중앙값 약 1.5(C), 상위 10% 약 3(B)
+const GRADES = [["S", 6, "#ffd76a"], ["A", 3.8, "#9fe0a0"], ["B", 2.2, "#8fd6d8"], ["C", 1.0, "#d9b877"], ["D", 0, "rgba(244,236,217,.6)"]];
+const GRADE_ORDER = "DCBAS";
+function computeGrade(){
+  const ratio = treasure / Math.max(50, dist);
+  for(const g of GRADES){
+    if(ratio < g[1]) continue;
+    if((g[0] === "S" || g[0] === "A") && dist < 200) continue;   // 짧게 끝난 판은 A 이상 안 준다
+    return g;
+  }
+  return GRADES[GRADES.length - 1];
+}
+let bestGrade = "", runGrade = null, newGradeRecord = false;
 
 // 현상금 — 거리·보물·보스·미션·PERFECT를 합쳐 베리로 매긴다
 function computeBounty(){
@@ -5091,6 +5132,7 @@ function draw(){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
     drawPoster(W/2 - 330, 52, 250, 380);
+    if(runGrade) drawGradeStamp(W/2 + 300, 118);
     const reasonText = deathReason === "완주" ? "보스 러시 완주!"
       : deathReason === "시간" ? "시간 종료!"
       : deathReason === "바다" ? "바다에 빠졌다"
@@ -5154,7 +5196,7 @@ function draw(){
     const L = lifeLog;
     const stats = [
       ["항해 횟수", L.runs + "판"], ["총 항해 거리", commas(L.dist) + "m"], ["최고 거리", Math.floor(best) + "m"],
-      ["최고 현상금", "฿ " + commas(bestBounty)], ["최고 콤보", "×" + bestChain], ["보스 격파", lifeBossKills + "마리"],
+      ["최고 현상금", "฿ " + commas(bestBounty)], ["콤보·등급", "×" + bestChain + (bestGrade ? " · " + bestGrade : "")], ["보스 격파", lifeBossKills + "마리"],
       ["크라켄 격파", lifeKrakenKills + "마리"], ["PERFECT", L.perfects + "회"], ["미션 완료", L.missions + "개"],
       ["갈매기 격추", L.gulls + "마리"], ["보물 통", L.barrels + "개"], ["황금 고리", L.golds + "번"],
       ["수면 스치기", L.skims + "회"], ["기어 2 발동", L.gears + "번"], ["보물 지도", mapPieces + "/" + MAP_PIECES + " 조각" + (mapsDone ? " · 완성 " + mapsDone : "")]
@@ -5227,7 +5269,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, slowT, bossIntro, shakeT, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone, barrage, shells, barragesCleared, floes, geysers, floeSaves, geyserHits, rocketCharge, rockets }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, shakeT, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, runGrade, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone, barrage, shells, barragesCleared, floes, geysers, floeSaves, geyserHits, rocketCharge, rockets }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

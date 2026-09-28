@@ -1125,6 +1125,21 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 항해 등급 --- */
+{
+  const a = start();
+  T().setTreasure(5000);
+  a.hold(false); T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  let s = run(a, 3);
+  ok("짧게 끝난 판은 보물이 많아도 A 이상을 안 준다", s.runGrade && s.runGrade[0] === "B", "등급=" + (s.runGrade && s.runGrade[0]));
+  const b = start();
+  T().teleport(300 * 22);
+  T().setTreasure(300 * 7);
+  b.hold(false); T().setFusen(0); T().P().y = b.peek().SEA + 10;
+  s = run(b, 3);
+  ok("300m에 보물 2100이면 S", s.runGrade && s.runGrade[0] === "S", "등급=" + (s.runGrade && s.runGrade[0]) + " 거리=" + Math.floor(s.dist));
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
