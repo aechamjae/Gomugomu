@@ -525,6 +525,7 @@ const GHOST_STEP = 4;
 let ghostBest = null, ghostRec = [], playT = 0;
 let genRand = Math.random;
 let weatherRand = Math.random;   // 날씨 시작 지점·종류 — 오늘의 항해에선 이것도 시드로 고정
+let barrageRand = Math.random;   // 포격 시작 지점 — 날씨와 섞으면 뽑는 순서가 속도에 따라 달라져서 따로 둔다
 function mulberry32(a){
   return function(){
     a |= 0; a = a + 0x6D2B79F5 | 0;
@@ -677,6 +678,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
   weatherRand = dailyMode ? mulberry32(todaySeed() * 7 + 13) : Math.random;
+  barrageRand = dailyMode ? mulberry32(todaySeed() * 11 + 5) : Math.random;
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
   cam = { x:0, z:1 };
   anchors = [];
@@ -710,7 +712,7 @@ function reset(){
   barrage = null; shells = []; barragesCleared = 0;
   floes = []; geysers = []; floeSaves = 0; geyserHits = 0;
   rocketCharge = 0; rockets = 0;
-  nextBarrageAt = BARRAGE_FIRST + weatherRand()*400;
+  nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
   runBounty = 0; newBountyRecord = false; newDailyRecord = false;
@@ -885,8 +887,10 @@ function updateBarrage(dt){
       addShake(4, 10);
       for(let k=0;k<18;k++) spark(q.x, q.y, k % 2 ? "#f0a24e" : "#1b1218");
       if(state === STATE.PLAY && Math.hypot(p.x - q.x, p.y - q.y) < SHELL_R + 12){
+        const before = stun;
         knock(false);
-        barrage && (barrage.hit = true);
+        // 기어 2·무적·보호막으로 막았으면 무피해 도전은 그대로
+        if(barrage && stun > before) barrage.hit = true;
       }
     }
     if(q.boom){ q.bt += dt; if(q.bt > 24) shells.splice(i,1); }
@@ -909,7 +913,7 @@ function updateBarrage(dt){
         addGear(barrage.hit ? "good" : "near");
       }
       barrage = null;
-      nextBarrageAt = dist + BARRAGE_EVERY[0] + weatherRand()*(BARRAGE_EVERY[1] - BARRAGE_EVERY[0]);
+      nextBarrageAt = dist + BARRAGE_EVERY[0] + barrageRand()*(BARRAGE_EVERY[1] - BARRAGE_EVERY[0]);
     }
   } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && dist >= nextBarrageAt){
     barrage = { cd: 45, hit: false, t: 0 };
@@ -1448,6 +1452,7 @@ function grab(){
     const fresh = Math.min(1, airTime / 20);
     const pull = 0.99 - 0.09 * fresh;
     rope = { a, len: Math.max(48, Math.min(d*pull, safe)) };
+    rocketCharge = 0;          // 줄이 다른 이유로 끊겼어도 충전이 다음 고리로 넘어가지 않게
     rings.push({ x:a.x, y:a.y, t:0, big: airTime > 34 });
     if(a.gold && !a.goldUsed){
       a.goldUsed = true;

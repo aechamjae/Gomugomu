@@ -1038,6 +1038,35 @@ function swing(a, st){
   }
 }
 
+/* --- 세 번째 리뷰 회귀 방지 --- */
+{
+  // 로켓 충전이 끊긴 줄을 넘어 다음 고리로 이어지지 않는다
+  const a = start();
+  run(a, 200, () => a.hold(true));
+  if(a.peek().rope){
+    run(a, 160, () => { a.hold(true); a.keys.down = true; });
+    a.keys.down = false;
+    // 줄을 강제로 끊는다(과신장 등과 같은 효과) — 멀리 떨어뜨리면 REACH×1.7을 넘어 끊긴다
+    T().P().x += 2000; H.step();
+    const P = T().P();
+    a.hold(false); for(let k = 0; k < 12; k++) H.step();
+    a.hold(true); H.step();
+    ok("줄이 다른 이유로 끊기면 로켓 충전이 다음 고리로 넘어가지 않는다", !a.peek().rope || a.peek().rocketCharge < 30, "충전=" + a.peek().rocketCharge.toFixed(0));
+  }
+}
+{
+  // 기어 2로 막은 포탄은 무피해 도전을 깨지 않는다
+  const a = start();
+  T().setNextBarrage(0); T().setGear(100); a.fireGear();
+  run(a, 60, (st) => swing(a, st));
+  const P = T().P();
+  if(a.peek().barrage){
+    a.peek().shells.push({ x:P.x, y:P.y, t:60, boom:false });
+    run(a, 3, () => { P.vx = 0; P.vy = 0; });
+    ok("기어 2로 막은 포탄은 무피해 도전을 깨지 않는다", a.peek().barrage && !a.peek().barrage.hit);
+  } else ok("기어 2로 막은 포탄은 무피해 도전을 깨지 않는다", false, "포격이 시작되지 않음");
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
