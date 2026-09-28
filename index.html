@@ -194,6 +194,7 @@
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
       <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초) · <b>E</b> 기어 2(게이지가 차면)</span>
+      <span><b>↓</b> 끝까지 감고 계속 누른 뒤 놓으면 <b>고무고무 로켓</b></span>
       <span><b>금빛 링</b>일 때 놓으면 PERFECT · <b>수면 스치기</b> · 해왕류 <b>아슬아슬</b> 회피 보너스</span>
       <span><b>고기</b> 바다에서 한 번 튕김 · <b>보물 통</b> 쏘거나 들이받기 · <b>황금 고리</b> 보물 폭발 · 금 간 돛대는 곧 부러짐</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
@@ -311,7 +312,8 @@ const TIPS = [
   "보스를 누적 3마리 잡으면 앵무새가 동료로 합류해 금화를 물어 온다",
   "금화가 아치 모양으로 늘어서 있으면 한 줄을 다 먹어라 — 완성 보너스",
   "떨어지다가 해파리를 위에서 밟으면 트램펄린처럼 튕겨 오른다",
-  "하늘 높이 반짝이는 양피지는 보물 지도 조각 — 다섯 개 모으면 큰 보물이 기다린다"
+  "하늘 높이 반짝이는 양피지는 보물 지도 조각 — 다섯 개 모으면 큰 보물이 기다린다",
+  "↓로 줄을 끝까지 감고 계속 누르면 충전 — 놓으면 고무고무 로켓!"
 ];
 
 /* 날씨 구간 — 순풍(공중에서 앞으로 밀어준다) / 폭풍(돌풍·하강기류, 대신 금화 2배) */
@@ -379,6 +381,11 @@ const BARRAGE_EVERY = [1100, 1700];   // 다음 포격까지 간격(최소, 최�
 const SHELL_WARN    = 62;             // 표식 → 착탄까지
 const SHELL_R       = 46;             // 폭발 반경
 const SHELL_CD      = [55, 80];       // 표식 간격
+
+/* 고무고무 로켓 — 줄을 끝까지 감은 채 ↓를 계속 누르면 충전, 놓으면 고리 쪽으로 몸을 쏘아 올린다 */
+const ROCKET_LEN   = 52;     // 이 길이 이하로 감겨 있어야 충전된다
+const ROCKET_MIN   = 30;     // 이만큼 충전돼야 발동
+const ROCKET_MAX   = 70;
 
 /* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
 const GEAR_MAX  = 100;
@@ -665,7 +672,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
     barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT, rushIdx, rushT, rushDone, newRushRecord,
-    barrage, nextBarrageAt, shells, barragesCleared, floes, geysers, floeSaves, geyserHits;
+    barrage, nextBarrageAt, shells, barragesCleared, floes, geysers, floeSaves, geyserHits, rocketCharge, rockets;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -702,6 +709,7 @@ function reset(){
   flash = 0;
   barrage = null; shells = []; barragesCleared = 0;
   floes = []; geysers = []; floeSaves = 0; geyserHits = 0;
+  rocketCharge = 0; rockets = 0;
   nextBarrageAt = BARRAGE_FIRST + weatherRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
@@ -1488,6 +1496,22 @@ function releaseGrade(){
 function release(boost){
   holding = false;
   if(state === STATE.PAUSE) return;
+  if(rope && rocketCharge >= ROCKET_MIN){
+    // 고무고무 로켓 — 고리 쪽으로 몸을 쏘아 올리고, 앞으로 날아간다
+    const dx = rope.a.x - p.x, dy = rope.a.y - p.y, d = Math.hypot(dx, dy) || 1;
+    const pow = 13 + (rocketCharge - ROCKET_MIN) * 0.12;
+    p.vx = dx/d * pow + 7;
+    p.vy = dy/d * pow - 4;
+    rockets++;
+    rocketCharge = 0;
+    rope = null;
+    grabCd = GRAB_CD;
+    addGear("good");
+    addShake(4, 10);
+    pops.push({ x:p.x, y:p.y-40, t:60, text:"고무고무 로켓!", color:"#f0a24e" });
+    for(let i=0;i<18;i++) spark(p.x, p.y, "#f0a24e");
+    return;
+  }
   if(rope){
     const grade = releaseGrade();
     if(grade === 2){
@@ -1979,6 +2003,7 @@ function knock(hard, mild){
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 넉백·무적시간도 가볍게 넘긴다(스턴 시간은 위에서 이미 반영)
   iframes = mild ? 60 : 78;
   rope = null;
+  rocketCharge = 0;
   chain = 0;
   addShake(hard ? 9 : mild ? 4 : 6, hard ? 22 : 14);
   p.vx *= hard ? 0.34 : mild ? 0.74 : 0.52;
@@ -2684,6 +2709,11 @@ function update(dt){
 
     if(keys.down) rope.len = Math.max(46, rope.len - ZIP*dt);
     else if(rope.len > REEL_MIN) rope.len = Math.max(REEL_MIN, rope.len - REEL*dt);
+    if(keys.down && rope.len <= ROCKET_LEN && stun <= 0){
+      const was = rocketCharge;
+      rocketCharge = Math.min(ROCKET_MAX, rocketCharge + dt);
+      if(was < ROCKET_MIN && rocketCharge >= ROCKET_MIN) pops.push({ x:p.x, y:p.y-34, t:40, text:"충전 완료 — 놓아라!", color:"#f0a24e" });
+    } else if(!keys.down) rocketCharge = Math.max(0, rocketCharge - 2*dt);
     if(d > reach()*1.7) rope = null;
     airTime = 0;
   } else {
@@ -3300,6 +3330,21 @@ function drawMeat(m){
   ctx.restore();
 }
 
+function drawRocketCharge(){
+  if(state !== STATE.PLAY || !rope || rocketCharge <= 2) return;
+  const x = p.x - cam.x, y = p.y;
+  const k = Math.min(1, rocketCharge / ROCKET_MIN);
+  ctx.save();
+  ctx.strokeStyle = k >= 1 ? "rgba(240,162,78,.95)" : "rgba(240,162,78,.55)";
+  ctx.lineWidth = k >= 1 ? 4 : 3;
+  ctx.beginPath(); ctx.arc(x, y, 30, -Math.PI/2, -Math.PI/2 + Math.PI*2*k); ctx.stroke();
+  if(k >= 1){
+    ctx.fillStyle = "rgba(240,162,78," + (0.15 + Math.sin(time*0.5)*0.1).toFixed(2) + ")";
+    ctx.beginPath(); ctx.arc(x, y, 30, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawReleaseCue(){
   if(state !== STATE.PLAY || !rope) return;
   const g = releaseGrade();
@@ -3484,7 +3529,9 @@ function drawFace(){
 }
 
 function drawPlayer(){
-  const x = p.x - cam.x, y = p.y;
+  // 로켓 충전이 끝나면 몸이 부르르 떨린다
+  const shiver = rope && rocketCharge >= ROCKET_MIN ? (Math.random() - 0.5) * 2.4 : 0;
+  const x = p.x - cam.x + shiver, y = p.y;
   const lean = Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012));
   const diving = keys.down && !rope;
 
@@ -4789,6 +4836,7 @@ function draw(){
   drawParrot();
   drawFusen();
   drawReleaseCue();
+  drawRocketCharge();
   drawGearAura();
   drawPlayer();
   drawShield();
@@ -5026,7 +5074,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone, barrage, shells, barragesCleared, floes, geysers, floeSaves, geyserHits }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone, barrage, shells, barragesCleared, floes, geysers, floeSaves, geyserHits, rocketCharge, rockets }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

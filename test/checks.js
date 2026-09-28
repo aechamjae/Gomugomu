@@ -1008,6 +1008,36 @@ function swing(a, st){
      "recent=" + L.recent.slice(-3).join(","));
 }
 
+/* --- 고무고무 로켓 --- */
+{
+  let fired = false, vy = 0;
+  for(let attempt = 0; attempt < 4 && !fired; attempt++){
+    const a = start();
+    run(a, 200, (st) => { a.hold(true); a.keys.right = false; });
+    if(!a.peek().rope) continue;
+    a.keys.down = true;
+    run(a, 160, () => { a.hold(true); a.keys.down = true; });
+    a.keys.down = false;
+    const before = a.peek().rockets;
+    if(!a.peek().rope) continue;
+    a.hold(false);
+    fired = a.peek().rockets === before + 1;
+    vy = a.peek().vy;
+  }
+  ok("줄을 끝까지 감고 ↓를 계속 누르다 놓으면 고무고무 로켓", fired && vy < -5, "vy=" + vy.toFixed(1));
+}
+{
+  const a = start();
+  run(a, 200, (st) => { a.hold(true); });
+  if(a.peek().rope){
+    run(a, 10, () => { a.hold(true); a.keys.down = true; });   // 잠깐만 감으면 충전이 모자라다
+    a.keys.down = false;
+    const before = a.peek().rockets;
+    a.hold(false);
+    ok("충전이 모자라면 로켓이 나가지 않는다", a.peek().rockets === before);
+  }
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
