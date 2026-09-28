@@ -477,6 +477,18 @@ function dailyBestToday(){ return dailyDate === todayKey() ? dailyBest : 0; }
 function startDaily(){
   practiceMode = null;
   dailyMode = true;
+  blitzMode = false;
+  reset();
+}
+
+// 60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한. 바다에 빠지면 끝 대신 -5초
+const BLITZ_T = 60 * 60;
+const BLITZ_SEA_PENALTY = 60 * 5;
+let blitzMode = false, blitzBest = 0;
+function startBlitz(){
+  practiceMode = null;
+  dailyMode = false;
+  blitzMode = true;
   reset();
 }
 
@@ -502,12 +514,14 @@ function practiceLabel(){
 function startMainGame(){
   practiceMode = null;
   dailyMode = false;
+  blitzMode = false;
   reset();
 }
 function startPractice(idx){
   const opt = PRACTICE_OPTIONS[idx];
   if(!opt) return;
   dailyMode = false;
+  blitzMode = false;
   practiceMode = opt.type === "king" ? { type:"king" } : { type:"boss", bossType:opt.bossType };
   reset();
 }
@@ -516,11 +530,12 @@ function startPractice(idx){
 function menuRows(){
   if(state === STATE.MENU){
     return [
-      { y: H/2 - 10, label: "1) 본게임", action: startMainGame },
-      { y: H/2 + 34, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
-      { y: H/2 + 78, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
-      { y: H/2 + 122, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
-      { y: H/2 + 166, label: "5) 항해 일지", action: () => { state = STATE.LOG; } }
+      { y: H/2 - 40, label: "1) 본게임", action: startMainGame },
+      { y: H/2 + 4, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
+      { y: H/2 + 48, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
+      { y: H/2 + 92, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
+      { y: H/2 + 136, label: "5) 항해 일지", action: () => { state = STATE.LOG; } },
+      { y: H/2 + 180, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz }
     ];
   }
   if(state === STATE.LOG){
@@ -574,7 +589,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -591,6 +606,7 @@ function reset(){
   gullHits = 0;
   jellies = []; bounces = 0;
   mapItems = []; mapGot = 0;
+  blitzT = BLITZ_T; newBlitzRecord = false;
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
   bonusOn = false; bonusVisits = 0;
@@ -638,6 +654,7 @@ function reset(){
   } else if(practiceMode && practiceMode.type === "king"){
     nextBossAt = Infinity; nextBigAt = Infinity;   // 폭주 연습 중엔 일반 보스는 끈다
   }
+  if(blitzMode){ nextBossAt = Infinity; nextBigAt = Infinity; }
   bossKills = 0;
   stun = 0;
   iframes = 0;
@@ -662,7 +679,7 @@ function reset(){
 }
 
 function pickMissions(){
-  if(practiceMode) return [];                 // 연습 모드엔 미션이 없다
+  if(practiceMode || blitzMode) return [];    // 연습 모드·60초 사냥엔 미션이 없다
   const pool = MISSIONS.slice();
   const out = [];
   while(out.length < MISSION_COUNT && pool.length){
@@ -947,11 +964,11 @@ function generate(){
     const y = Math.max(64, Math.min(268, baseY*0.68 + lastAY*0.32 + jitter));
     const an = { x, y, kind: genRand() < 0.62 ? 0 : 1 };   // 0 돛대, 1 바위 기둥
     const bz = inBonus(x / 22);
-    if(!practiceMode && x/22 > 60 && genRand() < (bz ? 0.3 : GOLD_CHANCE)) an.gold = true;
+    if(!practiceMode && x/22 > 60 && genRand() < (bz ? 0.3 : blitzMode ? 0.09 : GOLD_CHANCE)) an.gold = true;
     else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && genRand() < ROT_CHANCE) an.rot = true;
     anchors.push(an);
 
-    if(x/22 > 40 && (genRand() < ARC_CHANCE || bz)){
+    if(x/22 > 40 && (genRand() < (blitzMode ? 0.45 : ARC_CHANCE) || bz)){
       // 두 고리 사이의 스윙 궤적을 흉내 낸 아치 — 가운데가 가장 높다
       const id = ++arcSeq;
       const base = Math.min(SEA - 100, (lastAY + y)/2 + 150 + genRand()*40);
@@ -1444,6 +1461,7 @@ function die(reason){
     bank += Math.floor(treasure);
     saveShop();
     logRun();
+    if(blitzMode && treasure > blitzBest){ blitzBest = Math.floor(treasure); newBlitzRecord = true; saveShop(); }
     if(dailyMode){
       if(dailyDate !== todayKey()){ dailyDate = todayKey(); dailyBest = 0; ghostBest = null; }
       if(dist > dailyBest){ dailyBest = dist; newDailyRecord = true; ghostBest = ghostRec.slice(); }
@@ -1597,6 +1615,25 @@ function spawnBoss(big){
 
 // 보스 등장 컷인 — 위아래 띠가 양옆에서 밀려 들어오고 이름이 찍힌다 (약 2초)
 const INTRO_T = 105;
+function drawBlitzTimer(){
+  const sec = Math.ceil(blitzT / 60);
+  const low = sec <= 10;
+  const pulse = low ? 1 + Math.max(0, Math.sin(time*0.3))*0.12 : 1;
+  ctx.save();
+  ctx.translate(W/2, 34);
+  ctx.scale(pulse, pulse);
+  ctx.fillStyle = "rgba(13,27,38,.6)";
+  ctx.fillRect(-62, -22, 124, 44);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "900 28px ui-monospace, Menlo, monospace";
+  ctx.fillStyle = low ? "#ff8f80" : "#f4ecd9";
+  ctx.fillText("0:" + String(sec).padStart(2, "0"), 0, -2);
+  ctx.font = "600 10px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "#ffd76a";
+  ctx.fillText("보물 " + Math.floor(treasure), 0, 16);
+  ctx.restore();
+}
+
 function drawBossIntro(){
   if(!bossIntro) return;
   const t = bossIntro.t;
@@ -2572,8 +2609,20 @@ function update(dt){
   generate();
   syncHUD();
 
+  if(blitzMode){
+    blitzT -= dt;
+    if(blitzT <= 0){ blitzT = 0; return die("시간"); }
+  }
   if(p.y > SEA - 14){
-    if(fusen > 0){
+    if(blitzMode && fusen <= 0){
+      // 60초 사냥에선 빠져도 끝나지 않는다 — 대신 5초를 잃고 튕겨 오른다
+      blitzT = Math.max(0, blitzT - BLITZ_SEA_PENALTY);
+      rope = null; p.y = SEA - 16; p.vy = -FUSEN_BOUNCE; p.vx = Math.max(Math.abs(p.vx), 7);
+      stun = 0; iframes = Math.max(iframes, 40); fusenAnim = 46;
+      pops.push({ x:p.x, y:p.y-40, t:70, text:"풍덩! -5초", color:"#f7a8a0" });
+      for(let i=0;i<18;i++) spark(p.x, SEA, "#8fd6d8");
+      addShake(5, 12);
+    } else if(fusen > 0){
       // 고무고무 풍선 — 바다에 닿는 순간 몸을 부풀려 튕겨 오른다
       fusen--;
       rope = null;
@@ -2649,6 +2698,7 @@ function applyShopRecord(v){
     if(r.skin && ownedSkins.indexOf(r.skin) >= 0) skin = r.skin;
     if(r.parrot === false) parrotOn = false;
     mapPieces = r.mapPieces || 0; mapsDone = r.mapsDone || 0;
+    blitzBest = r.blitz || 0;
   }catch(e){}
 }
 async function loadShop(){
@@ -2664,7 +2714,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -4180,6 +4230,7 @@ function draw(){
   if(state === STATE.PLAY) drawGunGauge();
   if(state === STATE.PLAY) drawFusenGauge();
   if(state === STATE.PLAY) drawGearGauge();
+  if(state === STATE.PLAY && blitzMode) drawBlitzTimer();
   if(state === STATE.PLAY) drawBossIntro();
   if(state === STATE.PLAY) drawSinkBanner();
   if(state === STATE.PLAY) drawMissions();
@@ -4225,6 +4276,7 @@ function draw(){
   } else if(state === STATE.READY){
     ctx.fillStyle = "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
+    if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 바다에 빠지면 -5초" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 54, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
@@ -4243,13 +4295,15 @@ function draw(){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
     drawPoster(W/2 - 330, 52, 250, 380);
-    const reasonText = deathReason === "바다" ? "바다에 빠졌다"
+    const reasonText = deathReason === "시간" ? "시간 종료!"
+      : deathReason === "바다" ? "바다에 빠졌다"
       : deathReason === "정체" ? "너무 오래 멈춰 선단에 뒤처졌다"
       : "선단에 뒤처졌다";
     const lx = W/2 - 50;
     let overY = 92;
     const line = (t, font, color, gap) => { leftText(t, lx, overY, font, color); overY += gap; };
     if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8", 26);
+    if(blitzMode) line((newBlitzRecord ? "★ 60초 사냥 신기록 " : "60초 보물 사냥 · 최고 ") + Math.floor(blitzBest), "700 14px 'Pretendard', system-ui, sans-serif", newBlitzRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(dailyMode) line((newDailyRecord ? "★ 오늘의 항해 신기록 " : "오늘의 항해 · 오늘 최고 ") + Math.floor(dailyBestToday()) + "m", "700 14px 'Pretendard', system-ui, sans-serif", newDailyRecord ? "#ffd76a" : "#8fd6d8", 26);
     line(reasonText, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
     line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
@@ -4276,10 +4330,10 @@ function draw(){
   } else if(state === STATE.MENU){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
     ctx.fillRect(0,0,W,H);
-    centerText("고무팔 · 대항해", H/2 - 90, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("고무팔 · 대항해", H/2 - 120, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
-    centerText("창고 보물 " + Math.floor(bank), H/2 - 56, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
-    centerText("숫자 키 또는 클릭으로 선택", H/2 + 204, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("창고 보물 " + Math.floor(bank), H/2 - 86, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    centerText("숫자 키 또는 클릭으로 선택", H/2 + 216, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.LOG){
     ctx.fillStyle = "rgba(13,27,38,0.86)";
     ctx.fillRect(0,0,W,H);
@@ -4359,7 +4413,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
@@ -4376,6 +4430,7 @@ window.__swing = {
                  skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]) }),
   toShop: () => { state = STATE.SHOP; },
   startDaily: startDaily,
+  startBlitz: startBlitz,
   log: () => lifeLog,
   map: () => ({ pieces: mapPieces, done: mapsDone, set: (v) => { mapPieces = v; } }),
   parrot: () => ({ q: parrot, active: parrotActive(), setOn: (v) => { parrotOn = v; } }),

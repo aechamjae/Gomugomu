@@ -836,6 +836,23 @@ function swing(a, st){
   sh().setBank(0); M().set(0);
 }
 
+/* --- 60초 보물 사냥 --- */
+{
+  const a = A();
+  a.startBlitz(); H.step(); a.hold(true); H.step(); a.hold(false);
+  ok("60초 사냥은 미션 없이 시작한다", a.peek().blitzMode && a.peek().missions.length === 0);
+  const P = T().P();
+  T().setFusen(0);
+  const t0 = a.peek().blitzT;
+  P.y = a.peek().SEA - 20; P.vy = 10;
+  run(a, 3);
+  ok("60초 사냥에선 바다에 빠져도 끝나지 않고 5초를 잃는다", a.peek().state === 1 && a.peek().blitzT < t0 - 290, "남은=" + Math.round(a.peek().blitzT));
+  let bossSeen = false;
+  const s = run(a, 4000, (st) => { swing(a, st); if(st.boss) bossSeen = true; });
+  ok("60초가 지나면 끝나고 보스는 나오지 않는다", s.state === 2 && s.deathReason === "시간" && !bossSeen, "사인=" + s.deathReason);
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
