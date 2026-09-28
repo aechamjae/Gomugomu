@@ -186,6 +186,7 @@
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
       <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초)</span>
+      <span>놓을 때 몸이 <b>금빛</b>으로 빛나면 PERFECT 릴리즈(가속+보물)</span>
       <span><b>고기</b> 먹으면 바다에 빠질 때 한 번 튕겨 오른다(최대 2개)</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
     </div>
@@ -256,6 +257,13 @@ const MEAT_FROM   = 120;    // 이 거리(m)부터 고기가 나온다
 const MEAT_CHANCE = 0.035;  // 고리 구간마다 나올 확률 (0.07이면 봇 평균 거리가 33%나 뛰어서 절반으로)
 const FUSEN_MAX   = 2;      // 한 번에 들고 있을 수 있는 풍선 수
 const FUSEN_BOUNCE = 15.5;  // 튕겨 오르는 속도
+
+/* 퍼펙트 릴리즈 — 앞쪽 위로 알맞은 각도·속도일 때 놓으면 가속 보너스 */
+const REL_PERFECT = [32, 58];  // 이 각도(도, 수평 기준 위쪽) 안에서 놓으면 PERFECT
+const REL_GOOD    = [18, 72];  // 이 안이면 GOOD
+const REL_MIN_SP  = 8.5;       // 이 속도 이상이어야 판정한다 (살살 놓는 건 해당 없음)
+const REL_PERFECT_K = 1.10;    // PERFECT 가속 배율
+const REL_GOOD_K    = 1.04;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -340,7 +348,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     boss, shots, nextBossAt, nextBigAt, bossKills, stun, iframes, grabCd, pPrevX, pPrevY,
     mobs, lastKingX, skillCd, fist, gunCd, gun, fire, stallX, stallT,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
-    meats, fusen, fusenAnim;
+    meats, fusen, fusenAnim, perfectStreak, perfects;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -350,6 +358,8 @@ function reset(){
   meats = [];
   fusen = 0;
   fusenAnim = 0;
+  perfectStreak = 0;
+  perfects = 0;
   rope = null;
   state = STATE.READY;
   dist = 0;
@@ -648,10 +658,35 @@ function grab(){
   }
 }
 
+// 지금 놓으면 몇 등급인가 — 2 PERFECT, 1 GOOD, 0 해당 없음
+function releaseGrade(){
+  if(!rope || stun > 0) return 0;
+  if(p.x < rope.a.x || p.vx <= 0) return 0;          // 고리를 지나 앞으로 솟구칠 때만
+  const sp = Math.hypot(p.vx, p.vy);
+  if(sp < REL_MIN_SP) return 0;
+  const ang = Math.atan2(-p.vy, p.vx) * 180 / Math.PI;
+  if(ang >= REL_PERFECT[0] && ang <= REL_PERFECT[1]) return 2;
+  if(ang >= REL_GOOD[0] && ang <= REL_GOOD[1]) return 1;
+  return 0;
+}
+
 function release(boost){
   holding = false;
   if(state === STATE.PAUSE) return;
   if(rope){
+    const grade = releaseGrade();
+    if(grade === 2){
+      p.vx *= REL_PERFECT_K; p.vy *= REL_PERFECT_K;
+      perfectStreak++; perfects++;
+      const gain = (20 + Math.min(5, perfectStreak)*6) * chainMult();
+      treasure += gain;
+      pops.push({ x:p.x, y:p.y-44, t:60, text:"PERFECT" + (perfectStreak > 1 ? " ×" + perfectStreak : "") + " +" + gain, color:"#ffd76a" });
+      for(let i=0;i<14;i++) spark(p.x, p.y, "#ffd76a");
+    } else if(grade === 1){
+      p.vx *= REL_GOOD_K; p.vy *= REL_GOOD_K;
+      perfectStreak = 0;
+      pops.push({ x:p.x, y:p.y-44, t:40, text:"GOOD", color:"#d9b877" });
+    } else perfectStreak = 0;
     const dx = rope.a.x - p.x, dy = rope.a.y - p.y;
     const d = Math.hypot(dx, dy) || 1;
     const ext = Math.max(0, d - rope.len);
@@ -1924,6 +1959,18 @@ function drawMeat(m){
   ctx.restore();
 }
 
+function drawReleaseCue(){
+  if(state !== STATE.PLAY || !rope) return;
+  const g = releaseGrade();
+  if(!g) return;
+  const x = p.x - cam.x, y = p.y;
+  ctx.save();
+  ctx.strokeStyle = g === 2 ? "rgba(255,215,106,.9)" : "rgba(217,184,119,.45)";
+  ctx.lineWidth = g === 2 ? 4 : 2;
+  ctx.beginPath(); ctx.arc(x, y, g === 2 ? 22 + Math.sin(time*0.6)*2 : 20, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
 function drawFusen(){
   if(fusenAnim <= 0) return;
   const k = fusenAnim / 46;
@@ -2643,6 +2690,7 @@ function draw(){
   drawMobs();
   drawShots();
   drawFusen();
+  drawReleaseCue();
   drawPlayer();
   drawShield();
   drawFire();
@@ -2742,6 +2790,10 @@ function draw(){
     centerText(reasonText, H/2 - 40, "700 29px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), H/2 + 2, "600 17px 'Pretendard', system-ui, sans-serif", "#d9b877");
     let overY = H/2 + 40;
+    if(perfects > 0){
+      centerText("PERFECT 릴리즈 " + perfects + "회", overY, "600 14px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)");
+      overY += 22;
+    }
     if(maxChain > 1){
       const newChainRecord = maxChain >= bestChain;
       centerText((newChainRecord ? "★ 신기록 " : "") + "최고 콤보 ×" + maxChain, overY,
@@ -2789,7 +2841,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen }),
+                 practiceMode, meats, fusen, perfects, perfectStreak }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

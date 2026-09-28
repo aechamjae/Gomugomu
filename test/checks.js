@@ -334,6 +334,31 @@ function swing(a, st){
   ok("고기를 먹으면 풍선이 생긴다", s.fusen === 1, "fusen=" + s.fusen);
 }
 
+/* --- 퍼펙트 릴리즈 --- */
+{
+  const a = start();
+  let s = run(a, 200, (st) => { a.hold(true); a.keys.right = true; });
+  s = a.peek();
+  if(s.rope){
+    const P = T().P();
+    P.x = s.rope.a.x + 40; P.y = s.rope.a.y + 60; P.vx = 9; P.vy = -9;   // 앞쪽 위 45°
+    const before = Math.hypot(P.vx, P.vy);
+    a.hold(false);
+    const after = Math.hypot(P.vx, P.vy);
+    ok("알맞은 각도로 놓으면 PERFECT 릴리즈 가속", a.peek().perfects === 1 && after > before * 1.05,
+       "perfects=" + a.peek().perfects + " 속도 " + before.toFixed(1) + "→" + after.toFixed(1));
+  } else ok("알맞은 각도로 놓으면 PERFECT 릴리즈 가속", false, "줄을 못 잡음");
+  // 뒤로 놓으면 판정 없음
+  s = run(a, 200, (st) => { a.hold(true); a.keys.right = true; });
+  s = a.peek();
+  if(s.rope){
+    const P = T().P();
+    P.x = s.rope.a.x - 40; P.vx = -9; P.vy = -9;
+    a.hold(false);
+    ok("고리 뒤쪽으로 놓으면 PERFECT가 아니다", a.peek().perfects === 1, "perfects=" + a.peek().perfects);
+  }
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
