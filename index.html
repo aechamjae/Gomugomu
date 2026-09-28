@@ -785,14 +785,15 @@ function updateWeather(dt){
     if(weather.type === "storm" && Math.random() < 0.005*dt) flash = 1;
     // 보스전 중엔 거리가 멈추니, 그대로 두면 날씨가 보스전 내내 이어진다 — 보스가 뜨면 걷힌다
     if(dist > weather.to || boss || bonusOn){
-      pops.push({ x:p.x, y:p.y-50, t:70, text: weather.type === "storm" ? "폭풍을 빠져나왔다" : "바람이 잦아든다", color:"#8fd6d8" });
+      pops.push({ x:p.x, y:p.y-50, t:70, text: weather.type === "storm" ? "폭풍을 빠져나왔다" : weather.type === "fog" ? "안개가 걷힌다" : "바람이 잦아든다", color:"#8fd6d8" });
       weather = null;
       nextWeatherAt = dist + 500 + weatherRand()*400;
     }
   } else if(!practiceMode && !boss && !bonusOn && dist >= nextWeatherAt){
-    const type = weatherRand() < 0.5 ? "wind" : "storm";
+    const r = weatherRand();
+    const type = r < 0.36 ? "wind" : r < 0.7 ? "storm" : "fog";
     weather = { type, from: dist, to: dist + WEATHER_LEN };
-    missionFlash = { text: type === "wind" ? "순풍이 분다! →" : "폭풍 구간 — 금화 2배", reward:0, t:150, weather:type };
+    missionFlash = { text: type === "wind" ? "순풍이 분다! →" : type === "storm" ? "폭풍 구간 — 금화 2배" : "짙은 안개 — 금화 1.5배", reward:0, t:150, weather:type };
   }
 }
 
@@ -837,7 +838,8 @@ function collectCoin(c, byPlayer){
       for(let i=0;i<16;i++) spark(c.x, c.y, "#ffd76a");
     }
   }
-  const mult = chainMult() * (weather && weather.type === "storm" ? 2 : 1) * (gearT > 0 ? 2 : 1);
+  const wx = weather ? (weather.type === "storm" ? 2 : weather.type === "fog" ? 1.5 : 1) : 1;
+  const mult = chainMult() * wx * (gearT > 0 ? 2 : 1);
   const gain = Math.round(25 * mult);
   treasure += gain;
   if(byPlayer) p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
@@ -3971,6 +3973,20 @@ function drawWeather(){
       const x = ((hash(i*7.1)*W*1.4 + time*(9 + hash(i)*6)) % (W*1.4)) - W*0.2;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + len*0.5, y - 5, x + len, y); ctx.stroke();
     }
+  } else if(weather.type === "fog"){
+    // 플레이어 주변만 보이고 멀리는 뿌옇다 — 카메라 확대/축소를 고려한 화면 위치
+    const sx = W*0.32 + (p.x - cam.x - W*0.32) * cam.z, sy = H*0.5 + (p.y - H*0.5) * cam.z;
+    const fg = ctx.createRadialGradient(sx, sy, 150, sx, sy, 360);
+    fg.addColorStop(0, "rgba(196,204,214,0)");
+    fg.addColorStop(1, "rgba(196,204,214,.88)");
+    ctx.fillStyle = fg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(220,226,234,.10)";
+    for(let i=0;i<5;i++){
+      const y = 80 + i*90 + Math.sin(time*0.01 + i)*12;
+      const x = ((time*(0.6 + i*0.2) + i*300) % (W + 400)) - 200;
+      ctx.beginPath(); ctx.ellipse(x, y, 220, 26, 0, 0, Math.PI*2); ctx.fill();
+    }
   } else {
     ctx.fillStyle = "rgba(10,16,30,.32)";
     ctx.fillRect(0, 0, W, H);
@@ -3989,8 +4005,8 @@ function drawWeather(){
     ctx.fillRect(0, 0, W, H);
   }
   const left = Math.max(0, Math.ceil(weather.to - dist));
-  centerText((weather.type === "wind" ? "순풍 구간" : "폭풍 구간 · 금화 2배") + " — 남은 " + left + "m", H - 18,
-             "600 13px 'Pretendard', system-ui, sans-serif", weather.type === "wind" ? "#f4ecd9" : "#b8c8e8", 0.85);
+  centerText((weather.type === "wind" ? "순풍 구간" : weather.type === "storm" ? "폭풍 구간 · 금화 2배" : "안개 구간 · 금화 1.5배") + " — 남은 " + left + "m", H - 18,
+             "600 13px 'Pretendard', system-ui, sans-serif", weather.type === "wind" ? "#f4ecd9" : weather.type === "fog" ? "#3a4656" : "#b8c8e8", 0.85);
 }
 
 function drawBestFlag(){
@@ -4030,7 +4046,7 @@ function drawMissionFlash(){
   ctx.restore();
   if(missionFlash.bonus) centerText(missionFlash.text, y, "700 16px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
   else if(missionFlash.gear) centerText(missionFlash.text, y, "700 19px 'Pretendard', system-ui, sans-serif", "#ff8fa0", a);
-  else if(missionFlash.weather) centerText(missionFlash.text, y, "700 18px 'Pretendard', system-ui, sans-serif", missionFlash.weather === "wind" ? "#f4ecd9" : "#b8c8e8", a);
+  else if(missionFlash.weather) centerText(missionFlash.text, y, "700 18px 'Pretendard', system-ui, sans-serif", missionFlash.weather === "wind" ? "#f4ecd9" : missionFlash.weather === "fog" ? "#dfe6ee" : "#b8c8e8", a);
   else if(missionFlash.record) centerText("★ " + missionFlash.text + " ★", y, "700 18px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
   else centerText("미션 완료 · " + missionFlash.text + "  +" + missionFlash.reward, y, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0", a);
 }
