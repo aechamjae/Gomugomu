@@ -359,6 +359,24 @@ function swing(a, st){
   }
 }
 
+/* --- 항해 미션 --- */
+{
+  const a = start();
+  const ms = a.peek().missions;
+  ok("본게임은 미션 3개로 시작한다", ms.length === 3 && new Set(ms.map(m => m.kind)).size === 3,
+     ms.map(m => m.text).join(" / "));
+  // 금방 차는 거리 미션으로 바꿔 넣고 달성 처리를 확인
+  ms.length = 0;
+  ms.push({ kind:"dist", n:1, text:"1m 항해", reward:80, done:false });
+  const t1 = a.peek().treasure;
+  run(a, 60, (st) => swing(a, st));
+  ok("미션을 달성하면 완료 처리되고 보물을 받는다", ms[0].done && a.peek().treasure >= t1 + 80,
+     "done=" + ms[0].done + " 보물 " + t1 + "→" + a.peek().treasure);
+  a.startPractice(0);
+  ok("연습 모드엔 미션이 없다", a.peek().missions.length === 0);
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

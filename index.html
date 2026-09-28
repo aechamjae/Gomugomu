@@ -265,6 +265,20 @@ const REL_MIN_SP  = 8.5;       // 이 속도 이상이어야 판정한다 (살�
 const REL_PERFECT_K = 1.10;    // PERFECT 가속 배율
 const REL_GOOD_K    = 1.04;
 
+/* 항해 미션 — 판마다 무작위 목표 3개. 목표 수치가 뒤로 갈수록 어렵고 보상도 크다 */
+const MISSIONS = [
+  { kind:"coins",   goals:[8, 12, 16],       text:(n) => "금화 " + n + "개 줍기" },
+  { kind:"perfect", goals:[3, 5, 8],         text:(n) => "PERFECT 릴리즈 " + n + "회" },
+  { kind:"air",     goals:[2, 2.5, 3],       text:(n) => "한 번에 " + n + "초 체공" },
+  { kind:"chain",   goals:[3, 4, 5],         text:(n) => "연속 콤보 ×" + n },
+  { kind:"fish",    goals:[2, 4, 6],         text:(n) => "식인 물고기 " + n + "마리 처치" },
+  { kind:"king",    goals:[1],               text:()  => "해왕류 물리치기", from:1 },
+  { kind:"dist",    goals:[400, 700, 1000],  text:(n) => n + "m 항해" },
+  { kind:"boss",    goals:[1, 2],            text:(n) => "보스 " + n + "마리 격파", from:1 },
+  { kind:"meat",    goals:[1, 2],            text:(n) => "고기 " + n + "개 먹기" }
+];
+const MISSION_COUNT = 3;
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const distEl = document.getElementById("dist");
@@ -348,7 +362,8 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     boss, shots, nextBossAt, nextBigAt, bossKills, stun, iframes, grabCd, pPrevX, pPrevY,
     mobs, lastKingX, skillCd, fist, gunCd, gun, fire, stallX, stallT,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
-    meats, fusen, fusenAnim, perfectStreak, perfects;
+    meats, fusen, fusenAnim, perfectStreak, perfects,
+    missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -360,6 +375,9 @@ function reset(){
   fusenAnim = 0;
   perfectStreak = 0;
   perfects = 0;
+  coinsGot = 0; fishKills = 0; kingKills = 0; meatsGot = 0; maxAir = 0;
+  missionFlash = null;
+  missions = pickMissions();
   rope = null;
   state = STATE.READY;
   dist = 0;
@@ -407,6 +425,51 @@ function reset(){
   lastAX = 470; lastAY = 108;
   generate();
   syncHUD();
+}
+
+function pickMissions(){
+  if(practiceMode) return [];                 // 연습 모드엔 미션이 없다
+  const pool = MISSIONS.slice();
+  const out = [];
+  while(out.length < MISSION_COUNT && pool.length){
+    const m = pool.splice(Math.floor(Math.random()*pool.length), 1)[0];
+    const tier = Math.floor(Math.random()*m.goals.length);
+    const n = m.goals[tier];
+    out.push({ kind:m.kind, n, text:m.text(n), reward: 80 + (tier + (m.from||0))*60, done:false });
+  }
+  return out;
+}
+
+function missionValue(kind){
+  switch(kind){
+    case "coins":   return coinsGot;
+    case "perfect": return perfects;
+    case "air":     return Math.floor(maxAir/6)/10;
+    case "chain":   return maxChain;
+    case "fish":    return fishKills;
+    case "king":    return kingKills;
+    case "dist":    return Math.floor(dist);
+    case "boss":    return bossKills;
+    case "meat":    return meatsGot;
+  }
+  return 0;
+}
+
+function checkMissions(){
+  for(const m of missions){
+    if(m.done || missionValue(m.kind) < m.n) continue;
+    m.done = true;
+    treasure += m.reward;
+    missionFlash = { text: m.text, reward: m.reward, t: 150 };
+    for(let i=0;i<18;i++) spark(p.x, p.y, "#9fe0a0");
+    if(missions.every(q => q.done)){
+      // 세 개를 다 깨면 풍선 하나를 덤으로 준다
+      const bonus = 300;
+      treasure += bonus;
+      if(fusen < FUSEN_MAX) fusen++;
+      pops.push({ x:p.x, y:p.y-70, t:150, text:"미션 올클리어! +" + bonus + " · 풍선 +1", color:"#9fe0a0" });
+    }
+  }
 }
 
 function syncHUD(){
@@ -556,7 +619,7 @@ function updateMobs(dt){
         if(d < 15 + 13){
           if(fire > 0){
             // 불붙은 동안엔 부딪혀도 다치지 않고, 오히려 몹에게 데미지를 준다
-            m.gone = true;
+            m.gone = true; fishKills++;
             pops.push({ x:m.x, y:m.y-20, t:40, text:"불꽃 데미지 1", color:"#f0a24e" });
             for(let k=0;k<10;k++) spark(m.x, m.y, "#f0a24e");
           } else {
@@ -1448,13 +1511,13 @@ function updateFist(dt){
     if(m.gone) continue;
     if(m.kind === 0){
       if(near(m.x, m.y) < FIST_R + 15){
-        m.gone = true; treasure += 15;
+        m.gone = true; treasure += 15; fishKills++;
         for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
       }
     } else if(m.h > 30 && m.phase !== 4){
       const top = SEA - m.h;
       if(near(m.x, top - 26) < FIST_R + 74 || near(m.x, (top+SEA)/2) < FIST_R + KING_W){
-        m.gone = true;
+        m.gone = true; kingKills++;
         treasure += 220;
         pops.push({ x:m.x, y:top - 70, t:120, text:"해왕류를 물리쳤다 +220", color:"#d9b877" });
         for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
@@ -1501,13 +1564,13 @@ function fireGun(){
     if(m.gone) continue;
     if(m.kind === 0){
       if(Math.hypot(m.x-gx, m.y-gy) < GUN_R){
-        m.gone = true; treasure += 15;
+        m.gone = true; treasure += 15; fishKills++;
         for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
       }
     } else if(m.h > 20 && m.phase !== 4){
       const top = SEA - m.h;
       if(Math.hypot(m.x-gx, (top-26)-gy) < GUN_R + 74){
-        m.gone = true; treasure += 260;
+        m.gone = true; treasure += 260; kingKills++;
         pops.push({ x:m.x, y:top-70, t:120, text:"해왕류를 물리쳤다 +260", color:"#d9b877" });
         for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
       }
@@ -1582,6 +1645,7 @@ function update(dt){
     if(keys.right) p.vx += AIR*dt;
     if(keys.down)  p.vy += DIVE*dt;
     airTime += dt;
+    if(airTime > maxAir && stun <= 0) maxAir = airTime;
   }
 
   p.vy += GRAV*dt;
@@ -1622,6 +1686,7 @@ function update(dt){
     if(c.got) continue;
     if(Math.hypot(c.x - p.x, c.y - p.y) < 27){
       c.got = true;
+      coinsGot++;
       const mult = chainMult();
       const gain = Math.round(25 * mult);
       treasure += gain;
@@ -1635,6 +1700,7 @@ function update(dt){
     if(m.got) continue;
     if(Math.hypot(m.x - p.x, m.y - p.y) < 32){
       m.got = true;
+      meatsGot++;
       if(fusen < FUSEN_MAX){
         fusen++;
         pops.push({ x:m.x, y:m.y-24, t:70, text:"고기! 풍선 " + fusen + "개", color:"#f7a8a0" });
@@ -1646,6 +1712,7 @@ function update(dt){
     }
   }
   if(fusenAnim > 0) fusenAnim -= dt;
+  if(missionFlash){ missionFlash.t -= dt; if(missionFlash.t <= 0) missionFlash = null; }
 
   if(stun > 0) stun -= dt;
   if(iframes > 0) iframes -= dt;
@@ -1665,6 +1732,7 @@ function update(dt){
   updateFist(dt);
   updateGun(dt);
   updateMobs(dt);
+  checkMissions();
   if(state !== STATE.PLAY) return;
 
   if(Math.abs(p.x - stallX) > STALL_RESET_DX){ stallX = p.x; stallT = 0; }
@@ -2581,6 +2649,39 @@ function drawGunGauge(){
   ctx.restore();
 }
 
+// 터치 기기는 오른쪽 위에 일시정지 버튼이 떠 있어서 미션 목록을 그만큼 내린다
+const IS_TOUCH = !!(window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
+function drawMissions(){
+  if(!missions.length) return;
+  ctx.save();
+  if(IS_TOUCH) ctx.translate(0, 40);
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(13,27,38,0.5)";
+  ctx.fillRect(W - 206, 8, 198, 14 + missions.length*17);
+  ctx.font = "600 12px 'Pretendard', system-ui, sans-serif";
+  missions.forEach((m, i) => {
+    const y = 22 + i*17;
+    const v = Math.min(m.n, missionValue(m.kind));
+    ctx.fillStyle = m.done ? "#9fe0a0" : "rgba(244,236,217,.78)";
+    ctx.fillText((m.done ? "✓ " : "") + m.text + (m.done ? "" : "  " + v + "/" + m.n), W - 16, y);
+  });
+  ctx.restore();
+}
+
+function drawMissionFlash(){
+  if(!missionFlash) return;
+  const a = Math.min(1, missionFlash.t/30);
+  const y = 100 - Math.min(20, (150 - missionFlash.t)*0.6) + 20;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = "rgba(13,27,38,0.78)";
+  ctx.fillRect(W/2 - 170, y - 20, 340, 40);
+  ctx.strokeStyle = "#9fe0a0"; ctx.lineWidth = 2;
+  ctx.strokeRect(W/2 - 170, y - 20, 340, 40);
+  ctx.restore();
+  centerText("미션 완료 · " + missionFlash.text + "  +" + missionFlash.reward, y, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0", a);
+}
+
 function drawBossBar(){
   const b = boss;
   const bw = 300, bx = (W-bw)/2, by = 22;
@@ -2728,6 +2829,8 @@ function draw(){
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
   if(state === STATE.PLAY) drawFusenGauge();
+  if(state === STATE.PLAY) drawMissions();
+  if(state === STATE.PLAY) drawMissionFlash();
   warnY = boss ? 68 : 22;
   if(state === STATE.PLAY) drawKingWarning();
   if(state === STATE.PLAY) drawStallWarning();
@@ -2777,6 +2880,7 @@ function draw(){
     centerText("Q 피스톨(5초) · W 엘리펀트 건(15초) — 원거리 공격, 해왕류·잡몹 처치", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
     centerText("식인 물고기는 휘청이게 하고, 해왕류는 원거리 스킬로 물리칠 수 있다", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
     centerText("클릭 또는 Space로 출항 · M 메뉴로", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 136, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
     const readyTitle = currentTitleName();
     if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.8)");
@@ -2790,6 +2894,12 @@ function draw(){
     centerText(reasonText, H/2 - 40, "700 29px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), H/2 + 2, "600 17px 'Pretendard', system-ui, sans-serif", "#d9b877");
     let overY = H/2 + 40;
+    if(missions.length){
+      const done = missions.filter(m => m.done).length;
+      centerText("미션 " + done + "/" + missions.length + " 완료" + (done ? " — " + missions.filter(m => m.done).map(m => m.text).join(", ") : ""),
+                 overY, "600 14px 'Pretendard', system-ui, sans-serif", done ? "#9fe0a0" : "rgba(244,236,217,.6)");
+      overY += 22;
+    }
     if(perfects > 0){
       centerText("PERFECT 릴리즈 " + perfects + "회", overY, "600 14px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)");
       overY += 22;
@@ -2841,7 +2951,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak }),
+                 practiceMode, meats, fusen, perfects, perfectStreak, missions }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
