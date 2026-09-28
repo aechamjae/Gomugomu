@@ -904,6 +904,19 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 선장 레벨 --- */
+{
+  const a = start();
+  const L = a.log();
+  const xp0 = L.xp || 0;
+  T().setTreasure(700);
+  a.hold(false); T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  const s = run(a, 3);
+  ok("판이 끝나면 보물+거리만큼 경험치가 쌓인다", L.xp === xp0 + 700 + Math.floor(s.dist), "xp " + xp0 + "→" + L.xp);
+  const lv = a.level();
+  ok("경험치로 레벨이 계산된다", lv.L >= 1 && lv.rest < lv.need, "Lv." + lv.L + " " + lv.rest + "/" + lv.need);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

@@ -626,6 +626,7 @@ function reset(){
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
   runBounty = 0; newBountyRecord = false; newDailyRecord = false;
+  runXp = 0;
   ghostRec = []; playT = 0;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
@@ -1555,8 +1556,20 @@ const TITLES = [
 ];
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
-let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0 };
+let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0 };
+
+/* 선장 레벨 — 판마다 모은 보물(+거리)이 경험치. 레벨 L에서 L+1까지 필요한 경험치는 점점 늘어난다 */
+const xpNeed = (L) => Math.round(400 + 180 * Math.pow(L, 1.35));
+function levelOf(xp){
+  let L = 1, rest = xp;
+  while(rest >= xpNeed(L) && L < 99){ rest -= xpNeed(L); L++; }
+  return { L, rest, need: xpNeed(L) };
+}
+let runXp = 0, levelBefore = 1;
 function logRun(){
+  levelBefore = levelOf(lifeLog.xp || 0).L;
+  runXp = Math.floor(treasure) + Math.floor(dist);
+  lifeLog.xp = (lifeLog.xp || 0) + runXp;
   lifeLog.runs++;
   lifeLog.dist += Math.floor(dist);
   lifeLog.perfects += perfects;
@@ -4143,6 +4156,35 @@ function shareResult(){
   }catch(e){}
   done(legacy() ? ok : "복사할 수 없는 환경이다");
 }
+// 결과 화면 경험치 바 — 이번 판에 얻은 만큼 차오르는 연출
+function drawXpBar(x, y){
+  const lv = levelOf(lifeLog.xp || 0);
+  const t = Math.min(1, (performance.now() - overAt) / 900);
+  const w = 300, h = 10;
+  ctx.save();
+  leftText("선장 Lv." + lv.L, x, y - 14, "700 15px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+  leftText("+" + runXp + " 경험치", x + 96, y - 14, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
+  ctx.fillStyle = "rgba(244,236,217,.15)";
+  ctx.fillRect(x, y, w, h);
+  // 이번 판 전 위치 → 지금 위치로 차오른다(레벨이 올랐으면 0부터)
+  const startK = lv.L > levelBefore ? 0 : Math.max(0, (lv.rest - runXp) / lv.need);
+  const k = startK + (lv.rest / lv.need - startK) * t;
+  ctx.fillStyle = "#9fe0a0";
+  ctx.fillRect(x, y, w * k, h);
+  ctx.strokeStyle = "rgba(244,236,217,.3)"; ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  ctx.font = "400 11px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "rgba(244,236,217,.55)"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  ctx.fillText(lv.rest + " / " + lv.need, x + w, y + 22);
+  if(lv.L > levelBefore && t >= 1){
+    ctx.textAlign = "left";
+    ctx.font = "900 15px 'Pretendard', system-ui, sans-serif";
+    ctx.fillStyle = "#ffd76a";
+    ctx.fillText("★ 레벨 업! Lv." + levelBefore + " → " + lv.L, x, y + 22);
+  }
+  ctx.restore();
+}
+
 function drawShareButton(){
   const B = SHARE_BTN;
   ctx.save();
@@ -4160,7 +4202,7 @@ function drawShareButton(){
     ctx.font = "600 12px 'Pretendard', system-ui, sans-serif";
     ctx.fillStyle = "#9fe0a0";
     ctx.textAlign = "right";
-    ctx.fillText(shareMsg.text, B.x + B.w, B.y - 12);
+    ctx.fillText(shareMsg.text, B.x + B.w, B.y + B.h + 13);
     if(shareMsg.t <= 0) shareMsg = null;
   }
   ctx.restore();
@@ -4225,7 +4267,7 @@ function drawPoster(x, y, w, h){
   ctx.fillText("DEAD OR ALIVE", w/2, py + ph + 24);
   const title = currentTitleName();
   ctx.font = "700 21px 'Pretendard', system-ui, sans-serif";
-  ctx.fillText((title ? "'" + title + "' " : "") + "고무팔", w/2, py + ph + 56, w - 30);
+  ctx.fillText((title ? "'" + title + "' " : "") + "고무팔 Lv." + levelOf(lifeLog.xp || 0).L, w/2, py + ph + 56, w - 30);
   // 현상금
   ctx.font = "900 26px Georgia, 'Times New Roman', serif";
   ctx.fillText("฿ " + commas(runBounty), w/2, py + ph + 96, w - 24);
@@ -4435,6 +4477,7 @@ function draw(){
            newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
     if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a", 26);
+    if(runXp > 0) drawXpBar(lx, H - 96);
     centerText("클릭 · Space · R로 다시 · M 메뉴로", H - 44, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     drawShareButton();
   } else if(state === STATE.MENU){
@@ -4442,7 +4485,7 @@ function draw(){
     ctx.fillRect(0,0,W,H);
     centerText("고무팔 · 대항해", H/2 - 120, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
-    centerText("창고 보물 " + Math.floor(bank), H/2 - 86, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    centerText("선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 86, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
     centerText("숫자 키 또는 클릭으로 선택", H/2 + 216, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.LOG){
     ctx.fillStyle = "rgba(13,27,38,0.86)";
@@ -4542,6 +4585,7 @@ window.__swing = {
   startDaily: startDaily,
   startBlitz: startBlitz,
   log: () => lifeLog,
+  level: () => levelOf(lifeLog.xp || 0),
   map: () => ({ pieces: mapPieces, done: mapsDone, set: (v) => { mapPieces = v; } }),
   parrot: () => ({ q: parrot, active: parrotActive(), setOn: (v) => { parrotOn = v; } }),
   toLog: () => { state = STATE.LOG; },
