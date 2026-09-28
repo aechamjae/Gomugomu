@@ -1184,6 +1184,26 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 오늘의 항해 연속 출석 --- */
+{
+  const a = A();
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  const y = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  a.streak().set(y, 2);
+  const bank0 = a.shop().bank;
+  a.startDaily(); H.step(); a.hold(true); H.step(); a.hold(false);
+  T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  run(a, 3);
+  ok("어제까지 2일 연속이면 오늘 첫 판에 3일 연속·보물 +300", a.streak().n === 3 && a.shop().bank - bank0 >= 300 && a.streak().reward === 300,
+     "연속=" + a.streak().n + " 보상=" + a.streak().reward);
+  a.startDaily(); H.step(); a.hold(true); H.step(); a.hold(false);
+  T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  run(a, 3);
+  ok("같은 날 두 번째 판엔 보상이 없다", a.streak().n === 3 && a.streak().reward === 0);
+  a.streak().set("", 0);
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

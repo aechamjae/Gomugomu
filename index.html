@@ -542,6 +542,16 @@ let practicePage = 0;
 
 // 오늘의 항해 — 날짜를 시드로 지형·잡몹·아이템·미션을 고정한다. practiceMode처럼 R로 재시작해도 유지
 let dailyMode = false, dailyBest = 0, dailyDate = "";
+// 연속 출석 — 오늘의 항해를 끝낸 날짜와 연속 일수. 그날 첫 판에 보상
+let streakDate = "", streak = 0, streakReward = 0;
+function dayBefore(key){
+  const d = new Date(key + "T12:00:00"); d.setDate(d.getDate() - 1);
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function streakNow(){   // 오늘 또는 어제까지 이어졌으면 유효
+  const t = todayKey();
+  return (streakDate === t || streakDate === dayBefore(t)) ? streak : 0;
+}
 // 고스트 — 오늘의 항해 최고 기록 판의 궤적. GHOST_STEP 프레임마다 [x, y]를 이어 붙인 배열
 const GHOST_STEP = 4;
 let ghostBest = null, ghostRec = [], playT = 0;
@@ -638,7 +648,7 @@ function menuRows(){
       { y: H/2 - 80, label: "1) 본게임", action: startMainGame },
       { y: H/2 - 40, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
       { y: H/2 + 0, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
-      { y: H/2 + 40, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
+      { y: H/2 + 40, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
       { y: H/2 + 80, label: "5) 항해 일지", action: () => { state = STATE.LOG; } },
       { y: H/2 + 120, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
       { y: H/2 + 160, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
@@ -764,7 +774,7 @@ function reset(){
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
-  runBounty = 0; newBountyRecord = false; newDailyRecord = false;
+  runBounty = 0; newBountyRecord = false; newDailyRecord = false; streakReward = 0;
   reviveUsed = false; reviveT = 0;
   runXp = 0;
   ghostRec = []; playT = 0;
@@ -1776,6 +1786,13 @@ function die(reason){
     saveShop();
     logRun();
     if(blitzMode && treasure > blitzBest){ blitzBest = Math.floor(treasure); newBlitzRecord = true; saveShop(); }
+    if(dailyMode && streakDate !== todayKey()){
+      streak = streakDate === dayBefore(todayKey()) ? streak + 1 : 1;
+      streakDate = todayKey();
+      streakReward = Math.min(700, 100 * streak);
+      bank += streakReward;
+      saveShop();
+    }
     if(dailyMode){
       if(dailyDate !== todayKey()){ dailyDate = todayKey(); dailyBest = 0; ghostBest = null; }
       if(dist > dailyBest){ dailyBest = dist; newDailyRecord = true; ghostBest = ghostRec.slice(); }
@@ -3124,10 +3141,11 @@ async function loadDaily(){
   let v = null;
   try{ if(window.storage){ const r = await window.storage.get("swing:daily"); if(r && r.value) v = r.value; } }catch(e){}
   try{ if(!v && window.localStorage) v = localStorage.getItem("swing:daily"); }catch(e){}
-  try{ if(v){ const r = JSON.parse(v); dailyDate = r.date || ""; dailyBest = r.best || 0; ghostBest = Array.isArray(r.ghost) ? r.ghost : null; } }catch(e){}
+  try{ if(v){ const r = JSON.parse(v); dailyDate = r.date || ""; dailyBest = r.best || 0; ghostBest = Array.isArray(r.ghost) ? r.ghost : null;
+               streakDate = r.streakDate || ""; streak = r.streak || 0; } }catch(e){}
 }
 async function saveDaily(){
-  const v = JSON.stringify({ date: dailyDate, best: Math.floor(dailyBest), ghost: ghostBest || [] });
+  const v = JSON.stringify({ date: dailyDate, best: Math.floor(dailyBest), ghost: ghostBest || [], streakDate, streak });
   try{ if(window.storage){ await window.storage.set("swing:daily", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:daily", v); }catch(e){}
 }
@@ -5254,6 +5272,7 @@ function draw(){
                                : ("보스 " + rushIdx + "/" + RUSH_ORDER.length + " 격파" + (rushBest ? " · 최단 " + fmtTime(rushBest) : "")),
                       "700 14px 'Pretendard', system-ui, sans-serif", newRushRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(blitzMode) line((newBlitzRecord ? "★ 60초 사냥 신기록 " : "60초 보물 사냥 · 최고 ") + Math.floor(blitzBest), "700 14px 'Pretendard', system-ui, sans-serif", newBlitzRecord ? "#ffd76a" : "#8fd6d8", 26);
+    if(dailyMode && streakReward) line("🔥 " + streak + "일 연속 출석! 창고 보물 +" + streakReward, "700 14px 'Pretendard', system-ui, sans-serif", "#ffb070", 26);
     if(dailyMode) line((newDailyRecord ? "★ 오늘의 항해 신기록 " : "오늘의 항해 · 오늘 최고 ") + Math.floor(dailyBestToday()) + "m", "700 14px 'Pretendard', system-ui, sans-serif", newDailyRecord ? "#ffd76a" : "#8fd6d8", 26);
     line(reasonText, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
     line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
@@ -5394,6 +5413,7 @@ window.__swing = {
                  skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]) }),
   toShop: () => { state = STATE.SHOP; },
   startDaily: startDaily,
+  streak: () => ({ date: streakDate, n: streak, reward: streakReward, set: (d, n) => { streakDate = d; streak = n; } }),
   startBlitz: startBlitz,
   startRush: startRush,
   revive: () => revive(), decline: () => declineRevive(),
