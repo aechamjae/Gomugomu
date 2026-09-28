@@ -791,6 +791,32 @@ function swing(a, st){
      "bonusOn=" + s.bonusOn + " 잡몹=" + zoneMobs + " 아치금화=" + arcCoins);
 }
 
+/* --- 트램펄린 해파리 --- */
+{
+  const a = start();
+  const P = T().P();
+  a.hold(false);
+  const st = a.peek();
+  st.jellies.length = 0;
+  st.jellies.push({ x:P.x + 4, base:P.y + 40, t:0, cd:0 });
+  P.vx = 1; P.vy = 6;
+  let up = false;
+  run(a, 12, (s) => { if(s.vy < -8) up = true; });
+  ok("해파리를 위에서 밟으면 튕겨 오른다", a.peek().bounces === 1 && up, "bounces=" + a.peek().bounces);
+}
+{
+  const a = start();
+  const P = T().P();
+  a.hold(false);
+  const st = a.peek();
+  st.jellies.length = 0;
+  st.jellies.push({ x:P.x + 30, base:P.y, t:0, cd:0 });
+  P.vx = 10; P.vy = -0.3;
+  let stunned = false;
+  run(a, 6, (s) => { if(s.stun > 0) stunned = true; });
+  ok("옆으로 부딪히면 튕기지 않고 스턴도 없다", a.peek().bounces === 0 && !stunned);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

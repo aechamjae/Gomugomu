@@ -287,7 +287,8 @@ const MISSIONS = [
   { kind:"boss",    goals:[1, 2],            text:(n) => "보스 " + n + "마리 격파", from:1 },
   { kind:"meat",    goals:[1, 2],            text:(n) => "고기 " + n + "개 먹기" },
   { kind:"skim",    goals:[1, 2, 4],         text:(n) => "수면 스치기 " + n + "회" },
-  { kind:"barrel",  goals:[1, 2, 3],         text:(n) => "보물 통 " + n + "개 부수기" }
+  { kind:"barrel",  goals:[1, 2, 3],         text:(n) => "보물 통 " + n + "개 부수기" },
+  { kind:"jelly",   goals:[1, 2, 3],         text:(n) => "해파리 트램펄린 " + n + "번" }
 ];
 const MISSION_COUNT = 3;
 
@@ -308,7 +309,8 @@ const TIPS = [
   "폭탄 갈매기는 가까워지면 내 높이로 내려온다 — 피스톨 한 방이면 떨어진다",
   "오늘의 항해는 하루 종일 같은 코스다 — 반투명 고스트가 오늘의 내 최고 기록",
   "보스를 누적 3마리 잡으면 앵무새가 동료로 합류해 금화를 물어 온다",
-  "금화가 아치 모양으로 늘어서 있으면 한 줄을 다 먹어라 — 완성 보너스"
+  "금화가 아치 모양으로 늘어서 있으면 한 줄을 다 먹어라 — 완성 보너스",
+  "떨어지다가 해파리를 위에서 밟으면 트램펄린처럼 튕겨 오른다"
 ];
 
 /* 날씨 구간 — 순풍(공중에서 앞으로 밀어준다) / 폭풍(돌풍·하강기류, 대신 금화 2배) */
@@ -356,6 +358,12 @@ function inBonus(m){
   if(practiceMode || m < BONUS_FIRST) return false;
   return (m - BONUS_FIRST) % BONUS_EVERY < BONUS_LEN;
 }
+
+/* 트램펄린 해파리 — 위에서 밟으면 크게 튕겨 오른다. 옆·아래로 부딪히면 살짝 쏘여 감속 */
+const JELLY_FROM   = 300;
+const JELLY_CHANCE = 0.07;
+const JELLY_R      = 22;
+const JELLY_BOUNCE = 13.5;
 
 /* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
 const GEAR_MAX  = 100;
@@ -558,7 +566,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -573,6 +581,7 @@ function reset(){
   gulls = [];
   gullKills = 0;
   gullHits = 0;
+  jellies = []; bounces = 0;
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
   bonusOn = false; bonusVisits = 0;
@@ -671,6 +680,7 @@ function missionValue(kind){
     case "meat":    return meatsGot;
     case "skim":    return skims;
     case "barrel":  return barrelsBroken;
+    case "jelly":   return bounces;
   }
   return 0;
 }
@@ -935,6 +945,9 @@ function generate(){
     if(x/22 > MEAT_FROM && genRand() < MEAT_CHANCE){
       meats.push({ x: lastAX + gap*(0.4 + genRand()*0.2), y: SEA - 88 - genRand()*56, got:false });
     }
+    if(!practiceMode && x/22 > JELLY_FROM && genRand() < JELLY_CHANCE){
+      jellies.push({ x: lastAX + gap*(0.35 + genRand()*0.3), base: SEA - 130 - genRand()*80, t: genRand()*100, cd:0 });
+    }
     if(!practiceMode && x/22 > BARREL_FROM && genRand() < BARREL_CHANCE){
       barrels.push({ x: lastAX + gap*(0.3 + genRand()*0.4), gone:false });
     }
@@ -946,6 +959,7 @@ function generate(){
   meats   = meats.filter(m => m.x > cam.x - 320 && !m.got);
   barrels = barrels.filter(b => b.x > cam.x - 320 && !b.gone);
   gulls   = gulls.filter(g => g.x > cam.x - 320 && !g.gone);
+  jellies = jellies.filter(j => j.x > cam.x - 320);
   mobs    = mobs.filter(m => m.x > cam.x - 420 && !m.gone);
 }
 
@@ -1008,6 +1022,41 @@ function killGull(g, gain){
   addGear("kill");
   pops.push({ x:g.x, y:g.y-22, t:44, text:"갈매기 격추 +" + gain, color:"#d9b877" });
   for(let k=0;k<12;k++) spark(g.x, g.y, k % 2 ? "#f4ecd9" : "#f0a24e");
+}
+
+const jellyY = (j) => j.base + Math.sin(j.t*0.035)*14;
+
+function updateJellies(dt){
+  for(const j of jellies){
+    j.t += dt;
+    if(j.cd > 0){ j.cd -= dt; j.squash = Math.max(0, (j.squash || 0) - 0.08*dt); continue; }
+    j.squash = Math.max(0, (j.squash || 0) - 0.08*dt);
+    if(state !== STATE.PLAY) continue;
+    const jy = jellyY(j);
+    const d = distOriginToSeg(pPrevX - j.x, pPrevY - jy, p.x - j.x, p.y - jy);
+    if(d > JELLY_R + 13) continue;
+    j.cd = 20;
+    if(p.vy > 0 && pPrevY < jy - 4){
+      // 위에서 밟았다 — 트램펄린
+      rope = null;
+      p.vy = -JELLY_BOUNCE;
+      p.vx = Math.max(p.vx, 0) + 1.5;
+      p.y = jy - JELLY_R - 12;
+      bounces++;
+      j.squash = 1;
+      const gain = 10 * chainMult();
+      treasure += gain;
+      addGear("good");
+      pops.push({ x:j.x, y:jy-36, t:50, text:"뿅! +" + gain, color:"#e6a8f0" });
+      for(let k=0;k<12;k++) spark(j.x, jy - 10, "#e6a8f0");
+      addShake(2, 6);
+    } else if(stun <= 0 && iframes <= 0 && gearT <= 0){
+      // 옆이나 아래로 부딪혔다 — 살짝 쏘인다(스턴 없음)
+      p.vx *= 0.8;
+      pops.push({ x:j.x, y:jy-30, t:40, text:"찌릿", color:"#e6a8f0" });
+      for(let k=0;k<6;k++) spark(p.x, p.y, "#e6a8f0");
+    }
+  }
 }
 
 function updateGulls(dt){
@@ -2460,6 +2509,7 @@ function update(dt){
   updateGun(dt);
   updateMobs(dt);
   updateGulls(dt);
+  updateJellies(dt);
   updateParrot(dt);
   checkMissions();
   if(!recordBroken && !practiceMode && runBest >= 50 && dist > runBest){
@@ -3411,6 +3461,32 @@ function drawParrot(){
   ctx.restore();
 }
 
+function drawJellies(){
+  for(const j of jellies){
+    const x = j.x - cam.x;
+    if(x < -50 || x > W/cam.z + 50) continue;
+    const y = jellyY(j), sq = j.squash || 0;
+    const pulse = Math.sin(j.t*0.12);
+    const rw = JELLY_R + pulse*2 + sq*8, rh = JELLY_R*0.75 - pulse*1.5 - sq*7;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = "rgba(230,168,240,.6)"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    for(let i=0;i<5;i++){
+      const ox = -12 + i*6, wob = Math.sin(j.t*0.1 + i)*5;
+      ctx.beginPath(); ctx.moveTo(x + ox, y + 2);
+      ctx.quadraticCurveTo(x + ox + wob, y + 18, x + ox - wob*0.5, y + 32 - sq*10); ctx.stroke();
+    }
+    const g = ctx.createRadialGradient(x, y - rh*0.4, 2, x, y, rw);
+    g.addColorStop(0, "rgba(255,230,255,.95)");
+    g.addColorStop(1, "rgba(200,110,220,.75)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(x, y, rw, rh, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(120,50,140,.8)";
+    ctx.beginPath(); ctx.arc(x - 6, y - rh*0.35, 1.8, 0, Math.PI*2); ctx.arc(x + 6, y - rh*0.35, 1.8, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawGulls(){
   for(const g of gulls){
     const x = g.x - cam.x;
@@ -3988,6 +4064,7 @@ function draw(){
   }
   if(boss) drawBoss();
   drawMobs();
+  drawJellies();
   drawGulls();
   drawShots();
   drawGhost();
@@ -4215,7 +4292,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
