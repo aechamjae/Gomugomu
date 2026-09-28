@@ -589,7 +589,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -607,6 +607,7 @@ function reset(){
   jellies = []; bounces = 0;
   mapItems = []; mapGot = 0;
   blitzT = BLITZ_T; newBlitzRecord = false;
+  trail = []; rings = [];
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
   bonusOn = false; bonusVisits = 0;
@@ -1266,6 +1267,7 @@ function grab(){
     const fresh = Math.min(1, airTime / 20);
     const pull = 0.99 - 0.09 * fresh;
     rope = { a, len: Math.max(48, Math.min(d*pull, safe)) };
+    rings.push({ x:a.x, y:a.y, t:0, big: airTime > 34 });
     if(a.gold && !a.goldUsed){
       a.goldUsed = true;
       goldRings++;
@@ -2551,6 +2553,10 @@ function update(dt){
   updateWeather(dt);
   updateSkim(dt, sp);
   updateRot(dt);
+  // 잔상 — 빠를 때만 몇 프레임마다 위치를 남긴다
+  if(Math.hypot(p.vx, p.vy) > 19 && Math.floor(time) % 3 === 0) trail.push({ x:p.x, y:p.y, face:p.face, life:1 });
+  for(let i=trail.length-1;i>=0;i--){ trail[i].life -= 0.07*dt; if(trail[i].life <= 0) trail.splice(i,1); }
+  for(let i=rings.length-1;i>=0;i--){ rings[i].t += dt; if(rings[i].t > 22) rings.splice(i,1); }
   if(gearT > 0){
     gearT -= dt;
     if(gearT <= 0){
@@ -3045,6 +3051,25 @@ function drawBarrel(b){
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText("$", 2, 0);
   ctx.restore();
+}
+
+function drawTrail(){
+  const col = gearT > 0 ? "255,143,160" : fire > 0 ? "240,140,70" : curSkin().band === "#b03a34" ? "232,180,140" : "244,236,217";
+  for(const q of trail){
+    const x = q.x - cam.x;
+    ctx.fillStyle = "rgba(" + col + "," + (q.life * 0.28).toFixed(2) + ")";
+    ctx.beginPath(); ctx.ellipse(x, q.y + 4, 11, 14, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, q.y - 11, 8.5, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function drawGrabRings(){
+  for(const r of rings){
+    const k = r.t / 22;
+    ctx.strokeStyle = (r.big ? "rgba(255,215,106," : "rgba(244,236,217,") + ((1 - k) * 0.8).toFixed(2) + ")";
+    ctx.lineWidth = (r.big ? 4 : 2.5) * (1 - k) + 0.5;
+    ctx.beginPath(); ctx.arc(r.x - cam.x, r.y, 12 + k * (r.big ? 34 : 22), 0, Math.PI*2); ctx.stroke();
+  }
 }
 
 function drawGhost(){
@@ -4178,12 +4203,14 @@ function draw(){
     const t2 = missAnim.t;
     drawArm(shx, shy, shx + (missAnim.x-p.x)*t2, shy + (missAnim.y-p.y)*t2, false);
   }
+  drawGrabRings();
   if(boss) drawBoss();
   drawMobs();
   drawMapItems();
   drawJellies();
   drawGulls();
   drawShots();
+  drawTrail();
   drawGhost();
   drawParrot();
   drawFusen();
