@@ -589,7 +589,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -607,7 +607,7 @@ function reset(){
   jellies = []; bounces = 0;
   mapItems = []; mapGot = 0;
   blitzT = BLITZ_T; newBlitzRecord = false;
-  trail = []; rings = [];
+  trail = []; rings = []; happyT = 0;
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
   bonusOn = false; bonusVisits = 0;
@@ -831,6 +831,7 @@ function collectCoin(c, byPlayer){
     arcs[c.arc]++;
     if(arcs[c.arc] === ARC_N){
       arcsDone++;
+      happyT = 50;
       const bonus = ARC_BONUS * chainMult();
       treasure += bonus;
       addGear("good");
@@ -1275,6 +1276,7 @@ function grab(){
       a.goldUsed = true;
       goldRings++;
       addGear("gold");
+      happyT = 50;
       const g = 100 * chainMult();
       treasure += g;
       chainTimer = 0;
@@ -1323,6 +1325,7 @@ function release(boost){
       p.vx *= REL_PERFECT_K; p.vy *= REL_PERFECT_K;
       perfectStreak++; perfects++;
       addGear("perfect");
+      happyT = 50;
       const gain = (20 + Math.min(5, perfectStreak)*6) * chainMult();
       treasure += gain;
       pops.push({ x:p.x, y:p.y-44, t:60, text:"PERFECT" + (perfectStreak > 1 ? " ×" + perfectStreak : "") + " +" + gain, color:"#ffd76a" });
@@ -2576,6 +2579,7 @@ function update(dt){
     if(d < BARREL_R + 14) breakBarrel(b, "몸통 박치기");
   }
   if(fusenAnim > 0) fusenAnim -= dt;
+  if(happyT > 0) happyT -= dt;
   updateBonus();
   updateWeather(dt);
   updateSkim(dt, sp);
@@ -3200,6 +3204,37 @@ function drawArm(sx, sy, tx, ty, taut){
   ctx.beginPath(); ctx.arc(tx, ty, 6.5, 0, Math.PI*2); ctx.fill();
 }
 
+// 표정 — 휘청(××) / 겁먹음(O 입) / 기어 2(씩) / 방금 멋진 플레이(활짝) / 평소(점 눈)
+function drawFace(){
+  const f = p.face;
+  const ex = 3.4*f, ey = -11;
+  ctx.fillStyle = "#1b1218"; ctx.strokeStyle = "#1b1218"; ctx.lineCap = "round";
+  const scared = !rope && p.vy > 5 && p.y > SEA - 120 && stun <= 0;
+  if(stun > 0){
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(ex - 1.8, ey - 1.8); ctx.lineTo(ex + 1.8, ey + 1.8);
+    ctx.moveTo(ex + 1.8, ey - 1.8); ctx.lineTo(ex - 1.8, ey + 1.8);
+    ctx.stroke();
+    ctx.lineWidth = 1.2;                         // 물결 입
+    ctx.beginPath(); ctx.moveTo(1*f, -5.5); ctx.lineTo(2.5*f, -6.5); ctx.lineTo(4*f, -5.5); ctx.lineTo(5.5*f, -6.5); ctx.stroke();
+  } else if(scared){
+    ctx.beginPath(); ctx.arc(ex, ey, 2.3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#f4ecd9";
+    ctx.beginPath(); ctx.arc(ex + 0.6*f, ey - 0.6, 0.8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#1b1218";
+    ctx.beginPath(); ctx.ellipse(3.6*f, -5.6, 1.6, 2.1, 0, 0, Math.PI*2); ctx.fill();
+  } else if(gearT > 0 || happyT > 0){
+    ctx.lineWidth = 1.4;                         // 웃는 눈(∩)
+    ctx.beginPath(); ctx.arc(ex, ey + 0.8, 1.9, Math.PI*1.1, Math.PI*1.9); ctx.stroke();
+    ctx.fillStyle = gearT > 0 ? "#f4ecd9" : "#7a2f2b";
+    ctx.beginPath(); ctx.arc(3*f, -6.5, 3, 0, Math.PI); ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1; ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(ex, ey, 1.9, 0, Math.PI*2); ctx.fill();
+  }
+}
+
 function drawPlayer(){
   const x = p.x - cam.x, y = p.y;
   const lean = Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012));
@@ -3235,8 +3270,7 @@ function drawPlayer(){
   ctx.moveTo(-8, -12);
   ctx.quadraticCurveTo(-15 - Math.sin(time*0.14)*3, -10, -17, -3);
   ctx.lineTo(-9, -8); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#1b1218";
-  ctx.beginPath(); ctx.arc(3.4*p.face, -11, 1.9, 0, Math.PI*2); ctx.fill();
+  drawFace();
 
   ctx.strokeStyle = "#2f2436"; ctx.lineWidth = 5;
   const kick = Math.sin(time*0.13)*3;
