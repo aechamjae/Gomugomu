@@ -196,6 +196,7 @@
       <span>놓을 때 몸이 <b>금빛</b>으로 빛나면 PERFECT 릴리즈(가속+보물)</span>
       <span><b>수면</b> 바로 위를 빠르게 스치거나 해왕류를 <b>아슬아슬</b>하게 피하면 보너스</span>
       <span><b>황금 고리</b>는 보물 폭발, 금 간 <b>삭은 돛대</b>는 잡고 1초 남짓이면 부러진다</span>
+      <span>바다에 뜬 <b>보물 통</b>은 쏘거나 스치며 들이받으면 금화가 쏟아진다</span>
       <span><b>고기</b> 먹으면 바다에 빠질 때 한 번 튕겨 오른다(최대 2개)</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
     </div>
@@ -285,7 +286,8 @@ const MISSIONS = [
   { kind:"dist",    goals:[400, 700, 1000],  text:(n) => n + "m 항해" },
   { kind:"boss",    goals:[1, 2],            text:(n) => "보스 " + n + "마리 격파", from:1 },
   { kind:"meat",    goals:[1, 2],            text:(n) => "고기 " + n + "개 먹기" },
-  { kind:"skim",    goals:[1, 2, 4],         text:(n) => "수면 스치기 " + n + "회" }
+  { kind:"skim",    goals:[1, 2, 4],         text:(n) => "수면 스치기 " + n + "회" },
+  { kind:"barrel",  goals:[1, 2, 3],         text:(n) => "보물 통 " + n + "개 부수기" }
 ];
 const MISSION_COUNT = 3;
 
@@ -307,6 +309,11 @@ const GOLD_CHANCE = 0.035;
 const ROT_FROM    = 600;     // 이 거리(m)부터 삭은 돛대가 섞인다
 const ROT_CHANCE  = 0.12;    // 돛대 중 이 비율이 삭았다
 const ROT_T       = 72;      // 잡고 나서 부러지기까지(프레임)
+
+/* 보물 통 — 바다에 떠 있다. 쏘거나 들이받으면 금화가 공중에 흩뿌려진다 */
+const BARREL_FROM   = 150;
+const BARREL_CHANCE = 0.06;
+const BARREL_R      = 20;
 
 /* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
 const GEAR_MAX  = 100;
@@ -435,7 +442,8 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
-    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0;
+    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
+    barrels, barrelsBroken;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -443,6 +451,8 @@ function reset(){
   anchors = [];
   coins = [];
   meats = [];
+  barrels = [];
+  barrelsBroken = 0;
   fusen = upLv("fusen");      // 비상식량 업그레이드 — 풍선 하나를 들고 출발
   fusenAnim = 0;
   perfectStreak = 0;
@@ -532,6 +542,7 @@ function missionValue(kind){
     case "boss":    return bossKills;
     case "meat":    return meatsGot;
     case "skim":    return skims;
+    case "barrel":  return barrelsBroken;
   }
   return 0;
 }
@@ -609,6 +620,27 @@ function updateWeather(dt){
 // 화면 흔들림 — 더 센 흔들림이 들어오면 덮어쓴다
 function addShake(mag, t){
   if(mag >= shakeMag * (shakeT > 0 ? 1 : 0)){ shakeMag = mag; shakeT = t; }
+}
+
+const barrelY = (b) => SEA - 12 + Math.sin(time*0.05 + b.x*0.02)*4;
+
+// 통이 부서지며 금화가 위로 부채꼴로 흩뿌려진다
+function breakBarrel(b, how){
+  if(b.gone) return;
+  b.gone = true;
+  barrelsBroken++;
+  const y = barrelY(b);
+  treasure += 30;
+  const n = 6;
+  for(let i=0;i<n;i++){
+    const a = -Math.PI/2 + (i - (n-1)/2) * 0.28;
+    const r = 90 + (i % 2) * 50;
+    coins.push({ x: b.x + 60 + Math.cos(a)*r, y: Math.max(70, y - 60 + Math.sin(a)*r), got:false });
+  }
+  pops.push({ x:b.x, y:y-40, t:70, text:"보물 통! +30" + (how ? " (" + how + ")" : ""), color:"#d9b877" });
+  for(let i=0;i<18;i++) spark(b.x, y, i % 3 ? "#8a5a2c" : "#ffd76a");
+  addGear("kill");
+  addShake(3, 8);
 }
 
 function addGear(kind){
@@ -700,12 +732,16 @@ function generate(){
     if(x/22 > MEAT_FROM && Math.random() < MEAT_CHANCE){
       meats.push({ x: lastAX + gap*(0.4 + Math.random()*0.2), y: SEA - 88 - Math.random()*56, got:false });
     }
+    if(!practiceMode && x/22 > BARREL_FROM && Math.random() < BARREL_CHANCE){
+      barrels.push({ x: lastAX + gap*(0.3 + Math.random()*0.4), gone:false });
+    }
     spawnMobs(lastAX, x);
     lastAX = x; lastAY = y;
   }
   anchors = anchors.filter(a => a.x > cam.x - 320);
   coins   = coins.filter(c => c.x > cam.x - 320);
   meats   = meats.filter(m => m.x > cam.x - 320 && !m.got);
+  barrels = barrels.filter(b => b.x > cam.x - 320 && !b.gone);
   mobs    = mobs.filter(m => m.x > cam.x - 420 && !m.gone);
 }
 
@@ -1675,6 +1711,13 @@ function pistolAim(){
     if(d < bd && d < 860){ bd = d; best = { x:m.x, y:m.y }; }
   }
   if(best) return Math.atan2(best.y - p.y, best.x - p.x);
+  // 물고기도 없으면 앞쪽 보물 통을 노린다
+  for(const b of barrels){
+    if(b.gone || b.x < p.x + 20) continue;
+    const d = Math.hypot(b.x - p.x, barrelY(b) - p.y);
+    if(d < bd && d < 760){ bd = d; best = { x:b.x, y:barrelY(b) }; }
+  }
+  if(best) return Math.atan2(best.y - p.y, best.x - p.x);
   return p.face > 0 ? -0.10 : Math.PI + 0.10;      // 목표가 없으면 정면으로
 }
 
@@ -1706,6 +1749,10 @@ function updateFist(dt){
 
   const near = (tx, ty) =>
     distOriginToSeg(fist.px - tx, fist.py - ty, fist.x - tx, fist.y - ty);
+
+  for(const b of barrels){
+    if(!b.gone && near(b.x, barrelY(b)) < FIST_R + BARREL_R){ breakBarrel(b, "피스톨"); fist.back = true; return; }
+  }
 
   // 날아오는 탄을 쳐낸다
   for(let i=shots.length-1;i>=0;i--){
@@ -1785,6 +1832,9 @@ function fireGun(){
         for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
       }
     }
+  }
+  for(const b of barrels){
+    if(!b.gone && Math.hypot(b.x - gx, barrelY(b) - gy) < GUN_R + BARREL_R) breakBarrel(b, "엘리펀트 건");
   }
   if(boss && Math.hypot(boss.x-gx, boss.y-gy) < GUN_R + 40){
     damageBoss(true, "엘리펀트 건");
@@ -1934,6 +1984,11 @@ function update(dt){
       }
       for(let i=0;i<12;i++) spark(m.x, m.y, "#f7a8a0");
     }
+  }
+  for(const b of barrels){
+    if(b.gone) continue;
+    const d = distOriginToSeg(pPrevX - b.x, pPrevY - barrelY(b), p.x - b.x, p.y - barrelY(b));
+    if(d < BARREL_R + 14) breakBarrel(b, "몸통 박치기");
   }
   if(fusenAnim > 0) fusenAnim -= dt;
   updateWeather(dt);
@@ -2374,6 +2429,26 @@ function drawReleaseCue(){
   ctx.strokeStyle = g === 2 ? "rgba(255,215,106,.9)" : "rgba(217,184,119,.45)";
   ctx.lineWidth = g === 2 ? 4 : 2;
   ctx.beginPath(); ctx.arc(x, y, g === 2 ? 22 + Math.sin(time*0.6)*2 : 20, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawBarrel(b){
+  const x = b.x - cam.x;
+  if(b.gone || x < -40 || x > W/cam.z + 40) return;
+  const y = barrelY(b);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(time*0.04 + b.x)*0.12);
+  ctx.fillStyle = "#7a4a26";
+  ctx.beginPath(); ctx.ellipse(0, 0, 16, 21, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#946034";
+  ctx.fillRect(-12, -19, 6, 38);
+  ctx.strokeStyle = "#3a2618"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-15, -9); ctx.lineTo(15, -9); ctx.moveTo(-15, 9); ctx.lineTo(15, 9); ctx.stroke();
+  ctx.fillStyle = "#ffd76a";
+  ctx.font = "700 11px 'Pretendard', system-ui, sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("$", 2, 0);
   ctx.restore();
 }
 
@@ -3317,6 +3392,7 @@ function draw(){
   for(const a of anchors) drawMast(a, a === target || (rope && rope.a === a));
   for(const c of coins) drawCoin(c);
   for(const m of meats) drawMeat(m);
+  for(const b of barrels) drawBarrel(b);
 
   const shx = p.x - cam.x + 4*p.face, shy = p.y - 2;
   if(rope){
@@ -3506,7 +3582,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord }),
+                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

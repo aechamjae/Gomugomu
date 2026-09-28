@@ -527,6 +527,28 @@ function swing(a, st){
   ok("게임오버 때 현상금이 매겨진다", s.state === 2 && s.runBounty >= 100 * 500, "현상금=" + s.runBounty);
 }
 
+/* --- 보물 통 --- */
+{
+  const a = start();
+  const P = T().P();
+  const s0 = a.peek();
+  s0.barrels.length = 0; s0.mobs.length = 0;
+  s0.barrels.push({ x: P.x + 300, gone:false });
+  a.fire();
+  const s = run(a, 30);
+  ok("피스톨로 보물 통을 부수면 금화가 흩뿌려진다", s.barrelsBroken === 1, "부순 통=" + s.barrelsBroken);
+}
+{
+  const a = start();
+  const P = T().P();
+  const s0 = a.peek();
+  s0.barrels.length = 0;
+  s0.barrels.push({ x: P.x + 60, gone:false });
+  a.hold(false);
+  const s = run(a, 12, () => { P.y = s0.SEA - 30; P.vy = 0; P.vx = 10; });
+  ok("수면을 스치며 보물 통을 들이받아도 부서진다", s.barrelsBroken === 1, "부순 통=" + s.barrelsBroken);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
