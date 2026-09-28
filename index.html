@@ -5178,8 +5178,28 @@ function draw(){
   if(state === STATE.PAUSE){
     ctx.fillStyle = "rgba(13,27,38,0.74)";
     ctx.fillRect(0,0,W,H);
-    centerText("닻을 내렸다", H/2 - 26, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    centerText("P · Esc · Space · 화면을 눌러 계속", H/2 + 16, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.62)");
+    centerText("닻을 내렸다", H/2 - 120, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    if(practiceMode || dailyMode || blitzMode || rushMode)
+      centerText(practiceMode ? "연습 모드 — " + practiceLabel() : dailyMode ? "오늘의 항해" : blitzMode ? "60초 보물 사냥 · 남은 " + Math.ceil(blitzT/60) + "초" : "보스 러시 " + Math.min(rushIdx+1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length,
+                 H/2 - 88, "600 14px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
+    // 이번 판 상황
+    const facts = [Math.floor(dist) + "m", "보물 " + Math.floor(treasure)];
+    if(chain > 1) facts.push("콤보 ×" + chain);
+    if(fusen) facts.push("풍선 " + fusen);
+    facts.push("기어 " + (gearT > 0 ? "발동 중" : Math.floor(gear) + "%"));
+    if(perfects) facts.push("PERFECT " + perfects);
+    centerText(facts.join("  ·  "), H/2 - 52, "700 16px ui-monospace, Menlo, monospace", "#d9b877");
+    let py = H/2 - 14;
+    if(missions.length){
+      centerText("이번 항해 미션", py, "600 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)"); py += 22;
+      for(const m of missions){
+        const v = Math.min(m.n, missionValue(m.kind));
+        centerText((m.done ? "✓ " : "") + m.text + (m.done ? "" : "  " + v + "/" + m.n), py, "600 14px 'Pretendard', system-ui, sans-serif", m.done ? "#9fe0a0" : "#f4ecd9");
+        py += 21;
+      }
+    }
+    centerText("P · Esc · Space · 화면을 눌러 계속", H/2 + 110, "600 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.8)");
+    centerText("R 다시 시작 · M 메뉴(설정은 메뉴 8번)", H/2 + 134, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.5)");
   } else if(state === STATE.READY){
     ctx.fillStyle = "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
