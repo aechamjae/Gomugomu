@@ -356,7 +356,7 @@ const PARROT_CD     = 70;    // 한 번 물어 온 뒤 쉬는 시간
    지형 좌표(월드 x/22) 기준이라 보스전으로 거리 표시가 밀려도 같은 자리에 생긴다 */
 const BONUS_FIRST = 1200, BONUS_EVERY = 1500, BONUS_LEN = 110;
 function inBonus(m){
-  if(practiceMode || m < BONUS_FIRST) return false;
+  if(practiceMode || rushMode || m < BONUS_FIRST) return false;
   return (m - BONUS_FIRST) % BONUS_EVERY < BONUS_LEN;
 }
 
@@ -478,6 +478,7 @@ function startDaily(){
   practiceMode = null;
   dailyMode = true;
   blitzMode = false;
+  rushMode = false;
   reset();
 }
 
@@ -489,8 +490,21 @@ function startBlitz(){
   practiceMode = null;
   dailyMode = false;
   blitzMode = true;
+  rushMode = false;
   reset();
 }
+
+// 보스 러시 — 중간보스 6종 + 크라켄 7연전. 잡몹·날씨 없이 보스만, 완주 시간 기록
+const RUSH_ORDER = [0, 1, 3, 4, 2, 6, 5];
+let rushMode = false, rushBest = 0;
+function startRush(){
+  practiceMode = null;
+  dailyMode = false;
+  blitzMode = false;
+  rushMode = true;
+  reset();
+}
+const fmtTime = (fr) => { const t = fr / 60, m = Math.floor(t / 60), sec = t - m*60; return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(1); };
 
 /* 연습 대상 목록 — 인덱스는 BOSSES 배열과 동일, 마지막은 해왕류 폭주 */
 const PRACTICE_OPTIONS = [
@@ -515,6 +529,7 @@ function startMainGame(){
   practiceMode = null;
   dailyMode = false;
   blitzMode = false;
+  rushMode = false;
   reset();
 }
 function startPractice(idx){
@@ -522,6 +537,7 @@ function startPractice(idx){
   if(!opt) return;
   dailyMode = false;
   blitzMode = false;
+  rushMode = false;
   practiceMode = opt.type === "king" ? { type:"king" } : { type:"boss", bossType:opt.bossType };
   reset();
 }
@@ -530,12 +546,13 @@ function startPractice(idx){
 function menuRows(){
   if(state === STATE.MENU){
     return [
-      { y: H/2 - 40, label: "1) 본게임", action: startMainGame },
-      { y: H/2 + 4, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
-      { y: H/2 + 48, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
-      { y: H/2 + 92, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
-      { y: H/2 + 136, label: "5) 항해 일지", action: () => { state = STATE.LOG; } },
-      { y: H/2 + 180, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz }
+      { y: H/2 - 60, label: "1) 본게임", action: startMainGame },
+      { y: H/2 - 16, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
+      { y: H/2 + 28, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
+      { y: H/2 + 72, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
+      { y: H/2 + 116, label: "5) 항해 일지", action: () => { state = STATE.LOG; } },
+      { y: H/2 + 160, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
+      { y: H/2 + 204, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush }
     ];
   }
   if(state === STATE.LOG){
@@ -589,7 +606,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT, rushIdx, rushT, rushDone, newRushRecord;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -608,6 +625,7 @@ function reset(){
   mapItems = []; mapGot = 0;
   blitzT = BLITZ_T; newBlitzRecord = false;
   trail = []; rings = []; happyT = 0;
+  rushIdx = 0; rushT = 0; rushDone = false; newRushRecord = false;
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
   bonusOn = false; bonusVisits = 0;
@@ -657,6 +675,7 @@ function reset(){
     nextBossAt = Infinity; nextBigAt = Infinity;   // 폭주 연습 중엔 일반 보스는 끈다
   }
   if(blitzMode){ nextBossAt = Infinity; nextBigAt = Infinity; }
+  if(rushMode){ nextBossAt = 30; nextBigAt = Infinity; }
   bossKills = 0;
   stun = 0;
   iframes = 0;
@@ -681,7 +700,7 @@ function reset(){
 }
 
 function pickMissions(){
-  if(practiceMode || blitzMode) return [];    // 연습 모드·60초 사냥엔 미션이 없다
+  if(practiceMode || blitzMode || rushMode) return [];    // 연습·60초 사냥·보스 러시엔 미션이 없다
   const pool = MISSIONS.slice();
   const out = [];
   while(out.length < MISSION_COUNT && pool.length){
@@ -789,7 +808,7 @@ function updateWeather(dt){
       weather = null;
       nextWeatherAt = dist + 500 + weatherRand()*400;
     }
-  } else if(!practiceMode && !boss && !bonusOn && dist >= nextWeatherAt){
+  } else if(!practiceMode && !rushMode && !boss && !bonusOn && dist >= nextWeatherAt){
     const r = weatherRand();
     const type = r < 0.36 ? "wind" : r < 0.7 ? "storm" : "fog";
     weather = { type, from: dist, to: dist + WEATHER_LEN };
@@ -1020,7 +1039,7 @@ function generate(){
 /* ---------- 잡몹 ---------- */
 // 두 고리 사이 구간(x0~x1)에 잡몹을 뿌린다
 function spawnMobs(x0, x1){
-  if(practiceMode && practiceMode.type === "boss") return;   // 보스 연습 중엔 잡몹 없이 그 보스만 상대한다
+  if((practiceMode && practiceMode.type === "boss") || rushMode) return;   // 보스 연습·러시 중엔 잡몹 없이 보스만
   if(practiceMode && practiceMode.type === "king"){
     // 해왕류 폭주 연습 — 최소 거리 제한 없이, 훨씬 자주·훨씬 촘촘하게 쏟아낸다
     if(x1 - lastKingX > 480 && genRand() < 0.85){
@@ -1625,6 +1644,7 @@ function clearCuts(){
 function spawnBoss(big){
   let type;
   if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
+  else if(rushMode) type = RUSH_ORDER[rushIdx];
   else if(big) type = 5;
   else type = MID_BOSSES[Math.floor(Math.random()*MID_BOSSES.length)];
   boss = { type, big:!!big, hp: big ? 8 : 2, maxHp: big ? 8 : 2,
@@ -1640,6 +1660,18 @@ function spawnBoss(big){
 
 // 보스 등장 컷인 — 위아래 띠가 양옆에서 밀려 들어오고 이름이 찍힌다 (약 2초)
 const INTRO_T = 105;
+function drawRushHud(){
+  const y = boss ? 70 : 30;
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,.6)";
+  ctx.fillRect(W/2 - 110, y - 14, 220, 28);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "700 14px ui-monospace, Menlo, monospace";
+  ctx.fillStyle = "#f4ecd9";
+  ctx.fillText("보스 러시 " + Math.min(rushIdx + 1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length + "  ·  " + fmtTime(rushT), W/2, y);
+  ctx.restore();
+}
+
 function drawBlitzTimer(){
   const sec = Math.ceil(blitzT / 60);
   const low = sec <= 10;
@@ -1866,7 +1898,11 @@ function damageBoss(ranged, mark){
       saveTitles();
     }
     applyBossReward(b);
-    if(practiceMode && practiceMode.type === "boss"){
+    if(rushMode){
+      rushIdx++;
+      nextBossAt = dist + 40; nextBigAt = Infinity;
+      if(rushIdx >= RUSH_ORDER.length) rushDone = true;   // 마지막 크라켄까지 — update()에서 완주 처리
+    } else if(practiceMode && practiceMode.type === "boss"){
       // 연습 대상만 짧은 간격으로 계속 반복 등장
       if(b.big){ nextBigAt = dist + 60; nextBossAt = Infinity; }
       else { nextBossAt = dist + 60; nextBigAt = Infinity; }
@@ -2608,7 +2644,10 @@ function update(dt){
     chainTimer += dt;
     if(chainTimer > CHAIN_DECAY_T){ chain = 0; chainTimer = 0; }
   }
-  if(!boss){
+  if(rushMode){
+    rushT += dt;
+    if(!boss && dist >= nextBossAt && rushIdx < RUSH_ORDER.length) spawnBoss(RUSH_ORDER[rushIdx] === 5);
+  } else if(!boss){
     if(dist >= nextBigAt) spawnBoss(true);
     else if(dist >= nextBossAt && dist + 220 < nextBigAt) spawnBoss(false);
   }
@@ -2646,6 +2685,10 @@ function update(dt){
   generate();
   syncHUD();
 
+  if(rushMode && rushDone && slowT <= 0){
+    if(!rushBest || rushT < rushBest){ rushBest = Math.floor(rushT); newRushRecord = true; saveShop(); }
+    return die("완주");
+  }
   if(blitzMode){
     blitzT -= dt;
     if(blitzT <= 0){ blitzT = 0; return die("시간"); }
@@ -2736,6 +2779,7 @@ function applyShopRecord(v){
     if(r.parrot === false) parrotOn = false;
     mapPieces = r.mapPieces || 0; mapsDone = r.mapsDone || 0;
     blitzBest = r.blitz || 0;
+    rushBest = r.rush || 0;
   }catch(e){}
 }
 async function loadShop(){
@@ -2751,7 +2795,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -4432,6 +4476,7 @@ function draw(){
   if(state === STATE.PLAY) drawFusenGauge();
   if(state === STATE.PLAY) drawGearGauge();
   if(state === STATE.PLAY && blitzMode) drawBlitzTimer();
+  if(state === STATE.PLAY && rushMode) drawRushHud();
   if(state === STATE.PLAY) drawBossIntro();
   if(state === STATE.PLAY) drawSinkBanner();
   if(state === STATE.PLAY) drawMissions();
@@ -4477,6 +4522,7 @@ function draw(){
   } else if(state === STATE.READY){
     ctx.fillStyle = "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
+    if(rushMode) centerText("보스 러시 — 중간보스 6종과 크라켄을 연달아 격침하라" + (rushBest ? " · 최단 " + fmtTime(rushBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 바다에 빠지면 -5초" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
@@ -4496,7 +4542,8 @@ function draw(){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
     drawPoster(W/2 - 330, 52, 250, 380);
-    const reasonText = deathReason === "시간" ? "시간 종료!"
+    const reasonText = deathReason === "완주" ? "보스 러시 완주!"
+      : deathReason === "시간" ? "시간 종료!"
       : deathReason === "바다" ? "바다에 빠졌다"
       : deathReason === "정체" ? "너무 오래 멈춰 선단에 뒤처졌다"
       : "선단에 뒤처졌다";
@@ -4504,6 +4551,9 @@ function draw(){
     let overY = 92;
     const line = (t, font, color, gap) => { leftText(t, lx, overY, font, color); overY += gap; };
     if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8", 26);
+    if(rushMode) line(rushDone ? ((newRushRecord ? "★ 최단 기록 " : "완주 기록 ") + fmtTime(rushT) + (rushBest && !newRushRecord ? " · 최단 " + fmtTime(rushBest) : ""))
+                               : ("보스 " + rushIdx + "/" + RUSH_ORDER.length + " 격파" + (rushBest ? " · 최단 " + fmtTime(rushBest) : "")),
+                      "700 14px 'Pretendard', system-ui, sans-serif", newRushRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(blitzMode) line((newBlitzRecord ? "★ 60초 사냥 신기록 " : "60초 보물 사냥 · 최고 ") + Math.floor(blitzBest), "700 14px 'Pretendard', system-ui, sans-serif", newBlitzRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(dailyMode) line((newDailyRecord ? "★ 오늘의 항해 신기록 " : "오늘의 항해 · 오늘 최고 ") + Math.floor(dailyBestToday()) + "m", "700 14px 'Pretendard', system-ui, sans-serif", newDailyRecord ? "#ffd76a" : "#8fd6d8", 26);
     line(reasonText, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
@@ -4533,10 +4583,10 @@ function draw(){
   } else if(state === STATE.MENU){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
     ctx.fillRect(0,0,W,H);
-    centerText("고무팔 · 대항해", H/2 - 120, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("고무팔 · 대항해", H/2 - 145, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
-    centerText("선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 86, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
-    centerText("숫자 키 또는 클릭으로 선택", H/2 + 216, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 111, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    centerText("숫자 키 또는 클릭으로 선택", H/2 + 240, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.LOG){
     ctx.fillStyle = "rgba(13,27,38,0.86)";
     ctx.fillRect(0,0,W,H);
@@ -4616,7 +4666,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
@@ -4634,6 +4684,7 @@ window.__swing = {
   toShop: () => { state = STATE.SHOP; },
   startDaily: startDaily,
   startBlitz: startBlitz,
+  startRush: startRush,
   log: () => lifeLog,
   level: () => levelOf(lifeLog.xp || 0),
   map: () => ({ pieces: mapPieces, done: mapsDone, set: (v) => { mapPieces = v; } }),

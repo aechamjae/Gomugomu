@@ -917,6 +917,28 @@ function swing(a, st){
   ok("경험치로 레벨이 계산된다", lv.L >= 1 && lv.rest < lv.need, "Lv." + lv.L + " " + lv.rest + "/" + lv.need);
 }
 
+/* --- 보스 러시 --- */
+{
+  const a = A();
+  let order = [], s = null, fishSeen = false;
+  for(let attempt = 0; attempt < 3; attempt++){
+    order = []; fishSeen = false;
+    a.startRush(); H.step(); a.hold(true); H.step(); a.hold(false);
+    T().setFusen(2);
+    s = run(a, 9000, (st) => {
+      if(st.mobs.length) fishSeen = true;
+      if(st.boss){
+        if(!st.boss._seen){ st.boss._seen = true; order.push(st.boss.type); }
+        st.boss.hp = 1; st.boss.invul = 0; T().dmg(true, "테스트");
+      } else { swing(a, st); T().setFusen(2); }
+    });
+    if(s.deathReason === "완주") break;
+  }
+  ok("보스 러시 — 7연전을 순서대로 치르고 완주한다", s.deathReason === "완주" && order.join(",") === "0,1,3,4,2,6,5" && !fishSeen,
+     "사인=" + s.deathReason + " 순서=" + order.join(","));
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
