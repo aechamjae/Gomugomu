@@ -817,6 +817,25 @@ function swing(a, st){
   ok("옆으로 부딪히면 튕기지 않고 스턴도 없다", a.peek().bounces === 0 && !stunned);
 }
 
+/* --- 보물 지도 조각 --- */
+{
+  const a = start();
+  const M = a.map, sh = a.shop;
+  M().set(3);
+  const bank0 = sh().bank;
+  const P = T().P();
+  a.hold(false);
+  const st = a.peek();
+  st.mapItems.push({ x:P.x + 10, y:P.y, got:false });
+  run(a, 2, () => { P.vx = 5; P.vy = 0; });
+  ok("지도 조각을 주우면 판을 넘어 쌓인다", M().pieces === 4, "조각=" + M().pieces);
+  a.peek().mapItems.push({ x:T().P().x + 10, y:T().P().y, got:false });
+  run(a, 2, () => { P.vx = 5; P.vy = 0; });
+  ok("5조각을 모으면 지도 완성 — 창고에 보물", M().pieces === 0 && M().done >= 1 && sh().bank === bank0 + 5000,
+     "조각=" + M().pieces + " 완성=" + M().done + " 창고 " + bank0 + "→" + sh().bank);
+  sh().setBank(0); M().set(0);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
