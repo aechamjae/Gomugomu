@@ -305,7 +305,9 @@ const TIPS = [
   "미션 세 개를 전부 깨면 보너스 보물과 풍선을 준다",
   "노란 깃발은 내 최고 기록 지점이다 — 넘어서면 신기록",
   "폭탄 갈매기는 가까워지면 내 높이로 내려온다 — 피스톨 한 방이면 떨어진다",
-  "오늘의 항해는 하루 종일 같은 코스다 — 반투명 고스트가 오늘의 내 최고 기록"
+  "오늘의 항해는 하루 종일 같은 코스다 — 반투명 고스트가 오늘의 내 최고 기록",
+  "보스를 누적 3마리 잡으면 앵무새가 동료로 합류해 금화를 물어 온다",
+  "금화가 아치 모양으로 늘어서 있으면 한 줄을 다 먹어라 — 완성 보너스"
 ];
 
 /* 날씨 구간 — 순풍(공중에서 앞으로 밀어준다) / 폭풍(돌풍·하강기류, 대신 금화 2배) */
@@ -340,6 +342,11 @@ const GULL_R    = 16;
 const ARC_CHANCE = 0.14;
 const ARC_N      = 7;
 const ARC_BONUS  = 60;
+
+/* 앵무새 동료 — 보스 누적 3마리면 합류. 따라다니다 근처 금화를 물어 온다 */
+const PARROT_UNLOCK = 3;
+const PARROT_RANGE  = 190;   // 이 거리 안의 금화만 노린다
+const PARROT_CD     = 70;    // 한 번 물어 온 뒤 쉬는 시간
 
 /* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
 const GEAR_MAX  = 100;
@@ -382,6 +389,9 @@ const SKINS = [
   { id:"gold",  name:"황금 두건",   cost:4000, band:"#d9a62c", coat:"#8a6a2c" },
   { id:"black", name:"검은 수염",   cost:8000, band:"#26202c", coat:"#3a2a3a" }
 ];
+let parrotOn = true;
+const parrotUnlocked = () => lifeBossKills >= PARROT_UNLOCK;
+const parrotActive = () => parrotUnlocked() && parrotOn;
 let bank = 0, upgrades = {}, shopMsg = null, bestBounty = 0, ownedSkins = ["red"], skin = "red";
 const curSkin = () => SKINS.find(k => k.id === skin) || SKINS[0];
 function pickSkin(k){
@@ -487,7 +497,11 @@ function menuRows(){
     ];
   }
   if(state === STATE.LOG){
-    return [{ y: H - 44, label: "1) ← 뒤로가기", action: () => { state = STATE.MENU; } }];
+    const rows = [{ y: H - 44, label: "1) ← 뒤로가기", action: () => { state = STATE.MENU; } }];
+    if(parrotUnlocked()) rows.push({ y: H - 74, label: "2) 앵무새 동료 " + (parrotOn ? "켜짐 — 끄기" : "꺼짐 — 켜기"),
+                                     action: () => { parrotOn = !parrotOn; saveShop(); } });
+    else rows.push({ y: H - 74, label: "앵무새 동료 — 보스 누적 " + PARROT_UNLOCK + "마리 격파 시 합류 (" + lifeBossKills + "/" + PARROT_UNLOCK + ")", action: () => {} });
+    return rows;
   }
   if(state === STATE.SHOP){
     const top = H/2 - 92, rowH = 32;
@@ -533,7 +547,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -548,6 +562,7 @@ function reset(){
   gullKills = 0;
   gullHits = 0;
   arcs = {}; arcSeq = 0; arcsDone = 0;
+  parrot = { x:150 - 30, y:110, vx:0, vy:0, target:null, cd:60, t:0 };
   fusen = upLv("fusen");      // 비상식량 업그레이드 — 풍선 하나를 들고 출발
   fusenAnim = 0;
   perfectStreak = 0;
@@ -740,6 +755,57 @@ function breakBarrel(b, how){
   for(let i=0;i<18;i++) spark(b.x, y, i % 3 ? "#8a5a2c" : "#ffd76a");
   addGear("kill");
   addShake(3, 8);
+}
+
+// 금화 획득 — 플레이어가 직접 먹으면(byPlayer) 살짝 가속, 앵무새가 물어 오면 가속은 없다
+function collectCoin(c, byPlayer){
+  c.got = true;
+  coinsGot++;
+  if(c.arc && arcs[c.arc] !== undefined){
+    arcs[c.arc]++;
+    if(arcs[c.arc] === ARC_N){
+      arcsDone++;
+      const bonus = ARC_BONUS * chainMult();
+      treasure += bonus;
+      addGear("good");
+      pops.push({ x:c.x, y:c.y-40, t:80, text:"금화 줄 완성! +" + bonus, color:"#ffd76a" });
+      for(let i=0;i<16;i++) spark(c.x, c.y, "#ffd76a");
+    }
+  }
+  const mult = chainMult() * (weather && weather.type === "storm" ? 2 : 1) * (gearT > 0 ? 2 : 1);
+  const gain = Math.round(25 * mult);
+  treasure += gain;
+  if(byPlayer) p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
+  if(mult > 1) pops.push({ x:c.x, y:c.y-20, t:34, text:"+" + gain, color:"#ffd76a" });
+  for(let i=0;i<9;i++) spark(c.x, c.y, "#d9b877");
+}
+
+function updateParrot(dt){
+  if(!parrotActive()) return;
+  const q = parrot;
+  q.t += dt;
+  if(q.cd > 0) q.cd -= dt;
+  if(q.target && (q.target.got || Math.hypot(q.target.x - p.x, q.target.y - p.y) > PARROT_RANGE * 1.8)) q.target = null;
+  if(!q.target && q.cd <= 0){
+    let best = null, bd = PARROT_RANGE;
+    for(const c of coins){
+      if(c.got || c.x < p.x - 40) continue;
+      const d = Math.hypot(c.x - p.x, c.y - p.y);
+      if(d < bd){ bd = d; best = c; }
+    }
+    q.target = best;
+  }
+  // 목표가 있으면 날아가고, 없으면 플레이어 뒤쪽 위에 붙어 다닌다
+  const tx = q.target ? q.target.x : p.x - 34*p.face;
+  const ty = q.target ? q.target.y : p.y - 34 + Math.sin(q.t*0.07)*5;
+  const k = q.target ? 0.22 : 0.14;
+  q.x += (tx - q.x) * k * dt;
+  q.y += (ty - q.y) * k * dt;
+  if(q.target && Math.hypot(q.target.x - q.x, q.target.y - q.y) < 16){
+    collectCoin(q.target, false);
+    q.target = null;
+    q.cd = PARROT_CD;
+  }
 }
 
 function addGear(kind){
@@ -1526,6 +1592,8 @@ function damageBoss(ranged, mark){
     bossKills++;
     if(!practiceMode){        // 연습 모드에서 무한 반복 격파해도 칭호·기록은 오염되지 않게
       lifeBossKills++;
+      if(lifeBossKills === PARROT_UNLOCK)
+        pops.push({ x:b.x, y:b.y-100, t:180, text:"앵무새가 동료로 합류했다!", color:"#3fae5a" });
       if(b.big) lifeKrakenKills++;
       const unlocked = checkTitles();
       if(unlocked){
@@ -2162,27 +2230,7 @@ function update(dt){
       const dx = p.x - c.x, dy = p.y - c.y, dd = Math.hypot(dx, dy);
       if(dd < magR && dd > 1){ const k = Math.min(dd, (6 + 10*(1 - dd/magR)) * dt); c.x += dx/dd*k; c.y += dy/dd*k; }
     }
-    if(Math.hypot(c.x - p.x, c.y - p.y) < 27){
-      c.got = true;
-      coinsGot++;
-      if(c.arc && arcs[c.arc] !== undefined){
-        arcs[c.arc]++;
-        if(arcs[c.arc] === ARC_N){
-          arcsDone++;
-          const bonus = ARC_BONUS * chainMult();
-          treasure += bonus;
-          addGear("good");
-          pops.push({ x:c.x, y:c.y-40, t:80, text:"금화 줄 완성! +" + bonus, color:"#ffd76a" });
-          for(let i=0;i<16;i++) spark(c.x, c.y, "#ffd76a");
-        }
-      }
-      const mult = chainMult() * (weather && weather.type === "storm" ? 2 : 1) * (gearT > 0 ? 2 : 1);
-      const gain = Math.round(25 * mult);
-      treasure += gain;
-      p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
-      if(mult > 1) pops.push({ x:c.x, y:c.y-20, t:34, text:"+" + gain, color:"#ffd76a" });
-      for(let i=0;i<9;i++) spark(c.x, c.y, "#d9b877");
-    }
+    if(Math.hypot(c.x - p.x, c.y - p.y) < 27) collectCoin(c, true);
   }
 
   for(const m of meats){
@@ -2235,6 +2283,7 @@ function update(dt){
   updateGun(dt);
   updateMobs(dt);
   updateGulls(dt);
+  updateParrot(dt);
   checkMissions();
   if(!recordBroken && !practiceMode && runBest >= 50 && dist > runBest){
     recordBroken = true;
@@ -2334,6 +2383,7 @@ function applyShopRecord(v){
     bestBounty = r.bounty || 0;
     if(Array.isArray(r.skins)) ownedSkins = r.skins.indexOf("red") >= 0 ? r.skins : ["red"].concat(r.skins);
     if(r.skin && ownedSkins.indexOf(r.skin) >= 0) skin = r.skin;
+    if(r.parrot === false) parrotOn = false;
   }catch(e){}
 }
 async function loadShop(){
@@ -2349,7 +2399,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -3120,6 +3170,29 @@ function drawBoss(){
   }
 }
 
+function drawParrot(){
+  if(!parrotActive() || !(state === STATE.PLAY || state === STATE.PAUSE)) return;
+  const q = parrot, x = q.x - cam.x, y = q.y;
+  const flap = Math.sin(q.t * 0.5) * 7;
+  const dir = q.target ? (q.target.x >= q.x ? 1 : -1) : p.face;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir, 1);
+  ctx.fillStyle = "#3fae5a";                     // 몸통
+  ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#d8443a";                     // 날개
+  ctx.beginPath(); ctx.moveTo(-2, -1); ctx.quadraticCurveTo(-8, -9 - flap, -14, -4 - flap); ctx.lineTo(-4, 2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#2f8f48";                     // 꼬리
+  ctx.beginPath(); ctx.moveTo(-6, 2); ctx.lineTo(-15, 7); ctx.lineTo(-7, 5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#3fae5a";                     // 머리
+  ctx.beginPath(); ctx.arc(7, -4, 4.6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#f0c24e";                     // 부리
+  ctx.beginPath(); ctx.moveTo(11, -5); ctx.lineTo(15, -3); ctx.lineTo(11, -1.5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#1b1218";
+  ctx.beginPath(); ctx.arc(8, -5, 1.1, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
 function drawGulls(){
   for(const g of gulls){
     const x = g.x - cam.x;
@@ -3686,6 +3759,7 @@ function draw(){
   drawGulls();
   drawShots();
   drawGhost();
+  drawParrot();
   drawFusen();
   drawReleaseCue();
   drawGearAura();
@@ -3854,7 +3928,8 @@ function draw(){
                t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
       leftText(t.desc, cx + 150, cy, "400 12px 'Pretendard', system-ui, sans-serif", has ? "rgba(244,236,217,.6)" : "rgba(244,236,217,.35)");
     });
-    for(const row of menuRows()) centerText(row.label, row.y, "600 16px 'Pretendard', system-ui, sans-serif", "#d9b877");
+    for(const row of menuRows()) centerText(row.label, row.y, row === menuRows()[0] ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
+                                            row === menuRows()[0] ? "#d9b877" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)");
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
@@ -3921,6 +3996,7 @@ window.__swing = {
   toShop: () => { state = STATE.SHOP; },
   startDaily: startDaily,
   log: () => lifeLog,
+  parrot: () => ({ q: parrot, active: parrotActive(), setOn: (v) => { parrotOn = v; } }),
   toLog: () => { state = STATE.LOG; },
   ghost: () => ({ best: ghostBest, rec: ghostRec })
 };

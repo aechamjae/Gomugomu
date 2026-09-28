@@ -651,6 +651,24 @@ function swing(a, st){
   ok("금화 줄을 전부 먹으면 완성 보너스", found && done, "아치발견=" + found);
 }
 
+/* --- 앵무새 동료 --- */
+{
+  const before = T().lifeStats().boss;
+  T().setLifeBoss(0);
+  let a = start();
+  ok("보스를 3마리 잡기 전엔 앵무새가 없다", !a.parrot().active);
+  T().setLifeBoss(3);
+  a = start();
+  const P = T().P();
+  const st = a.peek();
+  st.coins.length = 0;
+  st.coins.push({ x:P.x + 120, y:P.y - 20, got:false });
+  a.hold(false);
+  const s = run(a, 90, () => { P.vx = 0; P.vy = 0; P.y = 200; });
+  ok("앵무새가 근처 금화를 물어 온다", a.parrot().active && st.coins[0].got, "got=" + st.coins[0].got);
+  T().setLifeBoss(before);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
