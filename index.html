@@ -342,7 +342,7 @@ const UPGRADES = [
   { id:"magnet", name:"금화 자석",  desc:"가까운 금화를 끌어당긴다", cost:[500, 1200, 3000] },
   { id:"fusen",  name:"비상식량",   desc:"출발할 때 풍선 1개",        cost:[2500] }
 ];
-let bank = 0, upgrades = {}, shopMsg = null;
+let bank = 0, upgrades = {}, shopMsg = null, bestBounty = 0;
 const upLv = (id) => upgrades[id] || 0;
 const reach = () => REACH * (1 + 0.06 * upLv("reach"));
 function buyUpgrade(u){
@@ -435,7 +435,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
-    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears;
+    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -455,6 +455,7 @@ function reset(){
   flash = 0;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
+  runBounty = 0; newBountyRecord = false;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
   rope = null;
@@ -1063,6 +1064,8 @@ function die(reason){
   state = STATE.OVER;
   deathReason = reason;
   overAt = performance.now();
+  runBounty = computeBounty();
+  if(!practiceMode && runBounty > bestBounty){ bestBounty = runBounty; newBountyRecord = true; }
   if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
     if(dist > best){ best = dist; saveBest(); }
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
@@ -2032,6 +2035,7 @@ function applyShopRecord(v){
     const r = JSON.parse(v);
     bank = r.bank || 0;
     upgrades = r.up || {};
+    bestBounty = r.bounty || 0;
   }catch(e){}
 }
 async function loadShop(){
@@ -2047,7 +2051,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -3168,6 +3172,88 @@ function drawStallWarning(){
   ctx.restore();
 }
 
+function leftText(t, x, y, font, color){
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.font = font; ctx.fillStyle = color;
+  ctx.fillText(t, x, y);
+}
+
+// 현상금 — 거리·보물·보스·미션·PERFECT를 합쳐 베리로 매긴다
+function computeBounty(){
+  const done = missions ? missions.filter(m => m.done).length : 0;
+  return Math.floor(dist) * 1000 + Math.floor(treasure) * 500 + bossKills * 50000 + perfects * 2000 + done * 20000;
+}
+const commas = (n) => String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+function drawPoster(x, y, w, h){
+  ctx.save();
+  ctx.translate(x + w/2, y + h/2);
+  ctx.rotate(-0.035);
+  ctx.translate(-w/2, -h/2);
+  // 종이
+  ctx.fillStyle = "#e9d9b0";
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "#b99a62"; ctx.lineWidth = 3;
+  ctx.strokeRect(6, 6, w - 12, h - 12);
+  ctx.fillStyle = "rgba(120,86,40,.12)";
+  for(let i=0;i<14;i++) ctx.fillRect(hash(i*4.1)*w, hash(i*9.3)*h, 3 + hash(i)*20, 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#3a2618";
+  ctx.font = "900 40px Georgia, 'Times New Roman', serif";
+  ctx.fillText("WANTED", w/2, 42);
+  // 사진
+  const px = 26, py = 70, pw = w - 52, ph = 150;
+  ctx.fillStyle = "#c9b48a";
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = "#3a2618"; ctx.lineWidth = 2;
+  ctx.strokeRect(px, py, pw, ph);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+  const cx = w/2, cy = py + ph/2 + 16;
+  ctx.fillStyle = "#e8ddc6";                     // 어깨
+  ctx.beginPath(); ctx.ellipse(cx, cy + 86, 70, 46, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#b03a34";
+  ctx.fillRect(cx - 70, cy + 70, 140, 10);
+  ctx.fillStyle = "#e8b48c";                     // 얼굴
+  ctx.beginPath(); ctx.arc(cx, cy, 44, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#b03a34";                     // 두건
+  ctx.beginPath(); ctx.arc(cx, cy - 8, 45, Math.PI, 0); ctx.lineTo(cx + 45, cy - 2); ctx.lineTo(cx - 45, cy - 2); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx - 36, cy - 12); ctx.quadraticCurveTo(cx - 72, cy - 6, cx - 80, cy + 26); ctx.lineTo(cx - 42, cy + 2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#1b1218";                     // 눈
+  ctx.beginPath(); ctx.arc(cx - 15, cy + 10, 4.5, 0, Math.PI*2); ctx.arc(cx + 15, cy + 10, 4.5, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "#1b1218"; ctx.lineWidth = 3;   // 씩 웃는 입
+  ctx.beginPath(); ctx.arc(cx, cy + 20, 17, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+  ctx.lineWidth = 1.5;                           // 흉터
+  ctx.beginPath(); ctx.moveTo(cx - 24, cy + 20); ctx.lineTo(cx - 19, cy + 24); ctx.moveTo(cx - 25, cy + 24); ctx.lineTo(cx - 18, cy + 20); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = "#3a2618";
+  ctx.font = "700 16px Georgia, 'Times New Roman', serif";
+  ctx.fillText("DEAD OR ALIVE", w/2, py + ph + 24);
+  const title = currentTitleName();
+  ctx.font = "700 21px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText((title ? "'" + title + "' " : "") + "고무팔", w/2, py + ph + 56, w - 30);
+  // 현상금
+  ctx.font = "900 26px Georgia, 'Times New Roman', serif";
+  ctx.fillText("฿ " + commas(runBounty), w/2, py + ph + 96, w - 24);
+  ctx.font = "400 11px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "rgba(58,38,24,.7)";
+  ctx.fillText(practiceMode ? "연습 항해 — 기록되지 않음" : "최고 현상금 ฿ " + commas(bestBounty), w/2, py + ph + 124, w - 24);
+  ctx.restore();
+  if(newBountyRecord){
+    // 신기록 도장
+    ctx.save();
+    ctx.translate(x + w - 44, y + 96);
+    ctx.rotate(-0.3);
+    ctx.strokeStyle = "rgba(176,58,52,.85)"; ctx.lineWidth = 4;
+    ctx.strokeRect(-52, -20, 104, 40);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(176,58,52,.9)";
+    ctx.font = "900 18px 'Pretendard', system-ui, sans-serif";
+    ctx.fillText("현상금 갱신", 0, 1);
+    ctx.restore();
+  }
+}
+
 function centerText(t, y, font, color, alpha){
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = font; ctx.fillStyle = color;
@@ -3301,39 +3387,38 @@ function draw(){
     if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.8)");
   } else if(state === STATE.OVER){
-    ctx.fillStyle = "rgba(13,27,38,0.74)";
+    ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
+    drawPoster(W/2 - 330, 52, 250, 380);
     const reasonText = deathReason === "바다" ? "바다에 빠졌다"
-      : deathReason === "정체" ? "너무 오래 멈춰 있어 선단에 뒤처졌다"
+      : deathReason === "정체" ? "너무 오래 멈춰 선단에 뒤처졌다"
       : "선단에 뒤처졌다";
-    if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 68, "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
-    centerText(reasonText, H/2 - 40, "700 29px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    centerText(Math.floor(dist) + "m · 보물 " + Math.floor(treasure) + (practiceMode ? "" : "  (창고 " + Math.floor(bank) + ")"), H/2 + 2, "600 17px 'Pretendard', system-ui, sans-serif", "#d9b877");
-    let overY = H/2 + 40;
+    const lx = W/2 - 50;
+    let overY = 92;
+    const line = (t, font, color, gap) => { leftText(t, lx, overY, font, color); overY += gap; };
+    if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8", 26);
+    line(reasonText, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
+    line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
+    if(!practiceMode) line("창고 보물 " + Math.floor(bank), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
     if(missions.length){
       const done = missions.filter(m => m.done).length;
-      centerText("미션 " + done + "/" + missions.length + " 완료" + (done ? " — " + missions.filter(m => m.done).map(m => m.text).join(", ") : ""),
-                 overY, "600 14px 'Pretendard', system-ui, sans-serif", done ? "#9fe0a0" : "rgba(244,236,217,.6)");
-      overY += 22;
+      line("미션 " + done + "/" + missions.length + " 완료", "600 15px 'Pretendard', system-ui, sans-serif", done ? "#9fe0a0" : "rgba(244,236,217,.6)", 20);
+      for(const m of missions) line((m.done ? "✓ " : "· ") + m.text, "400 13px 'Pretendard', system-ui, sans-serif", m.done ? "#9fe0a0" : "rgba(244,236,217,.45)", 18);
+      overY += 10;
     }
-    if(perfects > 0){
-      centerText("PERFECT 릴리즈 " + perfects + "회", overY, "600 14px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)");
-      overY += 22;
-    }
+    const facts = [];
+    if(perfects > 0) facts.push("PERFECT " + perfects);
+    if(bossKills > 0) facts.push("보스 " + bossKills);
+    if(skims > 0) facts.push("스치기 " + skims);
+    if(gears > 0) facts.push("기어 2 ×" + gears);
+    if(facts.length) line(facts.join(" · "), "600 14px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)", 24);
     if(maxChain > 1){
-      const newChainRecord = maxChain >= bestChain;
-      centerText((newChainRecord ? "★ 신기록 " : "") + "최고 콤보 ×" + maxChain, overY,
-                 "600 14px 'Pretendard', system-ui, sans-serif", newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)");
-      overY += 22;
+      const newChainRecord = maxChain >= bestChain && !practiceMode;
+      line((newChainRecord ? "★ 신기록 " : "") + "최고 콤보 ×" + maxChain, "600 14px 'Pretendard', system-ui, sans-serif",
+           newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
-    if(newTitle){
-      centerText("★ 새 칭호 획득: " + newTitle, overY, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a");
-      overY += 24;
-    } else {
-      const overTitle = currentTitleName();
-      if(overTitle){ centerText("현재 칭호: " + overTitle, overY, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)"); overY += 22; }
-    }
-    centerText("클릭 · Space · R로 다시 · M 메뉴로", overY + 4, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a", 26);
+    centerText("클릭 · Space · R로 다시 · M 메뉴로", H - 44, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.MENU){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
     ctx.fillRect(0,0,W,H);
@@ -3380,7 +3465,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears }),
+                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

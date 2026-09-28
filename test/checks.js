@@ -516,6 +516,17 @@ function swing(a, st){
   }
 }
 
+/* --- 현상수배 포스터 --- */
+{
+  const a = start();
+  a.hold(false);
+  T().setFusen(0);
+  T().setTreasure(100);
+  T().P().y = a.peek().SEA + 10;
+  const s = run(a, 3);
+  ok("게임오버 때 현상금이 매겨진다", s.state === 2 && s.runBounty >= 100 * 500, "현상금=" + s.runBounty);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
