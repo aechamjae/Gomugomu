@@ -665,7 +665,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
     barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT, rushIdx, rushT, rushDone, newRushRecord,
-    barrage, nextBarrageAt, shells, barragesCleared;
+    barrage, nextBarrageAt, shells, barragesCleared, floes, geysers, floeSaves, geyserHits;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -701,6 +701,7 @@ function reset(){
   nextWeatherAt = WEATHER_FIRST + weatherRand()*300;
   flash = 0;
   barrage = null; shells = []; barragesCleared = 0;
+  floes = []; geysers = []; floeSaves = 0; geyserHits = 0;
   nextBarrageAt = BARRAGE_FIRST + weatherRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
@@ -1135,6 +1136,11 @@ function generate(){
       barrels.push({ x: lastAX + gap*(0.3 + genRand()*0.4), gone:false });
     }
     if(!bz) spawnMobs(lastAX, x);        // 보물섬 해역엔 잡몹이 없다
+    if(!practiceMode && !rushMode){
+      const bio = biomeAt(x / 22);
+      if(bio === 1 && genRand() < FLOE_CHANCE) floes.push({ x: lastAX + gap*(0.3 + genRand()*0.4), t: genRand()*100 });
+      if(bio === 2 && !bz && genRand() < GEYSER_CHANCE) geysers.push({ x: lastAX + gap*(0.35 + genRand()*0.3), t: genRand()*200, cyc: 230 + genRand()*80 });
+    }
     lastAX = x; lastAY = y;
   }
   anchors = anchors.filter(a => a.x > cam.x - 320);
@@ -1143,6 +1149,8 @@ function generate(){
   barrels = barrels.filter(b => b.x > cam.x - 320 && !b.gone);
   gulls   = gulls.filter(g => g.x > cam.x - 320 && !g.gone);
   jellies = jellies.filter(j => j.x > cam.x - 320);
+  floes   = floes.filter(q => q.x > cam.x - 320);
+  geysers = geysers.filter(g => g.x > cam.x - 320);
   mapItems = mapItems.filter(m => m.x > cam.x - 320 && !m.got);
   mobs    = mobs.filter(m => m.x > cam.x - 420 && !m.gone);
 }
@@ -1241,6 +1249,37 @@ function updateJellies(dt){
       for(let k=0;k<6;k++) spark(p.x, p.y, "#e6a8f0");
     }
   }
+}
+
+// 용암 분수 한 주기: 0~60 기포 경고, 60~130 분출(높이), 그 뒤 잠잠
+function geyserState(g){
+  const k = g.t % g.cyc;
+  if(k < 60) return { phase: 1, h: 0, k };
+  if(k < 130){ const u = (k - 60) / 70; return { phase: 2, h: GEYSER_H * Math.min(1, u * 5) * Math.min(1, (1 - u) * 6), k }; }
+  return { phase: 0, h: 0, k };
+}
+
+function updateTerrainHazards(dt){
+  for(const q of floes) q.t += dt;
+  for(const g of geysers){
+    g.t += dt;
+    if(state !== STATE.PLAY || stun > 0 || iframes > 0 || gearT > 0) continue;
+    const st = geyserState(g);
+    if(st.h > 20 && segToCapsule(g.x, SEA - st.h, SEA + 10) < GEYSER_W + 12){
+      geyserHits++;
+      knock(false);
+      pops.push({ x:p.x, y:p.y-30, t:50, text:"앗 뜨거!", color:"#ff8f60" });
+    }
+  }
+}
+
+// 유빙 — 바다에 빠지기 직전, 발밑에 유빙이 있으면 그 위에서 튕겨 오른다
+function floeUnder(){
+  for(const q of floes){
+    const fx = q.x + Math.sin(q.t*0.02)*14;
+    if(Math.abs(p.x - fx) < FLOE_W/2 + 10) return q;
+  }
+  return null;
 }
 
 function updateGulls(dt){
@@ -2774,6 +2813,7 @@ function update(dt){
   updateMobs(dt);
   updateGulls(dt);
   updateJellies(dt);
+  updateTerrainHazards(dt);
   updateParrot(dt);
   checkMissions();
   if(!recordBroken && !practiceMode && runBest >= 50 && dist > runBest){
@@ -2806,6 +2846,15 @@ function update(dt){
   if(blitzMode){
     blitzT -= dt;
     if(blitzT <= 0){ blitzT = 0; return die("시간"); }
+  }
+  if(p.y > SEA - 14 && p.vy > 0 && floeUnder()){
+    // 유빙 위에 떨어졌다 — 미끄러지듯 앞으로 튕겨 오른다
+    rope = null; p.y = SEA - 16; p.vy = -11; p.vx = Math.max(p.vx, 6) + 2;
+    floeSaves++;
+    addGear("good");
+    pops.push({ x:p.x, y:p.y-36, t:50, text:"유빙 착지!", color:"#cfeaf2" });
+    for(let i=0;i<14;i++) spark(p.x, SEA - 8, "#ffffff");
+    addShake(2, 6);
   }
   if(p.y > SEA - 14){
     if(blitzMode && fusen <= 0){
@@ -2952,6 +3001,9 @@ const BIOMES = [
 ];
 const biomeAt = (m) => Math.floor(Math.max(0, m) / BIOME_LEN) % BIOMES.length;
 let biomeShown = 0;
+/* 해역별 지형 — 빙하: 유빙(떨어져도 튕겨 오른다) / 화산: 용암 분수(기포 경고 뒤 치솟는다) */
+const FLOE_CHANCE = 0.22, FLOE_W = 64;
+const GEYSER_CHANCE = 0.18, GEYSER_H = 250, GEYSER_W = 26;
 
 /* 낮·밤 주기 — 거리에 따라 노을 → 밤 → 새벽 → 낮 → 노을로 돈다 (DAY_LEN m마다 한 바퀴) */
 const DAY_LEN = 1600;
@@ -3826,6 +3878,46 @@ function drawParrot(){
   ctx.restore();
 }
 
+function drawTerrainHazards(){
+  for(const q of floes){
+    const x = q.x + Math.sin(q.t*0.02)*14 - cam.x;
+    if(x < -80 || x > W/cam.z + 80) continue;
+    const y = SEA - 6 + Math.sin(q.t*0.05)*2;
+    ctx.fillStyle = "#e8f6fb";
+    ctx.beginPath(); ctx.moveTo(x - FLOE_W/2, y); ctx.lineTo(x - FLOE_W/2 + 8, y - 8); ctx.lineTo(x + FLOE_W/2 - 6, y - 9);
+    ctx.lineTo(x + FLOE_W/2, y); ctx.lineTo(x + FLOE_W/2 - 10, y + 10); ctx.lineTo(x - FLOE_W/2 + 10, y + 10); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(156,203,220,.8)";
+    ctx.fillRect(x - FLOE_W/2 + 10, y + 2, FLOE_W - 20, 6);
+  }
+  for(const g of geysers){
+    const x = g.x - cam.x;
+    if(x < -60 || x > W/cam.z + 60) continue;
+    const st = geyserState(g);
+    if(st.phase === 1){                              // 기포 경고
+      ctx.fillStyle = "rgba(255,120,60," + (0.3 + (st.k / 60) * 0.5).toFixed(2) + ")";
+      for(let i=0;i<5;i++){
+        const bx = x + Math.sin(g.t*0.3 + i*1.7)*16, by = SEA - ((g.t*2 + i*12) % 24);
+        ctx.beginPath(); ctx.arc(bx, by, 3 + (i % 2), 0, Math.PI*2); ctx.fill();
+      }
+      ctx.fillStyle = "rgba(255,90,40,.35)";
+      ctx.beginPath(); ctx.ellipse(x, SEA + 2, 26, 6, 0, 0, Math.PI*2); ctx.fill();
+    } else if(st.phase === 2 && st.h > 2){
+      const top = SEA - st.h;
+      const grd = ctx.createLinearGradient(0, top, 0, SEA);
+      grd.addColorStop(0, "rgba(255,220,120,.95)");
+      grd.addColorStop(1, "rgba(220,60,30,.95)");
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.moveTo(x - GEYSER_W*0.7, SEA + 4);
+      ctx.quadraticCurveTo(x - GEYSER_W + Math.sin(g.t*0.5)*4, top + 40, x - 8, top);
+      ctx.quadraticCurveTo(x, top - 16, x + 8, top);
+      ctx.quadraticCurveTo(x + GEYSER_W + Math.sin(g.t*0.5 + 1)*4, top + 40, x + GEYSER_W*0.7, SEA + 4);
+      ctx.closePath(); ctx.fill();
+      if(Math.random() < 0.5) spark(g.x + (Math.random()-0.5)*20, top, "#ffb060");
+    }
+  }
+}
+
 function drawJellies(){
   for(const j of jellies){
     const x = j.x - cam.x;
@@ -4648,6 +4740,7 @@ function draw(){
   drawGrabRings();
   if(boss) drawBoss();
   drawMobs();
+  drawTerrainHazards();
   drawMapItems();
   drawJellies();
   drawGulls();
@@ -4894,7 +4987,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone, barrage, shells, barragesCleared }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone, barrage, shells, barragesCleared, floes, geysers, floeSaves, geyserHits }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

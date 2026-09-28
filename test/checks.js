@@ -978,6 +978,26 @@ function swing(a, st){
   ok("포탄이 떨어진 자리에 있으면 휘청인다", stunned);
 }
 
+/* --- 해역별 지형: 유빙 · 용암 분수 --- */
+{
+  const a = start();
+  const P = T().P();
+  a.hold(false); T().setFusen(0);
+  a.peek().floes.push({ x:P.x + 5, t:0 });
+  P.y = a.peek().SEA - 30; P.vy = 8; P.vx = 3;
+  const s = run(a, 4);
+  ok("유빙 위에 떨어지면 빠지지 않고 튕겨 오른다", s.state === 1 && s.floeSaves === 1 && s.vy < 0, "state=" + s.state + " saves=" + s.floeSaves);
+}
+{
+  const a = start();
+  const P = T().P();
+  a.hold(false);
+  a.peek().geysers.push({ x:P.x + 20, t:85, cyc:260 });
+  let stunned = false;
+  run(a, 10, (st) => { P.vx = 0; P.vy = 0; P.y = st.SEA - 120; if(st.stun > 0) stunned = true; });
+  ok("분출 중인 용암 분수에 닿으면 휘청인다", stunned && a.peek().geyserHits >= 1, "hits=" + a.peek().geyserHits);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
