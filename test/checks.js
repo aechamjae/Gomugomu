@@ -467,6 +467,27 @@ function swing(a, st){
   sh().setBank(0);
 }
 
+/* --- 특수 고리 --- */
+{
+  const a = start();
+  for(const an of a.peek().anchors) an.gold = true;
+  const tr0 = a.peek().treasure;
+  const s = run(a, 400, (st) => { swing(a, st); });
+  ok("황금 고리를 잡으면 보물이 터진다", s.goldRings >= 1 && s.treasure >= tr0 + 100, "goldRings=" + s.goldRings);
+}
+{
+  const a = start();
+  let s = run(a, 200, (st) => { a.hold(true); a.keys.right = true; });
+  s = a.peek();
+  if(s.rope){
+    const an = s.rope.a;
+    an.rot = true; an.creak = 3;
+    s = run(a, 6, () => a.hold(true));
+    ok("삭은 돛대는 잡고 있으면 부러져 줄이 끊긴다", an.broken && (!s.rope || s.rope.a !== an), "broken=" + an.broken);
+    ok("부러진 돛대는 다시 잡을 수 없다", a.pick() !== an);
+  } else ok("삭은 돛대는 잡고 있으면 부러져 줄이 끊긴다", false, "줄을 못 잡음");
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
