@@ -377,6 +377,19 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 최고 기록 깃발 --- */
+{
+  let broke = false, reached = 0;
+  for(let attempt = 0; attempt < 6 && !broke; attempt++){
+    T().setBest(60);
+    const a = start();
+    const s = run(a, 1500, (st) => swing(a, st));
+    broke = s.recordBroken; reached = Math.max(reached, s.dist);
+  }
+  ok("최고 기록을 넘으면 신기록 연출이 뜬다", broke, "도달=" + Math.floor(reached) + "m");
+  T().setBest(0);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

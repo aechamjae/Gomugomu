@@ -363,7 +363,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     mobs, lastKingX, skillCd, fist, gunCd, gun, fire, stallX, stallT,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
-    missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir;
+    missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -378,6 +378,8 @@ function reset(){
   coinsGot = 0; fishKills = 0; kingKills = 0; meatsGot = 0; maxAir = 0;
   missionFlash = null;
   missions = pickMissions();
+  runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
+  recordBroken = false;
   rope = null;
   state = STATE.READY;
   dist = 0;
@@ -1733,6 +1735,12 @@ function update(dt){
   updateGun(dt);
   updateMobs(dt);
   checkMissions();
+  if(!recordBroken && !practiceMode && runBest >= 50 && dist > runBest){
+    recordBroken = true;
+    missionFlash = { text: "신기록 돌파!", reward: 0, t: 150, record: true };
+    pops.push({ x:p.x, y:p.y-60, t:120, text:"신기록! " + Math.floor(runBest) + "m 돌파", color:"#ffd76a" });
+    for(let i=0;i<40;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#f0a24e");
+  }
   if(state !== STATE.PLAY) return;
 
   if(Math.abs(p.x - stallX) > STALL_RESET_DX){ stallX = p.x; stallT = 0; }
@@ -2668,6 +2676,30 @@ function drawMissions(){
   ctx.restore();
 }
 
+function drawBestFlag(){
+  if(practiceMode || runBest < 50) return;
+  const x = (runBest + distOffset) * 22 - cam.x;
+  if(x < -60 || x > W/cam.z + 80) return;
+  const top = SEA - 150;
+  ctx.save();
+  ctx.strokeStyle = "#3a2a22"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(x, SEA + 6); ctx.lineTo(x, top); ctx.stroke();
+  const wave = Math.sin(time*0.12)*5;
+  ctx.fillStyle = recordBroken ? "rgba(255,215,106,.45)" : "#ffd76a";
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.quadraticCurveTo(x + 30, top + 6 + wave, x + 58, top + 4 + wave*1.4);
+  ctx.lineTo(x + 58, top + 30 + wave*1.4);
+  ctx.quadraticCurveTo(x + 30, top + 32 + wave, x, top + 28);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#3a2a22";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.font = "700 11px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText("최고", x + 6, top + 11 + wave*0.8);
+  ctx.fillText(Math.floor(runBest) + "m", x + 6, top + 23 + wave*0.8);
+  ctx.restore();
+}
+
 function drawMissionFlash(){
   if(!missionFlash) return;
   const a = Math.min(1, missionFlash.t/30);
@@ -2676,10 +2708,11 @@ function drawMissionFlash(){
   ctx.globalAlpha = a;
   ctx.fillStyle = "rgba(13,27,38,0.78)";
   ctx.fillRect(W/2 - 170, y - 20, 340, 40);
-  ctx.strokeStyle = "#9fe0a0"; ctx.lineWidth = 2;
+  ctx.strokeStyle = missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
   ctx.strokeRect(W/2 - 170, y - 20, 340, 40);
   ctx.restore();
-  centerText("미션 완료 · " + missionFlash.text + "  +" + missionFlash.reward, y, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0", a);
+  if(missionFlash.record) centerText("★ " + missionFlash.text + " ★", y, "700 18px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
+  else centerText("미션 완료 · " + missionFlash.text + "  +" + missionFlash.reward, y, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0", a);
 }
 
 function drawBossBar(){
@@ -2775,6 +2808,7 @@ function draw(){
   let target = null;
   if(state === STATE.PLAY && !rope) target = pickAnchor();
 
+  drawBestFlag();
   for(const a of anchors) drawMast(a, a === target || (rope && rope.a === a));
   for(const c of coins) drawCoin(c);
   for(const m of meats) drawMeat(m);
@@ -2951,7 +2985,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak, missions }),
+                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
