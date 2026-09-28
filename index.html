@@ -108,6 +108,12 @@
       background:rgba(143,79,208,.24);border-color:rgba(143,79,208,.85);
     }
     .tskill2.cool{opacity:.4;border-color:rgba(217,184,119,.3);background:rgba(244,236,217,.06);}
+    .tskill3{
+      position:absolute;left:3.5vw;bottom:59vh;
+      width:15vw;height:15vw;max-width:72px;max-height:72px;font-size:2.9vw;
+      background:rgba(255,143,160,.26);border-color:rgba(255,143,160,.9);
+    }
+    .tskill3.cool{opacity:.4;border-color:rgba(217,184,119,.3);background:rgba(244,236,217,.06);}
     .tpause{
       position:absolute;top:2vh;right:3vw;
       width:44px;height:34px;border-radius:6px;font-size:13px;
@@ -165,6 +171,7 @@
       </div>
       <button class="tb tskill" id="skillBtn" data-k="skill">피스톨</button>
       <button class="tb tskill2" id="gunBtn" data-k="gun">건</button>
+      <button class="tb tskill3" id="gearBtn" data-k="gear">기어</button>
       <div class="tright">
         <button class="tb small" data-k="up">▲</button>
         <button class="tb big" data-k="grab">팔</button>
@@ -185,7 +192,7 @@
       <span><b>← →</b> 매달렸을 땐 그네 밀기, 공중에선 방향 조절</span>
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
-      <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초)</span>
+      <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초) · <b>E</b> 기어 2(게이지가 차면)</span>
       <span>놓을 때 몸이 <b>금빛</b>으로 빛나면 PERFECT 릴리즈(가속+보물)</span>
       <span><b>수면</b> 바로 위를 빠르게 스치거나 해왕류를 <b>아슬아슬</b>하게 피하면 보너스</span>
       <span><b>황금 고리</b>는 보물 폭발, 금 간 <b>삭은 돛대</b>는 잡고 1초 남짓이면 부러진다</span>
@@ -300,6 +307,13 @@ const GOLD_CHANCE = 0.035;
 const ROT_FROM    = 600;     // 이 거리(m)부터 삭은 돛대가 섞인다
 const ROT_CHANCE  = 0.12;    // 돛대 중 이 비율이 삭았다
 const ROT_T       = 72;      // 잡고 나서 부러지기까지(프레임)
+
+/* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
+const GEAR_MAX  = 100;
+const GEAR_T    = 300;
+const GEAR_GAIN = { perfect:18, good:6, skim:12, near:25, gold:20, kill:8, chain:4 };
+const GEAR_BOOST = 1.4;      // 펌핑·공중 조작 배율
+const GEAR_VMAX  = 1.15;     // 최고 속도 배율
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -421,7 +435,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
-    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings;
+    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -440,6 +454,7 @@ function reset(){
   nextWeatherAt = WEATHER_FIRST + Math.random()*300;
   flash = 0;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
+  gear = 0; gearT = 0; gears = 0;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
   rope = null;
@@ -548,6 +563,7 @@ function updateSkim(dt, sp){
   } else if(skimT > 0){
     if(skimT >= SKIM_MIN_T){
       skims++;
+      addGear("skim");
       treasure += skimGain;
       pops.push({ x:p.x, y:p.y-36, t:60, text:"수면 스치기 +" + skimGain, color:"#bfe8ea" });
     }
@@ -588,6 +604,24 @@ function updateWeather(dt){
   }
 }
 
+function addGear(kind){
+  if(gearT > 0 || state !== STATE.PLAY) return;
+  const was = gear;
+  gear = Math.min(GEAR_MAX, gear + (GEAR_GAIN[kind] || 0));
+  if(was < GEAR_MAX && gear >= GEAR_MAX)
+    pops.push({ x:p.x, y:p.y-56, t:90, text:"기어 2 준비! (E)", color:"#ff8fa0" });
+}
+
+function fireGear(){
+  if(state !== STATE.PLAY || gear < GEAR_MAX || gearT > 0) return;
+  gear = 0;
+  gearT = GEAR_T;
+  gears++;
+  stun = 0;
+  missionFlash = { text: "기어 2 — 고무고무 제트!", reward: 0, t: 110, gear: true };
+  for(let i=0;i<30;i++) spark(p.x, p.y, "#ff8fa0");
+}
+
 function syncHUD(){
   distEl.textContent = Math.floor(dist);
   spdEl.textContent = Math.round(Math.hypot(p.vx, p.vy) * 4);
@@ -609,6 +643,11 @@ function syncHUD(){
     const cd = Math.max(0, skillCd || 0);
     sb.classList.toggle("cool", cd > 0);
     sb.textContent = cd > 0 ? Math.ceil(cd/60) + "초" : "피스톨";
+  }
+  const rb = document.getElementById("gearBtn");
+  if(rb){
+    rb.classList.toggle("cool", !(gear >= GEAR_MAX) && !(gearT > 0));
+    rb.textContent = gearT > 0 ? Math.ceil(gearT/60) + "초" : Math.floor((gear||0)) + "%";
   }
   const gb = document.getElementById("gunBtn");
   if(gb){
@@ -736,9 +775,9 @@ function updateMobs(dt){
       if(m.air && stun <= 0 && iframes <= 0){
         const d = distOriginToSeg(pPrevX - m.x, pPrevY - m.y, p.x - m.x, p.y - m.y);
         if(d < 15 + 13){
-          if(fire > 0){
-            // 불붙은 동안엔 부딪혀도 다치지 않고, 오히려 몹에게 데미지를 준다
-            m.gone = true; fishKills++;
+          if(fire > 0 || gearT > 0){
+            // 불붙은 동안(또는 기어 2)엔 부딪혀도 다치지 않고, 오히려 몹에게 데미지를 준다
+            m.gone = true; fishKills++; addGear("kill");
             pops.push({ x:m.x, y:m.y-20, t:40, text:"불꽃 데미지 1", color:"#f0a24e" });
             for(let k=0;k<10;k++) spark(m.x, m.y, "#f0a24e");
           } else {
@@ -782,6 +821,7 @@ function updateMobs(dt){
           m.near = 2;
           if(stun > 0 || iframes > 0) continue;   // 결국 맞았으면(또는 보호막이 막았으면) 보너스 없음
           nearMisses++;
+          addGear("near");
           const gain = 60 * chainMult();
           treasure += gain;
           pops.push({ x:p.x, y:p.y-40, t:70, text:"아슬아슬! +" + gain, color:"#8fd6d8" });
@@ -839,6 +879,7 @@ function grab(){
     if(a.gold && !a.goldUsed){
       a.goldUsed = true;
       goldRings++;
+      addGear("gold");
       const g = 100 * chainMult();
       treasure += g;
       chainTimer = 0;
@@ -851,6 +892,7 @@ function grab(){
     }
     if(airTime > 34){
       chain++;
+      addGear("chain");
       maxChain = Math.max(maxChain, chain);
       chainTimer = 0;
       const gain = Math.floor(airTime*0.55 + Math.hypot(p.vx,p.vy)*3) * chainMult();
@@ -885,6 +927,7 @@ function release(boost){
     if(grade === 2){
       p.vx *= REL_PERFECT_K; p.vy *= REL_PERFECT_K;
       perfectStreak++; perfects++;
+      addGear("perfect");
       const gain = (20 + Math.min(5, perfectStreak)*6) * chainMult();
       treasure += gain;
       pops.push({ x:p.x, y:p.y-44, t:60, text:"PERFECT" + (perfectStreak > 1 ? " ×" + perfectStreak : "") + " +" + gain, color:"#ffd76a" });
@@ -892,6 +935,7 @@ function release(boost){
     } else if(grade === 1){
       p.vx *= REL_GOOD_K; p.vy *= REL_GOOD_K;
       perfectStreak = 0;
+      addGear("good");
       pops.push({ x:p.x, y:p.y-44, t:40, text:"GOOD", color:"#d9b877" });
     } else perfectStreak = 0;
     const dx = rope.a.x - p.x, dy = rope.a.y - p.y;
@@ -944,6 +988,7 @@ window.addEventListener("keydown", (e)=>{
   else if(k === "ArrowUp"){ e.preventDefault(); release(true); }
   else if(k === "KeyQ"){ e.preventDefault(); firePistol(); }
   else if(k === "KeyW"){ e.preventDefault(); fireGun(); }
+  else if(k === "KeyE"){ e.preventDefault(); fireGear(); }
 }, {passive:false});
 
 window.addEventListener("keyup", (e)=>{
@@ -985,6 +1030,7 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
     else if(k === "grab"){ if(!holding) grab(); }
     else if(k === "skill"){ firePistol(); }
     else if(k === "gun"){ fireGun(); }
+    else if(k === "gear"){ fireGear(); }
     else if(k === "pause"){ togglePause(); }
   };
   const lift = (e)=>{
@@ -1168,6 +1214,7 @@ function weakPoints(b){
 
 function knock(hard, mild){
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
+  if(gearT > 0) return;                    // 기어 2 중엔 아무것도 통하지 않는다
   if(shield > 0){                          // 보스 격파 보상으로 얻은 보호막이 대신 막아낸다
     shield--;
     iframes = 46;
@@ -1191,6 +1238,7 @@ function knock(hard, mild){
 // 해왕류 접촉 — 크라켄 촉수와 같은 강한 스턴(STUN_STRONG). 즉사는 아니다
 function knockKing(){
   if(stun > 0 || iframes > 0) return;
+  if(gearT > 0) return;
   if(shield > 0){
     shield--;
     iframes = 46;
@@ -1659,13 +1707,13 @@ function updateFist(dt){
     if(m.gone) continue;
     if(m.kind === 0){
       if(near(m.x, m.y) < FIST_R + 15){
-        m.gone = true; treasure += 15; fishKills++;
+        m.gone = true; treasure += 15; fishKills++; addGear("kill");
         for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
       }
     } else if(m.h > 30 && m.phase !== 4){
       const top = SEA - m.h;
       if(near(m.x, top - 26) < FIST_R + 74 || near(m.x, (top+SEA)/2) < FIST_R + KING_W){
-        m.gone = true; kingKills++;
+        m.gone = true; kingKills++; addGear("near");
         treasure += 220;
         pops.push({ x:m.x, y:top - 70, t:120, text:"해왕류를 물리쳤다 +220", color:"#d9b877" });
         for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
@@ -1712,13 +1760,13 @@ function fireGun(){
     if(m.gone) continue;
     if(m.kind === 0){
       if(Math.hypot(m.x-gx, m.y-gy) < GUN_R){
-        m.gone = true; treasure += 15; fishKills++;
+        m.gone = true; treasure += 15; fishKills++; addGear("kill");
         for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
       }
     } else if(m.h > 20 && m.phase !== 4){
       const top = SEA - m.h;
       if(Math.hypot(m.x-gx, (top-26)-gy) < GUN_R + 74){
-        m.gone = true; treasure += 260; kingKills++;
+        m.gone = true; treasure += 260; kingKills++; addGear("near");
         pops.push({ x:m.x, y:top-70, t:120, text:"해왕류를 물리쳤다 +260", color:"#d9b877" });
         for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
       }
@@ -1779,8 +1827,9 @@ function update(dt){
     if(keys.right) pump += 1;
     if(pump){
       const sgn = (tx * pump >= 0) ? 1 : -1;
-      p.vx += tx * sgn * PUMP * dt;
-      p.vy += ty * sgn * PUMP * dt;
+      const gk = gearT > 0 ? GEAR_BOOST : 1;
+      p.vx += tx * sgn * PUMP * gk * dt;
+      p.vy += ty * sgn * PUMP * gk * dt;
       p.vx += pump * PUMP * 0.35 * dt;       // 조작감을 위한 약간의 직접 조절
     }
 
@@ -1789,8 +1838,9 @@ function update(dt){
     if(d > reach()*1.7) rope = null;
     airTime = 0;
   } else {
-    if(keys.left)  p.vx -= AIR*dt;
-    if(keys.right) p.vx += AIR*dt;
+    const ak = gearT > 0 ? GEAR_BOOST : 1;
+    if(keys.left)  p.vx -= AIR*ak*dt;
+    if(keys.right) p.vx += AIR*ak*dt;
     if(keys.down)  p.vy += DIVE*dt;
     if(weather && weather.type === "wind") p.vx += TAILWIND*dt;
     else if(weather && weather.type === "storm"){
@@ -1805,9 +1855,10 @@ function update(dt){
   p.vx *= Math.pow(0.9996, dt);
 
   const sp = Math.hypot(p.vx, p.vy);
-  if(sp > MAXV && dist < FIRE_MAX_DIST) fire = FIRE_DUR;   // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다 — 2000m까지만
+  const vmax = gearT > 0 ? MAXV * GEAR_VMAX : MAXV;
+  if(sp > MAXV && gearT <= 0 && dist < FIRE_MAX_DIST) fire = FIRE_DUR;   // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다 — 2000m까지만
   else if(fire > 0) fire -= dt;
-  if(sp > MAXV){ p.vx = p.vx/sp*MAXV; p.vy = p.vy/sp*MAXV; }
+  if(sp > vmax){ p.vx = p.vx/sp*vmax; p.vy = p.vy/sp*vmax; }
 
   p.x += p.vx*dt;
   p.y += p.vy*dt;
@@ -1845,7 +1896,7 @@ function update(dt){
     if(Math.hypot(c.x - p.x, c.y - p.y) < 27){
       c.got = true;
       coinsGot++;
-      const mult = chainMult() * (weather && weather.type === "storm" ? 2 : 1);
+      const mult = chainMult() * (weather && weather.type === "storm" ? 2 : 1) * (gearT > 0 ? 2 : 1);
       const gain = Math.round(25 * mult);
       treasure += gain;
       p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
@@ -1873,6 +1924,11 @@ function update(dt){
   updateWeather(dt);
   updateSkim(dt, sp);
   updateRot(dt);
+  if(gearT > 0){
+    gearT -= dt;
+    if(Math.random() < 0.8) bits.push({ x:p.x + (Math.random()-0.5)*14, y:p.y + (Math.random()-0.5)*14,
+                                         vx:-p.vx*0.2 + (Math.random()-0.5), vy:-1.5 - Math.random()*1.5, life:0.7, color:"#ffd0d8" });
+  }
   if(missionFlash){ missionFlash.t -= dt; if(missionFlash.t <= 0) missionFlash = null; }
 
   if(stun > 0) stun -= dt;
@@ -2263,6 +2319,37 @@ function drawFusen(){
   ctx.beginPath(); ctx.arc(x, y + 2, r, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = "#b03a34"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(x, y + 2, r, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawGearGauge(){
+  const x = 80, y = H - 108, w = 112, h = 8;
+  const k = Math.min(1, gearT > 0 ? gearT / GEAR_T : gear / GEAR_MAX);
+  const full = gear >= GEAR_MAX || gearT > 0;
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,.6)";
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = full ? "rgba(255,143,160," + (0.75 + Math.sin(time*0.3)*0.25).toFixed(2) + ")" : "rgba(255,143,160,.7)";
+  ctx.fillRect(x, y, w * k, h);
+  ctx.strokeStyle = "rgba(244,236,217,.3)"; ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  ctx.font = (full ? "700 " : "400 ") + "11px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = full ? "#ff8fa0" : "rgba(244,236,217,.55)";
+  ctx.fillText(gearT > 0 ? "기어 2 발동 중" : full ? "기어 2 준비 — E" : "기어 2", x, y - 5);
+  ctx.restore();
+}
+
+function drawGearAura(){
+  if(gearT <= 0) return;
+  const x = p.x - cam.x, y = p.y;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, gearT/30) * 0.5;
+  const g = ctx.createRadialGradient(x, y, 6, x, y, 34);
+  g.addColorStop(0, "rgba(255,120,140,.7)");
+  g.addColorStop(1, "rgba(255,120,140,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, 34, 0, Math.PI*2); ctx.fill();
   ctx.restore();
 }
 
@@ -2946,10 +3033,11 @@ function drawMissionFlash(){
   ctx.globalAlpha = a;
   ctx.fillStyle = "rgba(13,27,38,0.78)";
   ctx.fillRect(W/2 - 170, y - 20, 340, 40);
-  ctx.strokeStyle = missionFlash.weather ? "#8fd6d8" : missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
+  ctx.strokeStyle = missionFlash.gear ? "#ff8fa0" : missionFlash.weather ? "#8fd6d8" : missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
   ctx.strokeRect(W/2 - 170, y - 20, 340, 40);
   ctx.restore();
-  if(missionFlash.weather) centerText(missionFlash.text, y, "700 18px 'Pretendard', system-ui, sans-serif", missionFlash.weather === "wind" ? "#f4ecd9" : "#b8c8e8", a);
+  if(missionFlash.gear) centerText(missionFlash.text, y, "700 19px 'Pretendard', system-ui, sans-serif", "#ff8fa0", a);
+  else if(missionFlash.weather) centerText(missionFlash.text, y, "700 18px 'Pretendard', system-ui, sans-serif", missionFlash.weather === "wind" ? "#f4ecd9" : "#b8c8e8", a);
   else if(missionFlash.record) centerText("★ " + missionFlash.text + " ★", y, "700 18px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
   else centerText("미션 완료 · " + missionFlash.text + "  +" + missionFlash.reward, y, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0", a);
 }
@@ -3065,6 +3153,7 @@ function draw(){
   drawShots();
   drawFusen();
   drawReleaseCue();
+  drawGearAura();
   drawPlayer();
   drawShield();
   drawFire();
@@ -3103,6 +3192,7 @@ function draw(){
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
   if(state === STATE.PLAY) drawFusenGauge();
+  if(state === STATE.PLAY) drawGearGauge();
   if(state === STATE.PLAY) drawMissions();
   if(state === STATE.PLAY) drawMissionFlash();
   warnY = boss ? 68 : 22;
@@ -3238,13 +3328,14 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors }),
+                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
   pick: pickAnchor,
   fire: firePistol,
   fireGun: fireGun,
+  fireGear: fireGear,
   reset: reset,
   weak: () => (boss ? weakPoints(boss) : []),
   startMain: startMainGame,

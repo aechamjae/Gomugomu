@@ -488,6 +488,34 @@ function swing(a, st){
   } else ok("삭은 돛대는 잡고 있으면 부러져 줄이 끊긴다", false, "줄을 못 잡음");
 }
 
+/* --- 기어 2 --- */
+{
+  const a = start();
+  a.fireGear();
+  ok("게이지가 덜 차면 기어 2가 안 나간다", a.peek().gearT === 0);
+  T().setGear(100);
+  a.fireGear();
+  ok("게이지가 차면 기어 2 발동", a.peek().gearT > 0 && a.peek().gear === 0, "gearT=" + a.peek().gearT);
+  let s = a.peek();
+  s.mobs.length = 0;
+  s.mobs.push({ kind:1, x:s.x + 200, y:s.SEA, phase:3, t:0, h:300, gone:false });
+  let hit = false;
+  s = run(a, 120, (st) => { a.keys.right = true; st.mobs.forEach(m => { if(m.kind === 1) m.phase = 3; }); if(st.stun > 0) hit = true; });
+  ok("기어 2 중엔 해왕류에 닿아도 휘청이지 않는다", !hit, "stun목격=" + hit);
+}
+{
+  // 게이지는 멋진 플레이로 찬다 — PERFECT 한 번이면 18
+  const a = start();
+  let s = run(a, 200, (st) => { a.hold(true); a.keys.right = true; });
+  s = a.peek();
+  if(s.rope){
+    const P = T().P();
+    P.x = s.rope.a.x + 40; P.vx = 9; P.vy = -9;
+    a.hold(false);
+    ok("PERFECT 릴리즈로 기어 게이지가 찬다", a.peek().gear >= 18, "gear=" + a.peek().gear);
+  }
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
