@@ -1067,6 +1067,18 @@ function swing(a, st){
   } else ok("기어 2로 막은 포탄은 무피해 도전을 깨지 않는다", false, "포격이 시작되지 않음");
 }
 
+/* --- 설정 --- */
+{
+  const a = start();
+  a.settings.shake = false;
+  a.fireGun();
+  ok("화면 흔들림을 끄면 엘리펀트 건을 쏴도 흔들리지 않는다", a.peek().shakeT === 0);
+  a.settings.shake = true;
+  const b = start();
+  b.fireGun();
+  ok("켜 두면 흔들린다", b.peek().shakeT > 0);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
