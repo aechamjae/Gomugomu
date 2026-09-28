@@ -549,6 +549,17 @@ function swing(a, st){
   ok("수면을 스치며 보물 통을 들이받아도 부서진다", s.barrelsBroken === 1, "부순 통=" + s.barrelsBroken);
 }
 
+/* --- 두건 스킨 --- */
+{
+  const sh = A().shop;
+  sh().setBank(1000);
+  ok("보물이 모자라면 스킨을 못 산다", sh().pickSkin(1) === false && sh().skin === "red");
+  sh().setBank(2000);
+  ok("스킨을 사면 보물이 빠지고 바로 장착된다", sh().pickSkin(1) && sh().skin === "navy" && sh().bank === 500, "창고=" + sh().bank);
+  ok("가진 스킨은 공짜로 다시 장착", sh().pickSkin(0) && sh().skin === "red" && sh().bank === 500);
+  sh().ownedSkins.length = 1; sh().setBank(0);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

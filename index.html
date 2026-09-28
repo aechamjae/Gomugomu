@@ -362,7 +362,31 @@ const UPGRADES = [
   { id:"magnet", name:"금화 자석",  desc:"가까운 금화를 끌어당긴다", cost:[500, 1200, 3000] },
   { id:"fusen",  name:"비상식량",   desc:"출발할 때 풍선 1개",        cost:[2500] }
 ];
-let bank = 0, upgrades = {}, shopMsg = null, bestBounty = 0;
+/* 두건 스킨 — 코스메틱. 사면 바로 장착, 가진 건 골라서 다시 쓸 수 있다 */
+const SKINS = [
+  { id:"red",   name:"붉은 두건",   cost:0,    band:"#b03a34", coat:"#7a2f2b" },
+  { id:"navy",  name:"해군 두건",   cost:1500, band:"#2f5fa8", coat:"#1f3a66" },
+  { id:"gold",  name:"황금 두건",   cost:4000, band:"#d9a62c", coat:"#8a6a2c" },
+  { id:"black", name:"검은 수염",   cost:8000, band:"#26202c", coat:"#3a2a3a" }
+];
+let bank = 0, upgrades = {}, shopMsg = null, bestBounty = 0, ownedSkins = ["red"], skin = "red";
+const curSkin = () => SKINS.find(k => k.id === skin) || SKINS[0];
+function pickSkin(k){
+  if(ownedSkins.indexOf(k.id) >= 0){
+    skin = k.id;
+    shopMsg = { text: k.name + " 장착", t: 80, good: true };
+  } else if(bank < k.cost){
+    shopMsg = { text: "보물이 " + (k.cost - bank) + " 모자라다", t: 90 };
+    return false;
+  } else {
+    bank -= k.cost;
+    ownedSkins.push(k.id);
+    skin = k.id;
+    shopMsg = { text: k.name + " 획득 · 장착!", t: 90, good: true };
+  }
+  saveShop();
+  return true;
+}
 const upLv = (id) => upgrades[id] || 0;
 const reach = () => REACH * (1 + 0.06 * upLv("reach"));
 function buyUpgrade(u){
@@ -420,14 +444,21 @@ function menuRows(){
     ];
   }
   if(state === STATE.SHOP){
-    const top = H/2 - 90, rowH = 44;
+    const top = H/2 - 92, rowH = 32;
     const rows = UPGRADES.map((u, i) => {
       const lv = upLv(u.id), max = u.cost.length;
       const price = lv >= max ? "최고 단계" : "보물 " + u.cost[lv];
       return { y: top + i*rowH, label: (i+1) + ") " + u.name + " " + lv + "/" + max + " — " + u.desc + " · " + price,
                action: () => buyUpgrade(u), dim: lv >= max || bank < u.cost[lv] };
     });
-    rows.push({ y: top + UPGRADES.length*rowH + 10, label: (UPGRADES.length+1) + ") ← 뒤로가기", action: () => { state = STATE.MENU; } });
+    const sTop = top + UPGRADES.length*rowH + 12;
+    SKINS.forEach((k, i) => {
+      const own = ownedSkins.indexOf(k.id) >= 0;
+      const n = UPGRADES.length + i + 1;
+      rows.push({ y: sTop + i*rowH, label: n + ") " + k.name + " — " + (skin === k.id ? "장착 중" : own ? "장착하기" : "보물 " + k.cost),
+                  action: () => pickSkin(k), dim: !own && bank < k.cost, swatch: k.band, on: skin === k.id });
+    });
+    rows.push({ y: sTop + SKINS.length*rowH + 8, label: (UPGRADES.length + SKINS.length + 1) + ") ← 뒤로가기", action: () => { state = STATE.MENU; } });
     return rows;
   }
   if(state === STATE.PRACTICE_SELECT){
@@ -2118,6 +2149,8 @@ function applyShopRecord(v){
     bank = r.bank || 0;
     upgrades = r.up || {};
     bestBounty = r.bounty || 0;
+    if(Array.isArray(r.skins)) ownedSkins = r.skins.indexOf("red") >= 0 ? r.skins : ["red"].concat(r.skins);
+    if(r.skin && ownedSkins.indexOf(r.skin) >= 0) skin = r.skin;
   }catch(e){}
 }
 async function loadShop(){
@@ -2133,7 +2166,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -2552,7 +2585,8 @@ function drawPlayer(){
   const diving = keys.down && !rope;
 
   // 코트 자락
-  ctx.fillStyle = "#7a2f2b";
+  const sk = curSkin();
+  ctx.fillStyle = sk.coat;
   ctx.beginPath();
   ctx.moveTo(x-2, y-2);
   ctx.quadraticCurveTo(x - p.vx*2.4, y + 2 - p.vy*0.8, x - p.vx*3.8, y + 12 - p.vy*1.2);
@@ -2571,7 +2605,7 @@ function drawPlayer(){
 
   ctx.fillStyle = "#e8b48c";                     // 머리
   ctx.beginPath(); ctx.arc(0, -11, 9.2, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#b03a34";                     // 두건
+  ctx.fillStyle = sk.band;                       // 두건
   ctx.beginPath();
   ctx.arc(0, -13, 9.4, Math.PI, 0);
   ctx.lineTo(9.4, -11); ctx.lineTo(-9.4, -11);
@@ -3341,7 +3375,7 @@ function drawPoster(x, y, w, h){
   ctx.fillRect(cx - 70, cy + 70, 140, 10);
   ctx.fillStyle = "#e8b48c";                     // 얼굴
   ctx.beginPath(); ctx.arc(cx, cy, 44, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#b03a34";                     // 두건
+  ctx.fillStyle = curSkin().band;                // 두건
   ctx.beginPath(); ctx.arc(cx, cy - 8, 45, Math.PI, 0); ctx.lineTo(cx + 45, cy - 2); ctx.lineTo(cx - 45, cy - 2); ctx.closePath(); ctx.fill();
   ctx.beginPath(); ctx.moveTo(cx - 36, cy - 12); ctx.quadraticCurveTo(cx - 72, cy - 6, cx - 80, cy + 26); ctx.lineTo(cx - 42, cy + 2); ctx.closePath(); ctx.fill();
   ctx.fillStyle = "#1b1218";                     // 눈
@@ -3561,15 +3595,24 @@ function draw(){
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
-    centerText("보물 창고", H/2 - 180, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    centerText("가진 보물 " + Math.floor(bank), H/2 - 146, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
-    for(const row of menuRows()) centerText(row.label, row.y, "500 15px 'Pretendard', system-ui, sans-serif", row.dim ? "rgba(217,184,119,.45)" : "#d9b877");
+    centerText("보물 창고", H/2 - 184, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("가진 보물 " + Math.floor(bank), H/2 - 150, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
+    for(const row of menuRows()){
+      centerText(row.label, row.y, "500 15px 'Pretendard', system-ui, sans-serif", row.on ? "#9fe0a0" : row.dim ? "rgba(217,184,119,.45)" : "#d9b877");
+      if(row.swatch){
+        ctx.font = "500 15px 'Pretendard', system-ui, sans-serif";
+        const w = ctx.measureText(row.label).width;
+        ctx.fillStyle = row.swatch;
+        ctx.beginPath(); ctx.arc(W/2 - w/2 - 16, row.y, 7, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = "rgba(244,236,217,.5)"; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    }
     if(shopMsg){
       shopMsg.t -= 1;
-      centerText(shopMsg.text, H/2 + 150, "700 15px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
+      centerText(shopMsg.text, H/2 - 126, "700 14px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
       if(shopMsg.t <= 0) shopMsg = null;
     }
-    centerText("본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키 또는 클릭으로 구매 · Esc 뒤로", H/2 + 184, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키 또는 클릭으로 구매/장착 · Esc 뒤로", H - 20, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.PRACTICE_SELECT){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
@@ -3610,7 +3653,8 @@ window.__swing = {
   startMain: startMainGame,
   startPractice: startPractice,
   toMenu: () => { state = STATE.MENU; },
-  shop: () => ({ bank, upgrades, buy: (i) => buyUpgrade(UPGRADES[i]), setBank: (v) => { bank = v; }, reach: reach(), pistolCd: pistolCd() }),
+  shop: () => ({ bank, upgrades, buy: (i) => buyUpgrade(UPGRADES[i]), setBank: (v) => { bank = v; }, reach: reach(), pistolCd: pistolCd(),
+                 skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]) }),
   toShop: () => { state = STATE.SHOP; }
 };
 
