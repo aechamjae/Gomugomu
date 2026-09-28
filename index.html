@@ -195,7 +195,7 @@
       <span><b>← →</b> 매달렸을 땐 그네 밀기, 공중에선 방향 조절</span>
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
-      <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초) · <b>E</b> 기어 2(게이지가 차면)</span>
+      <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초) · <b>E</b> 기어(출항 전 2~5 선택, 게이지가 차면)</span>
       <span><b>↓</b> 끝까지 감고 계속 누른 뒤 놓으면 <b>고무고무 로켓</b></span>
       <span><b>금빛 링</b>일 때 놓으면 PERFECT · <b>수면 스치기</b> · 해왕류 <b>아슬아슬</b> 회피 보너스</span>
       <span><b>고기</b> 바다에서 한 번 튕김 · <b>보물 통</b> 쏘거나 들이받기 · <b>황금 고리</b> 보물 폭발 · 금 간 돛대는 곧 부러짐</span>
@@ -301,7 +301,7 @@ const TIPS = [
   "PERFECT를 연달아 성공하면 보물이 점점 커진다",
   "바다 바로 위를 빠르게 스치면 물보라와 함께 보물이 쌓인다",
   "고기는 일부러 낮게 떠 있다 — 먹어 두면 바다에 빠져도 한 번 튕겨 오른다",
-  "기어 2 게이지가 차면 E — 5초 동안 무엇에도 휘청이지 않는다",
+  "출항 화면에서 기어를 고른다 — 기어 3은 거대 주먹, 기어 5는 완전 무적이지만 게이지가 크다",
   "보물 통은 피스톨로 쏘면 금화가 공중에 흩뿌려진다",
   "금이 간 돛대는 잡자마자 삐걱댄다 — 빨리 다음 고리로",
   "폭풍 구간은 돌풍이 거세지만 금화가 2배다",
@@ -389,12 +389,31 @@ const ROCKET_LEN   = 52;     // 이 길이 이하로 감겨 있어야 충전된�
 const ROCKET_MIN   = 30;     // 이만큼 충전돼야 발동
 const ROCKET_MAX   = 70;
 
-/* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
-const GEAR_MAX  = 100;
-const GEAR_T    = 300;
+/* 기어 시리즈 — 멋진 플레이로 게이지를 채워 E로 발동. 출항 전에 하나를 고르고, 보물로 순서대로 해금.
+   성능이 셀수록 게이지가 커서 자주 못 쓴다.
+   def: 방어(스턴·감속을 이 비율만큼 줄임, 1이면 완전 무적) · atk: 보스에게 주는 피해 배율 · spd: 최고 속도 배율 */
+const GEARS = {
+  2: { name:"기어 2", cost:0,     max:100, t:360, def:0.3, atk:1.5, spd:1.15, col:"#ff8fa0", desc:"6초 · 방어·공격·속도 소폭 상승" },
+  3: { name:"기어 3", cost:3000,  max:160, t:40,  def:0,   atk:1,   spd:1,    col:"#f0a24e", desc:"즉발 · 거대 주먹 범위 공격(공격력 4)" },
+  4: { name:"기어 4", cost:8000,  max:230, t:420, def:0.5, atk:2,   spd:1.25, col:"#c56ae0", desc:"7초 · 방어·공격 상승 + 공중에서 ↑ 부스터" },
+  5: { name:"기어 5", cost:20000, max:400, t:360, def:1,   atk:2,   spd:1.2,  col:"#fff4d8", desc:"6초 · 완전 무적 · 공격력 2배" }
+};
 const GEAR_GAIN = { perfect:18, good:6, skim:12, near:25, gold:20, kill:8, chain:4 };
-const GEAR_BOOST = 1.4;      // 펌핑·공중 조작 배율
-const GEAR_VMAX  = 1.15;     // 최고 속도 배율
+const GIANT_R   = 190;       // 기어 3 거대 주먹 범위
+let gearSel = 2, gearUnlocked = 2, gearOn = 0, giant = null, gearMsg = null;
+const gearMax = () => GEARS[gearSel].max;
+const buff = () => (gearT > 0 && gearOn && gearOn !== 3) ? GEARS[gearOn] : null;   // 지금 걸려 있는 기어 강화
+const invinc = () => { const b = buff(); return !!(b && b.def >= 1); };               // 기어 5 — 완전 무적
+const gearCol = () => GEARS[gearT > 0 && gearOn ? gearOn : gearSel].col;
+function selectGear(n){
+  const g = GEARS[n];
+  if(!g) return;
+  if(n <= gearUnlocked){ gearSel = n; gearMsg = { text: g.name + " 선택 — " + g.desc, t: 120, good: true }; }
+  else if(n > gearUnlocked + 1){ gearMsg = { text: GEARS[gearUnlocked + 1].name + "부터 순서대로 해금해야 한다", t: 120 }; return; }
+  else if(bank < g.cost){ gearMsg = { text: g.name + " 해금까지 보물 " + (g.cost - bank) + " 모자라다", t: 120 }; return; }
+  else { bank -= g.cost; gearUnlocked = n; gearSel = n; gearMsg = { text: g.name + " 해금! — " + g.desc, t: 150, good: true }; }
+  saveShop();
+}
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -457,7 +476,7 @@ const HINTS = {
   perfect: "몸에 금빛 링이 떴다 — 지금 놓으면 PERFECT!",
   sea:     "바다에 닿으면 끝! 빨리 다음 고리를 잡아라",
   enemy:   "Q 피스톨로 적을 쏠 수 있다 (자동 조준)",
-  gear:    "기어 2 게이지가 가득 찼다 — E 로 발동!",
+  gear:    "기어 게이지가 가득 찼다 — E 로 발동!",
   boss:    "보스는 빠른 속도로 약점(빨간 원)에 부딪쳐야 맞는다",
   meat:    "고기를 먹으면 바다에 빠져도 한 번 튕겨 오른다"
 };
@@ -478,7 +497,7 @@ function updateHints(dt){
   if(releaseGrade() === 2) hint("perfect");
   if(!rope && p.y > SEA - 110 && p.vy > 3) hint("sea");
   if(skillCd <= 0 && (mobs.some(m => m.kind === 1 && m.h > 40 && m.x > p.x) || gulls.some(g => g.x > p.x && g.x - p.x < 500))) hint("enemy");
-  if(gear >= GEAR_MAX) hint("gear");
+  if(gear >= gearMax()) hint("gear");
   if(boss && !bossIntro) hint("boss");
   if(meats.some(m => !m.got && Math.abs(m.x - p.x) < 400)) hint("meat");
 }
@@ -775,7 +794,7 @@ function reset(){
   rocketCharge = 0; rockets = 0;
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
-  gear = 0; gearT = 0; gears = 0;
+  gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null;
   runBounty = 0; newBountyRecord = false; newDailyRecord = false; streakReward = 0;
   reviveUsed = false; reviveT = 0;
   runXp = 0;
@@ -951,7 +970,7 @@ function updateBarrage(dt){
       if(state === STATE.PLAY && Math.hypot(p.x - q.x, p.y - q.y) < SHELL_R + 12){
         const before = stun;
         knock(false);
-        // 기어 2·무적·보호막으로 막았으면 무피해 도전은 그대로
+        // 기어 5·무적·보호막으로 막았으면 무피해 도전은 그대로
         if(barrage && stun > before) barrage.hit = true;
       }
     }
@@ -1046,7 +1065,7 @@ function collectCoin(c, byPlayer){
     }
   }
   const wx = weather ? (weather.type === "storm" ? 2 : weather.type === "fog" ? 1.5 : 1) : 1;
-  const mult = chainMult() * wx * (gearT > 0 ? 2 : 1);
+  const mult = chainMult() * wx * (buff() ? 2 : 1);
   const gain = Math.round(25 * mult);
   treasure += gain;
   if(byPlayer) p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
@@ -1103,20 +1122,54 @@ function collectMapPiece(m){
 function addGear(kind){
   if(gearT > 0 || state !== STATE.PLAY) return;
   const was = gear;
-  gear = Math.min(GEAR_MAX, gear + (GEAR_GAIN[kind] || 0));
-  if(was < GEAR_MAX && gear >= GEAR_MAX)
-    pops.push({ x:p.x, y:p.y-56, t:90, text:"기어 2 준비! (E)", color:"#ff8fa0" });
+  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0));
+  if(was < gearMax() && gear >= gearMax())
+    pops.push({ x:p.x, y:p.y-56, t:90, text:GEARS[gearSel].name + " 준비! (E)", color:GEARS[gearSel].col });
 }
 
 function fireGear(){
-  if(state !== STATE.PLAY || gear < GEAR_MAX || gearT > 0) return;
+  if(state !== STATE.PLAY || gear < gearMax() || gearT > 0) return;
+  const g = GEARS[gearSel];
   gear = 0;
-  gearT = GEAR_T;
-  addShake(6, 16);
+  gearOn = gearSel;
+  gearT = g.t;
   gears++;
+  if(gearSel === 3){ gigantPistol(); return; }
   stun = 0;
-  missionFlash = { text: "기어 2 — 고무고무 제트!", reward: 0, t: 110, gear: true };
-  for(let i=0;i<30;i++) spark(p.x, p.y, "#ff8fa0");
+  addShake(6, 16);
+  const shout = { 2:"기어 2 — 고무고무 제트!", 4:"기어 4 — 바운드맨!", 5:"기어 5 — 해방의 전사!" }[gearSel];
+  missionFlash = { text: shout, reward: 0, t: 110, gear: true };
+  for(let i=0;i<30;i++) spark(p.x, p.y, g.col);
+}
+
+// 기어 3 — 고무고무 기간트 피스톨: 앞쪽을 거대 주먹으로 내리쳐 범위 안을 싹 쓸고 보스에게 4 피해
+function gigantPistol(){
+  const dir = p.face || 1;
+  const cx = p.x + 250*dir, cy = p.y + 10;
+  giant = { x0:p.x, y0:p.y, cx, cy, dir, t:0 };
+  missionFlash = { text: "기어 3 — 고무고무 기간트 피스톨!", reward: 0, t: 110, gear: true };
+  addShake(10, 22);
+  const inR = (x, y, extra) => Math.hypot(x - cx, y - cy) < GIANT_R + (extra || 0);
+  for(const m of mobs){
+    if(m.gone) continue;
+    if(m.kind === 0 && inR(m.x, m.y)){ m.gone = true; fishKills++; treasure += 15; for(let k=0;k<8;k++) spark(m.x, m.y, "#d9b877"); }
+    else if(m.kind === 1 && m.h > 20 && m.phase !== 4){
+      const top = SEA - m.h;
+      if(inR(m.x, top - 26, 74) || inR(m.x, (top + SEA)/2, KING_W)){
+        m.gone = true; kingKills++; treasure += 260;
+        pops.push({ x:m.x, y:top-70, t:120, text:"해왕류를 물리쳤다 +260", color:"#d9b877" });
+        for(let k=0;k<24;k++) spark(m.x, top, "#8fd6d8");
+      }
+    }
+  }
+  for(const q of gulls) if(!q.gone && inR(q.x, q.y)) killGull(q, 20);
+  for(const b of barrels) if(!b.gone && inR(b.x, barrelY(b), BARREL_R)) breakBarrel(b, "기간트 피스톨");
+  for(let i=shots.length-1;i>=0;i--) if(inR(shots[i].x, shots[i].y)) shots.splice(i,1);
+  if(boss){
+    const ghostSafe = boss.type === 7 && (boss.phase === 1 || (boss.sink || 0) > 12);
+    const near = inR(boss.x, boss.y, 60) || weakPoints(boss).some(w => inR(w.x, w.y, w.r));
+    if(near && !ghostSafe){ boss.invul = 0; damageBoss(true, "기간트 피스톨", 4); }
+  }
 }
 
 function syncHUD(){
@@ -1143,8 +1196,8 @@ function syncHUD(){
   }
   const rb = document.getElementById("gearBtn");
   if(rb){
-    rb.classList.toggle("cool", !(gear >= GEAR_MAX) && !(gearT > 0));
-    rb.textContent = gearT > 0 ? Math.ceil(gearT/60) + "초" : Math.floor((gear||0)) + "%";
+    rb.classList.toggle("cool", !(gear >= gearMax()) && !(gearT > 0));
+    rb.textContent = buff() ? Math.ceil(gearT/60) + "초" : "G" + gearSel + " " + Math.floor((gear||0) / gearMax() * 100) + "%";
   }
   const gb = document.getElementById("gunBtn");
   if(gb){
@@ -1317,7 +1370,7 @@ function updateJellies(dt){
       pops.push({ x:j.x, y:jy-36, t:50, text:"뿅! +" + gain, color:"#e6a8f0" });
       for(let k=0;k<12;k++) spark(j.x, jy - 10, "#e6a8f0");
       addShake(2, 6);
-    } else if(stun <= 0 && iframes <= 0 && gearT <= 0){
+    } else if(stun <= 0 && iframes <= 0 && !buff()){
       // 옆이나 아래로 부딪혔다 — 살짝 쏘인다(스턴 없음)
       p.vx *= 0.8;
       pops.push({ x:j.x, y:jy-30, t:40, text:"찌릿", color:"#e6a8f0" });
@@ -1338,7 +1391,7 @@ function updateTerrainHazards(dt){
   for(const q of floes) q.t += dt;
   for(const g of geysers){
     g.t += dt;
-    if(state !== STATE.PLAY || stun > 0 || iframes > 0 || gearT > 0) continue;
+    if(state !== STATE.PLAY || stun > 0 || iframes > 0 || invinc()) continue;
     const st = geyserState(g);
     if(st.h > 20 && segToCapsule(g.x, SEA - st.h, SEA + 10) < GEYSER_W + 12){
       geyserHits++;
@@ -1372,7 +1425,7 @@ function updateGulls(dt){
     if(state !== STATE.PLAY || stun > 0 || iframes > 0) continue;
     const d = distOriginToSeg(pPrevX - g.x, pPrevY - g.y, p.x - g.x, p.y - g.y);
     if(d < GULL_R + 13){
-      if(fire > 0 || gearT > 0) killGull(g, 20);
+      if(fire > 0 || buff()) killGull(g, 20);
       else {
         g.gone = true;
         gullHits++;
@@ -1414,8 +1467,8 @@ function updateMobs(dt){
       if(m.air && stun <= 0 && iframes <= 0){
         const d = distOriginToSeg(pPrevX - m.x, pPrevY - m.y, p.x - m.x, p.y - m.y);
         if(d < 15 + 13){
-          if(fire > 0 || gearT > 0){
-            // 불붙은 동안(또는 기어 2)엔 부딪혀도 다치지 않고, 오히려 몹에게 데미지를 준다
+          if(fire > 0 || buff()){
+            // 불붙은 동안(또는 기어 강화 중)엔 부딪혀도 다치지 않고, 오히려 몹에게 데미지를 준다
             m.gone = true; fishKills++; addGear("kill");
             pops.push({ x:m.x, y:m.y-20, t:40, text:"불꽃 데미지 1", color:"#f0a24e" });
             for(let k=0;k<10;k++) spark(m.x, m.y, "#f0a24e");
@@ -1472,7 +1525,7 @@ function updateMobs(dt){
 }
 
 /* ---------- 입력 ---------- */
-const keys = { left:false, right:false, down:false };
+const keys = { left:false, right:false, down:false, up:false };
 
 function pickAnchor(){
   let pick = null, bd = 1e9;
@@ -1644,6 +1697,10 @@ window.addEventListener("keydown", (e)=>{
     else if(k === "Escape" || k === "KeyN") declineRevive();
     return;
   }
+  if(state === STATE.READY){
+    const gm = /^Digit([2-5])$/.exec(k);
+    if(gm){ e.preventDefault(); selectGear(parseInt(gm[1], 10)); return; }
+  }
   if(k === "KeyP" || k === "Escape"){ e.preventDefault(); togglePause(); return; }
   if(k === "KeyR"){ reset(); return; }
   if(k === "KeyC" && state === STATE.OVER){ e.preventDefault(); shareResult(); return; }
@@ -1655,7 +1712,7 @@ window.addEventListener("keydown", (e)=>{
   else if(k === "ArrowLeft" || k === "KeyA"){ e.preventDefault(); keys.left = true; }
   else if(k === "ArrowRight"){ e.preventDefault(); keys.right = true; }
   else if(k === "ArrowDown" || k === "KeyS"){ e.preventDefault(); keys.down = true; }
-  else if(k === "ArrowUp"){ e.preventDefault(); release(true); }
+  else if(k === "ArrowUp"){ e.preventDefault(); keys.up = true; if(!e.repeat) release(true); }
   else if(k === "KeyQ"){ e.preventDefault(); firePistol(); }
   else if(k === "KeyW"){ e.preventDefault(); fireGun(); }
   else if(k === "KeyE"){ e.preventDefault(); fireGear(); }
@@ -1667,6 +1724,7 @@ window.addEventListener("keyup", (e)=>{
   else if(k === "ArrowLeft" || k === "KeyA") keys.left = false;
   else if(k === "ArrowRight") keys.right = false;
   else if(k === "ArrowDown" || k === "KeyS") keys.down = false;
+  else if(k === "ArrowUp") keys.up = false;
 });
 
 canvas.addEventListener("mouseenter", ()=>{ try{ canvas.focus({preventScroll:true}); }catch(e){} });
@@ -1708,7 +1766,7 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
     if(k === "left"){ keys.left = true; }
     else if(k === "right"){ keys.right = true; }
     else if(k === "down"){ keys.down = true; }
-    else if(k === "up"){ release(true); }
+    else if(k === "up"){ keys.up = true; release(true); }
     else if(k === "grab"){ if(!holding) grab(); }
     else if(k === "skill"){ firePistol(); }
     else if(k === "gun"){ fireGun(); }
@@ -1720,6 +1778,7 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
     if(k === "left"){ keys.left = false; }
     else if(k === "right"){ keys.right = false; }
     else if(k === "down"){ keys.down = false; }
+    else if(k === "up"){ keys.up = false; }
     else if(k === "grab"){ release(false); }
   };
   btn.addEventListener("pointerdown", press);
@@ -1829,7 +1888,7 @@ const BOSS_REWARDS = [
   { id:"treasure", name:"보물 폭풍",        w:30 },
   { id:"recharge", name:"스킬 급속 재충전", w:20 },
   { id:"chainup",  name:"연속 콤보 부스트", w:18 },
-  { id:"gear",     name:"기어 2 충전",      w:10 },
+  { id:"gear",     name:"기어 충전",        w:10 },
   { id:"meat",     name:"고기 한 덩이",     w:10 }
 ];
 function pickReward(){
@@ -1857,8 +1916,8 @@ function applyBossReward(b){
     chainTimer = 0;
     pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 연속 콤보 +3!", color:"#ffd76a" });
   } else if(r.id === "gear"){
-    gear = GEAR_MAX;
-    pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 기어 2 게이지 가득! (E)", color:"#ff8fa0" });
+    gear = gearMax();
+    pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: " + GEARS[gearSel].name + " 게이지 가득! (E)", color:GEARS[gearSel].col });
   } else if(r.id === "meat"){
     if(fusen < FUSEN_MAX){ fusen++; pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 고기 — 풍선 +1", color:"#f7a8a0" }); }
     else { treasure += 120; pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 고기(배불러서 보물 +120)", color:"#d9b877" }); }
@@ -2129,7 +2188,7 @@ function weakPoints(b){
 
 function knock(hard, mild){
   if(stun > 0 || iframes > 0) return;      // 연속 피격으로 갇히지 않도록
-  if(gearT > 0) return;                    // 기어 2 중엔 아무것도 통하지 않는다
+  if(invinc()) return;                     // 기어 5 중엔 아무것도 통하지 않는다
   if(shield > 0){                          // 보스 격파 보상으로 얻은 보호막이 대신 막아낸다
     shield--;
     iframes = 46;
@@ -2141,12 +2200,15 @@ function knock(hard, mild){
   const base = hard ? STUN_STRONG : mild ? STUN_MOB : STUN_FRAMES;
   stun = fire > 0 ? base / 2 : base;       // 불꽃 효과 = 스턴 시간 절반
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 넉백·무적시간도 가볍게 넘긴다(스턴 시간은 위에서 이미 반영)
+  const def = buff() ? buff().def : 0;       // 기어 2·4의 방어력 — 스턴과 감속을 그만큼 줄인다
+  stun *= (1 - def);
   iframes = mild ? 60 : 78;
   rope = null;
   rocketCharge = 0;
   chain = 0;
   addShake(hard ? 9 : mild ? 4 : 6, hard ? 22 : 14);
-  p.vx *= hard ? 0.34 : mild ? 0.74 : 0.52;
+  const keep = hard ? 0.34 : mild ? 0.74 : 0.52;
+  p.vx *= keep + (1 - keep) * def;
   p.vy = Math.min(p.vy, -3.2);
   pops.push({ x:p.x, y:p.y-28, t:50, text:"휘청", color:"#b03a34" });
   for(let i=0;i<12;i++) spark(p.x, p.y, "#b03a34");
@@ -2155,7 +2217,7 @@ function knock(hard, mild){
 // 해왕류 접촉 — 크라켄 촉수와 같은 강한 스턴(STUN_STRONG). 즉사는 아니다
 function knockKing(){
   if(stun > 0 || iframes > 0) return;
-  if(gearT > 0) return;
+  if(invinc()) return;
   if(shield > 0){
     shield--;
     iframes = 46;
@@ -2171,21 +2233,25 @@ function knockKing(){
     for(let i=0;i<14;i++) spark(p.x, p.y, "#f0a24e");
     return;
   }
-  stun = STUN_STRONG;
+  const def = buff() ? buff().def : 0;
+  stun = STUN_STRONG * (1 - def);
   iframes = 90;
   addShake(11, 26);
   rope = null;
   chain = 0;
-  p.vx *= 0.22;
+  p.vx *= 0.22 + 0.78 * def;
   p.vy = Math.min(p.vy, -6);
   treasure = Math.max(0, treasure - 40);
   pops.push({ x:p.x, y:p.y-28, t:60, text:"해왕류에게 크게 당했다!", color:"#b03a34" });
   for(let i=0;i<18;i++) spark(p.x, p.y, "#b03a34");
 }
 
-function damageBoss(ranged, mark){
+function damageBoss(ranged, mark, power){
   const b = boss;
-  b.hp--; b.flash = 16; b.invul = b.big ? 44 : 30;
+  // 기어 강화 중엔 공격력 배율이 붙는다(기어 3 거대 주먹은 자체 공격력 4)
+  const amt = (power || 1) * (buff() ? buff().atk : 1);
+  b.hp = Math.max(0, b.hp - amt); b.flash = 16; b.invul = b.big ? 44 : 30;
+  if(amt !== 1) pops.push({ x: ranged ? b.x : p.x, y: (ranged ? b.y : p.y) - 52, t:50, text:"피해 " + (Math.round(amt*10)/10), color:gearCol() });
   addShake(b.hp <= 0 ? 12 : 6, b.hp <= 0 ? 30 : 14);
   treasure += b.big ? 60 : 40;
   if(!ranged){
@@ -2890,7 +2956,7 @@ function update(dt){
     if(keys.right) pump += 1;
     if(pump){
       const sgn = (tx * pump >= 0) ? 1 : -1;
-      const gk = gearT > 0 ? GEAR_BOOST : 1;
+      const gk = buff() ? 1 + (buff().spd - 1) * 2.5 : 1;
       p.vx += tx * sgn * PUMP * gk * dt;
       p.vy += ty * sgn * PUMP * gk * dt;
       p.vx += pump * PUMP * 0.35 * dt;       // 조작감을 위한 약간의 직접 조절
@@ -2906,10 +2972,15 @@ function update(dt){
     if(d > reach()*1.7) rope = null;
     airTime = 0;
   } else {
-    const ak = gearT > 0 ? GEAR_BOOST : 1;
+    const ak = buff() ? 1 + (buff().spd - 1) * 2.5 : 1;
     if(keys.left)  p.vx -= AIR*ak*dt;
     if(keys.right) p.vx += AIR*ak*dt;
     if(keys.down)  p.vy += DIVE*dt;
+    if(buff() && gearOn === 4 && keys.up){
+      // 기어 4 공중 부스터 — ↑를 누르는 동안 위·앞으로 치솟는다
+      p.vy -= 0.66*dt; p.vx += 0.12*dt;
+      if(Math.random() < 0.8) bits.push({ x:p.x - p.face*6, y:p.y + 16, vx:(Math.random()-0.5)*1.5, vy:2 + Math.random()*2, life:0.6, color:"#e0b0f0" });
+    }
     if(weather && weather.type === "wind") p.vx += TAILWIND*dt;
     else if(weather && weather.type === "storm"){
       p.vx += Math.sin(time*0.025) * STORM_GUST * dt;
@@ -2923,8 +2994,8 @@ function update(dt){
   p.vx *= Math.pow(0.9996, dt);
 
   const sp = Math.hypot(p.vx, p.vy);
-  const vmax = gearT > 0 ? MAXV * GEAR_VMAX : MAXV;
-  if(sp > MAXV && gearT <= 0 && dist < FIRE_MAX_DIST) fire = FIRE_DUR;   // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다 — 2000m까지만
+  const vmax = buff() ? MAXV * buff().spd : MAXV;
+  if(sp > MAXV && !buff() && dist < FIRE_MAX_DIST) fire = FIRE_DUR;   // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다 — 2000m까지만
   else if(fire > 0) fire -= dt;
   if(sp > vmax){ p.vx = p.vx/sp*vmax; p.vy = p.vy/sp*vmax; }
 
@@ -3001,16 +3072,17 @@ function update(dt){
   if(Math.hypot(p.vx, p.vy) > 19 && Math.floor(time) % 3 === 0) trail.push({ x:p.x, y:p.y, face:p.face, life:1 });
   for(let i=trail.length-1;i>=0;i--){ trail[i].life -= 0.07*dt; if(trail[i].life <= 0) trail.splice(i,1); }
   for(let i=rings.length-1;i>=0;i--){ rings[i].t += dt; if(rings[i].t > 22) rings.splice(i,1); }
+  if(giant){ giant.t += dt; if(giant.t > 40) giant = null; }
   if(gearT > 0){
     gearT -= dt;
-    if(gearT <= 0){
-      // 기어 2 동안엔 최고 속도를 넘길 수 있었는데, 끝나는 순간 그 속도가 그대로면
+    if(gearT <= 0 && gearOn !== 3){
+      // 기어 강화 동안엔 최고 속도를 넘길 수 있었는데, 끝나는 순간 그 속도가 그대로면
       // 다음 프레임에 불꽃이 공짜로 붙는다 — 보통 최고 속도보다 살짝 아래로 눌러 둔다
       const sp2 = Math.hypot(p.vx, p.vy), cap = MAXV * 0.96;
       if(sp2 > cap){ p.vx = p.vx/sp2*cap; p.vy = p.vy/sp2*cap; }
     }
-    if(Math.random() < 0.8) bits.push({ x:p.x + (Math.random()-0.5)*14, y:p.y + (Math.random()-0.5)*14,
-                                         vx:-p.vx*0.2 + (Math.random()-0.5), vy:-1.5 - Math.random()*1.5, life:0.7, color:"#ffd0d8" });
+    if(buff() && Math.random() < 0.8) bits.push({ x:p.x + (Math.random()-0.5)*14, y:p.y + (Math.random()-0.5)*14,
+                                         vx:-p.vx*0.2 + (Math.random()-0.5), vy:-1.5 - Math.random()*1.5, life:0.7, color:gearCol() });
   }
   if(missionFlash){ missionFlash.t -= dt; if(missionFlash.t <= 0) missionFlash = null; }
 
@@ -3070,6 +3142,11 @@ function update(dt){
   if(blitzMode){
     blitzT -= dt;
     if(blitzT <= 0){ blitzT = 0; return die("시간"); }
+  }
+  if(p.y > SEA - 14 && invinc()){
+    // 기어 5 — 바다도 튕겨 낸다
+    rope = null; p.y = SEA - 16; p.vy = -13; p.vx = Math.max(p.vx, 7);
+    for(let i=0;i<10;i++) spark(p.x, SEA - 6, "#fff4d8");
   }
   if(p.y > SEA - 14 && p.vy > 0 && floeUnder()){
     // 유빙 위에 떨어졌다 — 미끄러지듯 앞으로 튕겨 오른다
@@ -3169,6 +3246,8 @@ function applyShopRecord(v){
     blitzBest = r.blitz || 0;
     rushBest = r.rush || 0;
     bestGrade = r.grade || "";
+    gearUnlocked = Math.min(5, Math.max(2, r.gearU || 2));
+    gearSel = Math.min(gearUnlocked, Math.max(2, r.gearS || 2));
   }catch(e){}
 }
 async function loadShop(){
@@ -3184,7 +3263,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -3570,7 +3649,8 @@ function drawBarrel(b){
 
 function drawTrail(){
   if(!settings.lines) return;
-  const col = gearT > 0 ? "255,143,160" : fire > 0 ? "240,140,70" : curSkin().band === "#b03a34" ? "232,180,140" : "244,236,217";
+  const hex = gearCol(), rgb = parseInt(hex.slice(1,3),16) + "," + parseInt(hex.slice(3,5),16) + "," + parseInt(hex.slice(5,7),16);
+  const col = buff() ? rgb : fire > 0 ? "240,140,70" : curSkin().band === "#b03a34" ? "232,180,140" : "244,236,217";
   for(const q of trail){
     const x = q.x - cam.x;
     ctx.fillStyle = "rgba(" + col + "," + (q.life * 0.28).toFixed(2) + ")";
@@ -3625,30 +3705,60 @@ function drawFusen(){
 
 function drawGearGauge(){
   const x = 80, y = H - 108, w = 112, h = 8;
-  const k = Math.min(1, gearT > 0 ? gearT / GEAR_T : gear / GEAR_MAX);
-  const full = gear >= GEAR_MAX || gearT > 0;
+  const g = GEARS[gearSel];
+  const k = Math.min(1, buff() ? gearT / GEARS[gearOn].t : gear / gearMax());
+  const full = gear >= gearMax() || buff();
   ctx.save();
   ctx.fillStyle = "rgba(13,27,38,.6)";
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = full ? "rgba(255,143,160," + (0.75 + Math.sin(time*0.3)*0.25).toFixed(2) + ")" : "rgba(255,143,160,.7)";
+  ctx.globalAlpha = full ? 0.75 + Math.sin(time*0.3)*0.25 : 0.8;
+  ctx.fillStyle = g.col;
   ctx.fillRect(x, y, w * k, h);
+  ctx.globalAlpha = 1;
   ctx.strokeStyle = "rgba(244,236,217,.3)"; ctx.lineWidth = 1;
   ctx.strokeRect(x, y, w, h);
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
   ctx.font = (full ? "700 " : "400 ") + "11px 'Pretendard', system-ui, sans-serif";
-  ctx.fillStyle = full ? "#ff8fa0" : "rgba(244,236,217,.55)";
-  ctx.fillText(gearT > 0 ? "기어 2 발동 중" : full ? "기어 2 준비 — E" : "기어 2", x, y - 5);
+  ctx.fillStyle = full ? g.col : "rgba(244,236,217,.55)";
+  ctx.fillText(buff() ? g.name + " 발동 중" : full ? g.name + " 준비 — E" : g.name, x, y - 5);
+  ctx.restore();
+}
+
+// 기어 3 거대 주먹 — 어깨에서 뻗어 나가며 커지고, 닿는 순간 충격파
+function drawGiant(){
+  if(!giant) return;
+  const g = giant, k = Math.min(1, g.t / 12);
+  const fx = g.x0 + (g.cx - g.x0) * k - cam.x, fy = g.y0 + (g.cy - g.y0) * k;
+  const sx = p.x - cam.x, sy = p.y - 2;
+  ctx.save();
+  if(g.t < 26){
+    ctx.globalAlpha = Math.min(1, (26 - g.t) / 10);
+    ctx.strokeStyle = "#e8b48c"; ctx.lineCap = "round"; ctx.lineWidth = 16 + 18*k;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(fx, fy); ctx.stroke();
+    const r = 20 + 60*k;
+    ctx.fillStyle = "#e8b48c";
+    ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "#b03a34"; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(fx, fy, r - 8, 0, Math.PI*2); ctx.stroke();
+  }
+  if(g.t >= 10){
+    const u = (g.t - 10) / 30;
+    ctx.globalAlpha = Math.max(0, 1 - u);
+    ctx.strokeStyle = "#f0a24e"; ctx.lineWidth = 6 * (1 - u) + 1;
+    ctx.beginPath(); ctx.arc(g.cx - cam.x, g.cy, GIANT_R * (0.5 + u*0.6), 0, Math.PI*2); ctx.stroke();
+  }
   ctx.restore();
 }
 
 function drawGearAura(){
-  if(gearT <= 0) return;
+  if(!buff()) return;
   const x = p.x - cam.x, y = p.y;
   ctx.save();
-  ctx.globalAlpha = Math.min(1, gearT/30) * 0.5;
-  const g = ctx.createRadialGradient(x, y, 6, x, y, 34);
-  g.addColorStop(0, "rgba(255,120,140,.7)");
-  g.addColorStop(1, "rgba(255,120,140,0)");
+  ctx.globalAlpha = Math.min(1, gearT/30) * (gearOn === 5 ? 0.8 : 0.5);
+  const hx = gearCol(), rgb = parseInt(hx.slice(1,3),16) + "," + parseInt(hx.slice(3,5),16) + "," + parseInt(hx.slice(5,7),16);
+  const g = ctx.createRadialGradient(x, y, 6, x, y, gearOn === 5 ? 46 : 34);
+  g.addColorStop(0, "rgba(" + rgb + ",.75)");
+  g.addColorStop(1, "rgba(" + rgb + ",0)");
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(x, y, 34, 0, Math.PI*2); ctx.fill();
   ctx.restore();
@@ -3689,7 +3799,7 @@ function drawArm(sx, sy, tx, ty, taut){
   ctx.beginPath(); ctx.arc(tx, ty, 6.5, 0, Math.PI*2); ctx.fill();
 }
 
-// 표정 — 휘청(××) / 겁먹음(O 입) / 기어 2(씩) / 방금 멋진 플레이(활짝) / 평소(점 눈)
+// 표정 — 휘청(××) / 겁먹음(O 입) / 기어 강화(씩) / 방금 멋진 플레이(활짝) / 평소(점 눈)
 function drawFace(){
   const f = p.face;
   const ex = 3.4*f, ey = -11;
@@ -3709,10 +3819,10 @@ function drawFace(){
     ctx.beginPath(); ctx.arc(ex + 0.6*f, ey - 0.6, 0.8, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = "#1b1218";
     ctx.beginPath(); ctx.ellipse(3.6*f, -5.6, 1.6, 2.1, 0, 0, Math.PI*2); ctx.fill();
-  } else if(gearT > 0 || happyT > 0){
+  } else if(buff() || happyT > 0){
     ctx.lineWidth = 1.4;                         // 웃는 눈(∩)
     ctx.beginPath(); ctx.arc(ex, ey + 0.8, 1.9, Math.PI*1.1, Math.PI*1.9); ctx.stroke();
-    ctx.fillStyle = gearT > 0 ? "#f4ecd9" : "#7a2f2b";
+    ctx.fillStyle = buff() ? "#f4ecd9" : "#7a2f2b";
     ctx.beginPath(); ctx.arc(3*f, -6.5, 3, 0, Math.PI); ctx.closePath(); ctx.fill();
     ctx.lineWidth = 1; ctx.stroke();
   } else {
@@ -4544,7 +4654,7 @@ function drawSpeedLines(){
   const k = Math.max(0, Math.min(1, (sp - 17) / 9));
   if(k <= 0 || rope) return;
   ctx.save();
-  ctx.strokeStyle = gearT > 0 ? "rgba(255,190,200," + (0.35*k).toFixed(2) + ")" : "rgba(244,236,217," + (0.28*k).toFixed(2) + ")";
+  ctx.strokeStyle = buff() ? "rgba(255,230,240," + (0.35*k).toFixed(2) + ")" : "rgba(244,236,217," + (0.28*k).toFixed(2) + ")";
   ctx.lineWidth = 2; ctx.lineCap = "round";
   const ang = Math.atan2(p.vy, p.vx);
   const ca = Math.cos(ang), sa = Math.sin(ang);
@@ -4822,7 +4932,18 @@ function goToMenu(){
 function screenButtons(){
   const cx = W/2, bw = 128, gap = 10, h = 40, y = H - 60;   // 이 화면들에선 터치 조작 버튼을 숨기니 가운데에
   const row = (items) => items.map((it, i) => ({ x: cx - (items.length*bw + (items.length-1)*gap)/2 + i*(bw + gap), y, w: bw, h, label: it[0], act: it[1], col: it[2] }));
-  if(state === STATE.READY) return row([["← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]]);
+  if(state === STATE.READY){
+    // 기어 선택 줄(2~5) + 메뉴로
+    const gw = 150, gg = 10, gy = H - 112;
+    const gx0 = W/2 - (4*gw + 3*gg)/2;
+    const gearRow = [2,3,4,5].map((n, i) => {
+      const g = GEARS[n], sel = gearSel === n, open = n <= gearUnlocked;
+      const sub = sel ? "선택됨 · 게이지 " + g.max : open ? "게이지 " + g.max : n === gearUnlocked + 1 ? "🔒 보물 " + g.cost : "🔒 잠김";
+      return { x: gx0 + i*(gw + gg), y: gy, w: gw, h: 42, label: n + ") " + g.name, sub, act: () => selectGear(n),
+               col: sel ? g.col : open ? "rgba(244,236,217,.75)" : n === gearUnlocked + 1 && bank >= g.cost ? "#ffd76a" : "rgba(244,236,217,.35)", sel };
+    });
+    return gearRow.concat(row([["← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]]));
+  }
   if(state === STATE.PAUSE) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 시작 (R)", reset, "#d9b877"], ["계속 (P)", togglePause, "#9fe0a0"]]);
   if(state === STATE.OVER) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 (R)", reset, "#9fe0a0"], ["결과 공유 (C)", shareResult, "#d9b877"]]);
   return [];
@@ -4830,12 +4951,21 @@ function screenButtons(){
 function drawScreenButtons(){
   for(const B of screenButtons()){
     ctx.save();
-    ctx.fillStyle = "rgba(13,27,38,.72)"; ctx.fillRect(B.x, B.y, B.w, B.h);
-    ctx.strokeStyle = B.col; ctx.lineWidth = 1.5; ctx.strokeRect(B.x, B.y, B.w, B.h);
+    ctx.fillStyle = B.sel ? "rgba(40,30,50,.85)" : "rgba(13,27,38,.72)"; ctx.fillRect(B.x, B.y, B.w, B.h);
+    ctx.strokeStyle = B.col; ctx.lineWidth = B.sel ? 3 : 1.5; ctx.strokeRect(B.x, B.y, B.w, B.h);
     ctx.fillStyle = B.col; ctx.font = "700 14px 'Pretendard', system-ui, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(B.label, B.x + B.w/2, B.y + B.h/2 + 1);
+    if(B.sub){
+      ctx.fillText(B.label, B.x + B.w/2, B.y + 14);
+      ctx.font = "500 11px 'Pretendard', system-ui, sans-serif";
+      ctx.fillText(B.sub, B.x + B.w/2, B.y + 31);
+    } else ctx.fillText(B.label, B.x + B.w/2, B.y + B.h/2 + 1);
     ctx.restore();
+  }
+  if(state === STATE.READY){
+    const t = gearMsg ? gearMsg.text : GEARS[gearSel].name + " — " + GEARS[gearSel].desc + "  (숫자 키 2~5로도 고른다)";
+    centerText(t, H - 124, "600 13px 'Pretendard', system-ui, sans-serif", gearMsg ? (gearMsg.good ? "#9fe0a0" : "#f7a8a0") : GEARS[gearSel].col);
+    if(gearMsg){ gearMsg.t -= 1; if(gearMsg.t <= 0) gearMsg = null; }
   }
 }
 const SHARE_BTN = { x: W - 190, y: H - 66, w: 170, h: 38 };   // 공유 안내 문구 위치 기준
@@ -5145,6 +5275,7 @@ function draw(){
   drawReleaseCue();
   drawRocketCharge();
   drawGearAura();
+  drawGiant();
   drawPlayer();
   drawShield();
   drawFire();
@@ -5239,7 +5370,7 @@ function draw(){
     const facts = [Math.floor(dist) + "m", "보물 " + Math.floor(treasure)];
     if(chain > 1) facts.push("콤보 ×" + chain);
     if(fusen) facts.push("풍선 " + fusen);
-    facts.push("기어 " + (gearT > 0 ? "발동 중" : Math.floor(gear) + "%"));
+    facts.push(GEARS[gearSel].name + " " + (buff() ? "발동 중" : Math.floor(gear / gearMax() * 100) + "%"));
     if(perfects) facts.push("PERFECT " + perfects);
     centerText(facts.join("  ·  "), H/2 - 52, "700 16px ui-monospace, Menlo, monospace", "#d9b877");
     let py = H/2 - 14;
@@ -5260,15 +5391,14 @@ function draw(){
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 바다에 빠지면 -5초" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
-    centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 54, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 16, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
-    centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 " + CHAIN_CAP + "배", H/2 + 12, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
-    centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 36, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
-    centerText("Q 피스톨(5초) · W 엘리펀트 건(15초) — 원거리 공격, 해왕류·잡몹 처치", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
-    centerText("식인 물고기는 휘청이게 하고, 해왕류는 원거리 스킬로 물리칠 수 있다", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
-    centerText("화면을 누르거나 Space로 출항 · M 메뉴로", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
-    if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 136, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
-    if(tip) centerText("팁 · " + tip, H/2 + 164, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.8)");
+    centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 60, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 28, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
+    centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 " + CHAIN_CAP + "배", H/2 - 4, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
+    centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 18, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
+    centerText("Q 피스톨(5초) · W 엘리펀트 건(15초) · E 기어(아래에서 선택)", H/2 + 38, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
+    centerText("화면을 누르거나 Space로 출항 · M 메뉴로", H/2 + 60, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 84, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
+    if(tip) centerText("팁 · " + tip, H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.8)");
     const readyTitle = currentTitleName();
     if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.8)");
@@ -5329,7 +5459,7 @@ function draw(){
     if(perfects > 0) facts.push("PERFECT " + perfects);
     if(bossKills > 0) facts.push("보스 " + bossKills);
     if(skims > 0) facts.push("스치기 " + skims);
-    if(gears > 0) facts.push("기어 2 ×" + gears);
+    if(gears > 0) facts.push(GEARS[gearSel].name + " ×" + gears);
     if(facts.length) line(facts.join(" · "), "600 14px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)", 24);
     if(maxChain > 1){
       const newChainRecord = maxChain >= bestChain && !practiceMode;
@@ -5368,7 +5498,7 @@ function draw(){
       ["최고 현상금", "฿ " + commas(bestBounty)], ["콤보·등급", "×" + bestChain + (bestGrade ? " · " + bestGrade : "")], ["보스 격파", lifeBossKills + "마리"],
       ["크라켄 격파", lifeKrakenKills + "마리"], ["PERFECT", L.perfects + "회"], ["미션 완료", L.missions + "개"],
       ["갈매기 격추", L.gulls + "마리"], ["보물 통", L.barrels + "개"], ["황금 고리", L.golds + "번"],
-      ["수면 스치기", L.skims + "회"], ["기어 2 발동", L.gears + "번"], ["보물 지도", mapPieces + "/" + MAP_PIECES + " 조각" + (mapsDone ? " · 완성 " + mapsDone : "")]
+      ["수면 스치기", L.skims + "회"], ["기어 발동", L.gears + "번"], ["보물 지도", mapPieces + "/" + MAP_PIECES + " 조각" + (mapsDone ? " · 완성 " + mapsDone : "")]
     ];
     const colX = [W/2 - 330, W/2 - 105, W/2 + 120];
     stats.forEach((st, i) => {
@@ -5446,6 +5576,9 @@ window.__swing = {
   fire: firePistol,
   fireGun: fireGun,
   fireGear: fireGear,
+  gearSel: (n, unlock) => { if(unlock) gearUnlocked = Math.max(gearUnlocked, n); gearSel = n; },
+  gearInfo: () => ({ sel: gearSel, unlocked: gearUnlocked, on: gearOn, max: gearMax(), giant, buff: buff() }),
+  selectGear: selectGear,
   reset: reset,
   weak: () => (boss ? weakPoints(boss) : []),
   startMain: startMainGame,

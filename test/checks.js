@@ -491,21 +491,96 @@ function swing(a, st){
   } else ok("삭은 돛대는 잡고 있으면 부러져 줄이 끊긴다", false, "줄을 못 잡음");
 }
 
-/* --- 기어 2 --- */
+/* --- 기어 시리즈 --- */
 {
   const a = start();
+  a.gearSel(2);
   a.fireGear();
-  ok("게이지가 덜 차면 기어 2가 안 나간다", a.peek().gearT === 0);
+  ok("게이지가 덜 차면 기어가 안 나간다", a.peek().gearT === 0);
   T().setGear(100);
   a.fireGear();
-  ok("게이지가 차면 기어 2 발동", a.peek().gearT > 0 && a.peek().gear === 0, "gearT=" + a.peek().gearT);
+  ok("기어 2 — 게이지 100이 차면 발동", a.peek().gearT > 0 && a.peek().gear === 0, "gearT=" + a.peek().gearT);
+  // 기어 2는 방어력 — 휘청은 하되 스턴이 30% 줄어든다
+  let st0 = 0;
+  const s0 = a.peek(); s0.mobs.length = 0;
+  s0.mobs.push({ kind:1, x:s0.x + 60, y:s0.SEA, phase:3, t:0, h:300, gone:false });
+  run(a, 60, (st) => { st.mobs.forEach(m => { if(m.kind === 1) m.phase = 3; }); if(st.stun > st0) st0 = st.stun; });
+  ok("기어 2 중엔 해왕류에 맞아도 스턴이 줄어든다(60 → 42)", st0 > 0 && st0 <= 43, "최대 스턴=" + st0.toFixed(1));
+}
+{
+  const a = start();
+  a.gearSel(5, true);
+  T().setGear(399);
+  a.fireGear();
+  ok("기어 5는 게이지 400이 다 차야 한다", a.peek().gearT === 0);
+  T().setGear(400);
+  a.fireGear();
   let s = a.peek();
   s.mobs.length = 0;
   s.mobs.push({ kind:1, x:s.x + 200, y:s.SEA, phase:3, t:0, h:300, gone:false });
   let hit = false;
   s = run(a, 120, (st) => { a.keys.right = true; st.mobs.forEach(m => { if(m.kind === 1) m.phase = 3; }); if(st.stun > 0) hit = true; });
-  ok("기어 2 중엔 해왕류에 닿아도 휘청이지 않는다", !hit, "stun목격=" + hit);
+  ok("기어 5 중엔 해왕류에 닿아도 휘청이지 않는다", !hit, "stun목격=" + hit);
+  // 바다도 튕겨 낸다
+  const b = start(); b.gearSel(5, true); T().setGear(400); b.fireGear();
+  b.hold(false); T().setFusen(0); T().P().y = b.peek().SEA + 5; T().P().vy = 8;
+  run(b, 3);
+  ok("기어 5 중엔 바다에 빠져도 튕겨 오른다", b.peek().state === 1 && b.peek().vy < 0);
+  // 공격력 2배 — 보스에게 2 피해
+  const P = T().P();
+  const boss = { type:0, big:false, hp:2, maxHp:2, t:0, fire:90, invul:0, flash:0, x:P.x + 300, y:120, vy:0, air:true, phase:0, sub:0, perch:null, tents:[], swing:0, sink:0, dive:0 };
+  T().setBoss(boss);
+  T().dmg(false, "t");
+  ok("기어 5 중엔 한 대에 보스 체력 2가 깎인다", boss.hp === 0 || !b.peek().boss, "hp=" + boss.hp);
+  b.gearSel(2);
 }
+{
+  // 기어 3 — 거대 주먹: 범위 안 잡몹 일소 + 보스에 4 피해
+  const a = start();
+  a.gearSel(3, true);
+  T().setGear(160);
+  const P = T().P();
+  const s = a.peek();
+  s.mobs.length = 0; s.gulls.length = 0;
+  s.gulls.push({ x:P.x + 240, base:P.y, y:P.y, t:0, vx:-2, gone:false });
+  const boss = { type:5, big:true, hp:8, maxHp:8, t:0, fire:90, invul:40, flash:0, x:P.x + 260, y:P.y + 20, vy:0, air:false, phase:0, sub:200, perch:null, tents:[], swing:0, sink:0, dive:0 };
+  T().setBoss(boss);
+  P.vx = 5;
+  a.fireGear();
+  ok("기어 3 — 거대 주먹이 무적 중인 보스에게도 4 피해", boss.hp === 4, "hp=" + boss.hp);
+  ok("기어 3 — 범위 안의 갈매기도 격추", a.peek().gullKills >= 1, "격추=" + a.peek().gullKills);
+  ok("기어 3은 즉발이라 강화(방어·무적)가 걸리지 않는다", a.gearInfo().buff === null);
+  a.gearSel(2);
+}
+{
+  // 기어 4 — 공중에서 ↑를 누르면 부스터로 치솟는다
+  const a = start();
+  a.gearSel(4, true);
+  T().setGear(230);
+  a.fireGear();
+  a.hold(false);
+  const P = T().P(); P.y = 250; P.vy = 0;
+  a.keys.up = true;
+  run(a, 20, () => { a.hold(false); });
+  a.keys.up = false;
+  ok("기어 4 — 공중 부스터로 떠오른다", T().P().y < 250 - 20, "y 250→" + Math.round(T().P().y));
+  a.gearSel(2);
+}
+{
+  // 해금 — 보물로 순서대로
+  const a = A(), sh = a.shop;
+  sh().setBank(100000);
+  a.gearSel(2);
+  T().setGearUnlocked(2);        // 앞선 검사에서 풀린 기어를 다시 잠근다
+  a.selectGear(4);
+  ok("기어는 순서대로만 해금된다(3 전에 4 불가)", a.gearInfo().unlocked === 2);
+  a.selectGear(3);
+  ok("보물 3000으로 기어 3 해금·선택", a.gearInfo().unlocked === 3 && a.gearInfo().sel === 3 && sh().bank === 97000, "창고=" + sh().bank);
+  a.selectGear(2);
+  ok("해금한 기어끼리는 자유롭게 고른다", a.gearInfo().sel === 2 && sh().bank === 97000);
+  sh().setBank(0);
+}
+
 {
   // 게이지는 멋진 플레이로 찬다 — PERFECT 한 번이면 18
   const a = start();
@@ -686,7 +761,7 @@ function swing(a, st){
   for(let i = 0; i < 400 && a.peek().gearT > 0; i++){ P.vx = 30; P.vy = -1; P.y = 150; H.step(); }
   let fireSeen = false;
   for(let i = 0; i < 3; i++){ H.step(); if(a.peek().fire > 0) fireSeen = true; }
-  ok("기어 2가 끝나도 불꽃이 공짜로 붙지 않는다", a.peek().gearT <= 0 && !fireSeen, "불꽃=" + fireSeen);
+  ok("기어가 끝나도 불꽃이 공짜로 붙지 않는다", a.peek().gearT <= 0 && !fireSeen, "불꽃=" + fireSeen);
 }
 {
   // 오늘의 항해는 날씨도 같은 자리·같은 종류
@@ -1061,14 +1136,14 @@ function swing(a, st){
 {
   // 기어 2로 막은 포탄은 무피해 도전을 깨지 않는다
   const a = start();
-  T().setNextBarrage(0); T().setGear(100); a.fireGear();
+  T().setNextBarrage(0); a.gearSel(5, true); T().setGear(400); a.fireGear();
   run(a, 60, (st) => swing(a, st));
   const P = T().P();
   if(a.peek().barrage){
     a.peek().shells.push({ x:P.x, y:P.y, t:60, boom:false });
     run(a, 3, () => { P.vx = 0; P.vy = 0; });
-    ok("기어 2로 막은 포탄은 무피해 도전을 깨지 않는다", a.peek().barrage && !a.peek().barrage.hit);
-  } else ok("기어 2로 막은 포탄은 무피해 도전을 깨지 않는다", false, "포격이 시작되지 않음");
+    ok("기어 5로 막은 포탄은 무피해 도전을 깨지 않는다", a.peek().barrage && !a.peek().barrage.hit);
+  } else ok("기어 5로 막은 포탄은 무피해 도전을 깨지 않는다", false, "포격이 시작되지 않음");
 }
 
 /* --- 설정 --- */
