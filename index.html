@@ -359,8 +359,8 @@ function fit(){
 fit();
 window.addEventListener("resize", fit);
 
-const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6 };
-const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP;
+const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7 };
+const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG;
 
 /* 보물 창고 — 본게임에서 모은 보물이 쌓이고, 영구 업그레이드를 산다 */
 const UPGRADES = [
@@ -476,8 +476,12 @@ function menuRows(){
       { y: H/2 - 10, label: "1) 본게임", action: startMainGame },
       { y: H/2 + 34, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
       { y: H/2 + 78, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
-      { y: H/2 + 122, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily }
+      { y: H/2 + 122, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
+      { y: H/2 + 166, label: "5) 항해 일지", action: () => { state = STATE.LOG; } }
     ];
+  }
+  if(state === STATE.LOG){
+    return [{ y: H - 44, label: "1) ← 뒤로가기", action: () => { state = STATE.MENU; } }];
   }
   if(state === STATE.SHOP){
     const top = H/2 - 92, rowH = 32;
@@ -1246,6 +1250,7 @@ function die(reason){
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
     bank += Math.floor(treasure);
     saveShop();
+    logRun();
     if(dailyMode){
       if(dailyDate !== todayKey()){ dailyDate = todayKey(); dailyBest = 0; ghostBest = null; }
       if(dist > dailyBest){ dailyBest = dist; newDailyRecord = true; ghostBest = ghostRec.slice(); }
@@ -1302,13 +1307,44 @@ function chainMult(){
 
 /* 보스 처치 칭호 — 누적 처치 수 기준, 약한 순서로 나열 (마지막으로 만족하는 게 현재 칭호) */
 const TITLES = [
-  { id:"novice",   name:"풋내기 사냥꾼",     need:(s) => s.boss >= 1 },
-  { id:"hunter",   name:"현상금 사냥꾼",     need:(s) => s.boss >= 10 },
-  { id:"kraken1",  name:"크라켄 슬레이어",   need:(s) => s.kraken >= 1 },
-  { id:"veteran",  name:"그랑 라인의 폭풍",  need:(s) => s.boss >= 30 },
-  { id:"kraken3",  name:"심해의 재앙",       need:(s) => s.kraken >= 3 },
-  { id:"kraken10", name:"해왕을 넘어선 자",  need:(s) => s.kraken >= 10 }
+  { id:"novice",    name:"풋내기 사냥꾼",     desc:"보스 1마리 격파",        need:(s) => s.boss >= 1 },
+  { id:"gull20",    name:"하늘의 사냥꾼",     desc:"폭탄 갈매기 누적 20마리", need:(s) => (s.gulls || 0) >= 20 },
+  { id:"hunter",    name:"현상금 사냥꾼",     desc:"보스 누적 10마리",        need:(s) => s.boss >= 10 },
+  { id:"perfect50", name:"타이밍의 달인",     desc:"PERFECT 누적 50회",       need:(s) => (s.perfects || 0) >= 50 },
+  { id:"kraken1",   name:"크라켄 슬레이어",   desc:"크라켄 1마리 격파",       need:(s) => s.kraken >= 1 },
+  { id:"veteran",   name:"그랑 라인의 폭풍",  desc:"보스 누적 30마리",        need:(s) => s.boss >= 30 },
+  { id:"dist10k",   name:"대항해자",          desc:"누적 항해 10000m",        need:(s) => (s.dist || 0) >= 10000 },
+  { id:"kraken3",   name:"심해의 재앙",       desc:"크라켄 누적 3마리",       need:(s) => s.kraken >= 3 },
+  { id:"kraken10",  name:"해왕을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 }
 ];
+
+/* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
+let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0 };
+function logRun(){
+  lifeLog.runs++;
+  lifeLog.dist += Math.floor(dist);
+  lifeLog.perfects += perfects;
+  lifeLog.missions += missions.filter(m => m.done).length;
+  lifeLog.gulls += gullKills;
+  lifeLog.barrels += barrelsBroken;
+  lifeLog.skims += skims;
+  lifeLog.gears += gears;
+  lifeLog.golds += goldRings;
+  const unlocked = checkTitles();
+  if(unlocked){ newTitle = unlocked.name; saveTitles(); }
+  saveLog();
+}
+async function loadLog(){
+  let v = null;
+  try{ if(window.storage){ const r = await window.storage.get("swing:log"); if(r && r.value) v = r.value; } }catch(e){}
+  try{ if(!v && window.localStorage) v = localStorage.getItem("swing:log"); }catch(e){}
+  try{ if(v) Object.assign(lifeLog, JSON.parse(v)); }catch(e){}
+}
+async function saveLog(){
+  const v = JSON.stringify(lifeLog);
+  try{ if(window.storage){ await window.storage.set("swing:log", v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem("swing:log", v); }catch(e){}
+}
 
 function currentTitleName(){
   let name = null;
@@ -1317,7 +1353,7 @@ function currentTitleName(){
 }
 
 function checkTitles(){
-  const stats = { boss: lifeBossKills, kraken: lifeKrakenKills };
+  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills });
   let unlocked = null;
   for(const t of TITLES){
     if(!unlockedTitles.has(t.id) && t.need(stats)){
@@ -3761,7 +3797,35 @@ function draw(){
     centerText("고무팔 · 대항해", H/2 - 90, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
     centerText("창고 보물 " + Math.floor(bank), H/2 - 56, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
-    centerText("숫자 키 또는 클릭으로 선택", H/2 + 164, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("숫자 키 또는 클릭으로 선택", H/2 + 204, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+  } else if(state === STATE.LOG){
+    ctx.fillStyle = "rgba(13,27,38,0.86)";
+    ctx.fillRect(0,0,W,H);
+    centerText("항해 일지", 44, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    const L = lifeLog;
+    const stats = [
+      ["항해 횟수", L.runs + "판"], ["총 항해 거리", commas(L.dist) + "m"], ["최고 거리", Math.floor(best) + "m"],
+      ["최고 현상금", "฿ " + commas(bestBounty)], ["최고 콤보", "×" + bestChain], ["보스 격파", lifeBossKills + "마리"],
+      ["크라켄 격파", lifeKrakenKills + "마리"], ["PERFECT", L.perfects + "회"], ["미션 완료", L.missions + "개"],
+      ["갈매기 격추", L.gulls + "마리"], ["보물 통", L.barrels + "개"], ["황금 고리", L.golds + "번"],
+      ["수면 스치기", L.skims + "회"], ["기어 2 발동", L.gears + "번"]
+    ];
+    const colX = [W/2 - 330, W/2 - 105, W/2 + 120];
+    stats.forEach((st, i) => {
+      const cx = colX[i % 3], cy = 92 + Math.floor(i / 3) * 30;
+      leftText(st[0], cx, cy, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
+      leftText(st[1], cx + 96, cy, "700 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    });
+    centerText("칭호", 256, "700 17px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    const cur = currentTitleName();
+    TITLES.forEach((t, i) => {
+      const cx = i % 2 ? W/2 + 30 : W/2 - 310, cy = 288 + Math.floor(i / 2) * 28;
+      const has = unlockedTitles.has(t.id);
+      leftText((has ? "★ " : "☆ ") + t.name, cx, cy, "700 14px 'Pretendard', system-ui, sans-serif",
+               t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
+      leftText(t.desc, cx + 150, cy, "400 12px 'Pretendard', system-ui, sans-serif", has ? "rgba(244,236,217,.6)" : "rgba(244,236,217,.35)");
+    });
+    for(const row of menuRows()) centerText(row.label, row.y, "600 16px 'Pretendard', system-ui, sans-serif", "#d9b877");
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
@@ -3827,6 +3891,8 @@ window.__swing = {
                  skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]) }),
   toShop: () => { state = STATE.SHOP; },
   startDaily: startDaily,
+  log: () => lifeLog,
+  toLog: () => { state = STATE.LOG; },
   ghost: () => ({ best: ghostBest, rec: ghostRec })
 };
 
@@ -3837,6 +3903,7 @@ loadBestChain();
 loadTitles();
 loadShop();
 loadDaily();
+loadLog();
 try{ canvas.focus({preventScroll:true}); }catch(e){}
 requestAnimationFrame(loop);
 

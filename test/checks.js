@@ -611,6 +611,24 @@ function swing(a, st){
   ok("폭탄 갈매기에 부딪히면 휘청인다", stunned && s.gullHits === 1, "hits=" + s.gullHits);
 }
 
+/* --- 항해 일지 --- */
+{
+  const a = start();
+  const L = a.log();
+  const runs0 = L.runs, dist0 = L.dist;
+  run(a, 200, (st) => swing(a, st));
+  a.hold(false); T().setFusen(0);
+  T().P().y = a.peek().SEA + 10;
+  const s = run(a, 3);
+  ok("판이 끝나면 항해 일지에 누적된다", s.state === 2 && L.runs === runs0 + 1 && L.dist >= dist0 + Math.floor(s.dist),
+     "판 " + runs0 + "→" + L.runs + " 거리 " + dist0 + "→" + L.dist);
+  a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(false);
+  T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  run(a, 3);
+  ok("연습 모드 판은 일지에 안 쌓인다", L.runs === runs0 + 1);
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
