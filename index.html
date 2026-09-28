@@ -1622,6 +1622,7 @@ function keyName(e){
 
 window.addEventListener("keydown", (e)=>{
   const k = keyName(e);
+  if(k === "KeyM" && state === STATE.REVIVE) declineRevive();   // 부활 창에서 메뉴로 나가도 판은 정상 종료(보물·기록 저장)
   if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); state = STATE.MENU; syncHUD(); return; }
   if(inMenu()){
     if(k === "Escape"){ e.preventDefault(); if(state !== STATE.MENU) state = STATE.MENU; return; }
@@ -1777,7 +1778,7 @@ function die(reason){
   runBounty = computeBounty();
   runGrade = practiceMode ? null : computeGrade();
   newGradeRecord = false;
-  if(runGrade && GRADE_ORDER.indexOf(runGrade[0]) > GRADE_ORDER.indexOf(bestGrade || "")){ bestGrade = runGrade[0]; newGradeRecord = true; }
+  if(runGrade && GRADE_ORDER.indexOf(runGrade[0]) > (bestGrade ? GRADE_ORDER.indexOf(bestGrade) : -1)){ bestGrade = runGrade[0]; newGradeRecord = true; }
   if(!practiceMode && runBounty > bestBounty){ bestBounty = runBounty; newBountyRecord = true; }
   if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
     if(dist > best){ best = dist; saveBest(); }
@@ -2819,7 +2820,9 @@ function fireGun(){
   for(const g of gulls){
     if(!g.gone && Math.hypot(g.x - gx, g.y - gy) < GUN_R + GULL_R) killGull(g, 20);
   }
-  if(boss && Math.hypot(boss.x-gx, boss.y-gy) < GUN_R + 40){
+  // 유령 상태(또는 가라앉은) 유령선은 무적 — 광역기로도 안 맞는다
+  const ghostSafe = boss && boss.type === 7 && (boss.phase === 1 || (boss.sink || 0) > 12);
+  if(boss && !ghostSafe && Math.hypot(boss.x-gx, boss.y-gy) < GUN_R + 40){
     damageBoss(true, "엘리펀트 건");
   }
 }
@@ -5410,7 +5413,7 @@ window.__swing = {
   startPractice: startPractice,
   toMenu: () => { state = STATE.MENU; },
   shop: () => ({ bank, upgrades, buy: (i) => buyUpgrade(UPGRADES[i]), setBank: (v) => { bank = v; }, reach: reach(), pistolCd: pistolCd(),
-                 skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]) }),
+                 skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]), grade: bestGrade }),
   toShop: () => { state = STATE.SHOP; },
   startDaily: startDaily,
   streak: () => ({ date: streakDate, n: streak, reward: streakReward, set: (d, n) => { streakDate = d; streak = n; } }),

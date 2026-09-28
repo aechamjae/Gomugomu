@@ -649,8 +649,9 @@ function swing(a, st){
     found = true;
     const P = T().P();
     a.hold(false);
+    const before = a.peek().arcsDone;    // 봇이 준비 중에 스스로 한 줄을 완성했을 수도 있다
     for(const c of mine){ P.vx = 0; P.vy = 0; c.x = P.x; c.y = P.y; H.step(); }
-    done = a.peek().arcsDone === 1;
+    done = a.peek().arcsDone === before + 1;
   }
   ok("금화 줄을 전부 먹으면 완성 보너스", found && done, "아치발견=" + found);
   A().parrot().setOn(true);
@@ -1202,6 +1203,27 @@ function swing(a, st){
   ok("같은 날 두 번째 판엔 보상이 없다", a.streak().n === 3 && a.streak().reward === 0);
   a.streak().set("", 0);
   a.startMain();
+}
+
+/* --- 네 번째 리뷰 회귀 방지 --- */
+{
+  // 첫 판이 D여도 최고 등급으로 저장된다
+  T().setBestGrade("");
+  const a = start();
+  a.hold(false); T().setFusen(0); T().setTreasure(0);
+  T().P().y = a.peek().SEA + 10;
+  const s = run(a, 3);
+  ok("첫 판이 D 등급이어도 최고 등급으로 기록된다", s.runGrade && s.runGrade[0] === "D" && a.shop().grade === "D", "최고=" + a.shop().grade);
+}
+{
+  // 유령 상태 유령선은 엘리펀트 건에도 안 맞는다
+  const a = start();
+  const P = T().P();
+  const b = { type:7, big:true, hp:8, maxHp:8, t:0, fire:80, summon:90, walk:0, invul:0, flash:0,
+              x:P.x + 200, y:P.y, vy:0, air:false, phase:1, sub:100, perch:null, tents:[], swing:0, sink:0, dive:0 };
+  T().setBoss(b);
+  a.fireGun();
+  ok("유령 상태 유령선은 엘리펀트 건에도 무적", b.hp === 8, "hp=" + b.hp);
 }
 
 /* --- 흑조호 잠항 (순간이동 금지) --- */
