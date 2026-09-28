@@ -412,6 +412,32 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 위험 보너스 --- */
+{
+  const a = start();
+  const P = T().P();
+  const S = a.peek().SEA;
+  a.hold(false);
+  const tr0 = a.peek().treasure;
+  run(a, 30, () => { P.y = S - 35; P.vy = 0; P.vx = 12; });
+  P.y = 200; P.vy = 0;
+  const s = run(a, 2);
+  ok("수면 위를 빠르게 스치면 수면 스치기 보너스", s.skims === 1 && s.treasure > tr0, "skims=" + s.skims + " 보물 " + tr0 + "→" + s.treasure);
+}
+{
+  const a = start();
+  let s = a.peek();
+  s.mobs.length = 0;
+  const P = T().P();
+  // 해왕류 머리 위를 판정선 바로 바깥으로 지나가게 한다 (머리 중심 = SEA-300-26, 판정 반경 86)
+  const kx = P.x + 120;
+  s.mobs.push({ kind:1, x:kx, y:s.SEA, phase:3, t:0, h:300, gone:false });
+  const headY = s.SEA - 300 - 26;
+  a.hold(false);
+  s = run(a, 40, () => { P.y = headY - 86 - 20; P.vy = 0; P.vx = 10; });
+  ok("해왕류를 아슬아슬하게 피하면 보너스", s.nearMisses === 1 && s.stun <= 0, "nearMisses=" + s.nearMisses + " stun=" + s.stun);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

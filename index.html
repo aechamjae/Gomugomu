@@ -187,6 +187,7 @@
       <span><b>↑</b> 도약하며 놓기</span>
       <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초)</span>
       <span>놓을 때 몸이 <b>금빛</b>으로 빛나면 PERFECT 릴리즈(가속+보물)</span>
+      <span><b>수면</b> 바로 위를 빠르게 스치거나 해왕류를 <b>아슬아슬</b>하게 피하면 보너스</span>
       <span><b>고기</b> 먹으면 바다에 빠질 때 한 번 튕겨 오른다(최대 2개)</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
     </div>
@@ -275,7 +276,8 @@ const MISSIONS = [
   { kind:"king",    goals:[1],               text:()  => "해왕류 물리치기", from:1 },
   { kind:"dist",    goals:[400, 700, 1000],  text:(n) => n + "m 항해" },
   { kind:"boss",    goals:[1, 2],            text:(n) => "보스 " + n + "마리 격파", from:1 },
-  { kind:"meat",    goals:[1, 2],            text:(n) => "고기 " + n + "개 먹기" }
+  { kind:"meat",    goals:[1, 2],            text:(n) => "고기 " + n + "개 먹기" },
+  { kind:"skim",    goals:[1, 2, 4],         text:(n) => "수면 스치기 " + n + "회" }
 ];
 const MISSION_COUNT = 3;
 
@@ -285,6 +287,12 @@ const WEATHER_LEN   = 120;   // 한 구간 길이(m)
 const TAILWIND      = 0.055; // 순풍 가속(공중에서만)
 const STORM_GUST    = 0.07;  // 폭풍 좌우 돌풍 세기
 const STORM_DOWN    = 0.045; // 폭풍 하강기류 세기
+
+/* 위험 보너스 — 수면 스치기 / 해왕류 아슬아슬 회피 */
+const SKIM_H      = 58;      // 수면에서 이 높이 안쪽을 날면 스치기
+const SKIM_MIN_SP = 8;       // 이 속도 이상이어야 스치기로 친다
+const SKIM_MIN_T  = 14;      // 이만큼(프레임) 이상 스쳐야 1회로 인정
+const NEAR_MISS   = 44;      // 해왕류 판정선 바깥 이만큼 안으로 지나가면 아슬아슬
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -371,7 +379,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
-    weather, nextWeatherAt, flash;
+    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -389,6 +397,7 @@ function reset(){
   weather = null;
   nextWeatherAt = WEATHER_FIRST + Math.random()*300;
   flash = 0;
+  skimT = 0; skimGain = 0; skims = 0; nearMisses = 0;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
   rope = null;
@@ -464,6 +473,7 @@ function missionValue(kind){
     case "dist":    return Math.floor(dist);
     case "boss":    return bossKills;
     case "meat":    return meatsGot;
+    case "skim":    return skims;
   }
   return 0;
 }
@@ -482,6 +492,24 @@ function checkMissions(){
       if(fusen < FUSEN_MAX) fusen++;
       pops.push({ x:p.x, y:p.y-70, t:150, text:"미션 올클리어! +" + bonus + " · 풍선 +1", color:"#9fe0a0" });
     }
+  }
+}
+
+function updateSkim(dt, sp){
+  const skimming = !rope && stun <= 0 && p.y > SEA - SKIM_H && p.y < SEA - 14 && sp > SKIM_MIN_SP;
+  if(skimming){
+    const before = Math.floor(skimT / 10);
+    skimT += dt;
+    if(Math.floor(skimT / 10) > before) skimGain += 8 * chainMult();
+    if(Math.random() < 0.7) bits.push({ x:p.x - p.vx*0.6, y:SEA - 4, vx:-p.vx*0.15 + (Math.random()-0.5)*2,
+                                         vy:-2 - Math.random()*3, life:0.8, color:"#bfe8ea" });
+  } else if(skimT > 0){
+    if(skimT >= SKIM_MIN_T){
+      skims++;
+      treasure += skimGain;
+      pops.push({ x:p.x, y:p.y-36, t:60, text:"수면 스치기 +" + skimGain, color:"#bfe8ea" });
+    }
+    skimT = 0; skimGain = 0;
   }
 }
 
@@ -682,9 +710,21 @@ function updateMobs(dt){
       // 즉사하는 건 형평에 안 맞아서 아주 강한 스턴으로 바꿨다
       if(m.h > 30 && state === STATE.PLAY){
         const top = SEA - m.h;
-        if(segToCapsule(m.x, top, SEA + 20) < KING_W + 12){ knockKing(); return; }
+        const dn = segToCapsule(m.x, top, SEA + 20);
+        if(dn < KING_W + 12){ knockKing(); return; }
         const dh = distOriginToSeg(pPrevX - m.x, pPrevY - (top - 26), p.x - m.x, p.y - (top - 26));
         if(dh < 74 + 12){ knockKing(); return; }
+        // 판정선 바로 바깥을 스치고 지나가면 아슬아슬 보너스 — 한 마리당 한 번
+        if(!m.near && stun <= 0 && iframes <= 0 && (dn < KING_W + 12 + NEAR_MISS || dh < 86 + NEAR_MISS)) m.near = 1;
+        if(m.near === 1 && p.x > m.x + KING_W + 20){
+          m.near = 2;
+          if(stun > 0 || iframes > 0) continue;   // 결국 맞았으면(또는 보호막이 막았으면) 보너스 없음
+          nearMisses++;
+          const gain = 60 * chainMult();
+          treasure += gain;
+          pops.push({ x:p.x, y:p.y-40, t:70, text:"아슬아슬! +" + gain, color:"#8fd6d8" });
+          for(let k=0;k<12;k++) spark(p.x, p.y, "#8fd6d8");
+        }
       }
     }
   }
@@ -1747,6 +1787,7 @@ function update(dt){
   }
   if(fusenAnim > 0) fusenAnim -= dt;
   updateWeather(dt);
+  updateSkim(dt, sp);
   if(missionFlash){ missionFlash.t -= dt; if(missionFlash.t <= 0) missionFlash = null; }
 
   if(stun > 0) stun -= dt;
@@ -3053,7 +3094,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather }),
+                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
