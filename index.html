@@ -311,7 +311,30 @@ function fit(){
 fit();
 window.addEventListener("resize", fit);
 
-const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5 };
+const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6 };
+const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP;
+
+/* 보물 창고 — 본게임에서 모은 보물이 쌓이고, 영구 업그레이드를 산다 */
+const UPGRADES = [
+  { id:"reach",  name:"고무 단련",  desc:"팔 길이 +6%",             cost:[800, 2000, 4500] },
+  { id:"pistol", name:"피스톨 수련", desc:"피스톨 쿨타임 -12%",      cost:[600, 1500, 3500] },
+  { id:"magnet", name:"금화 자석",  desc:"가까운 금화를 끌어당긴다", cost:[500, 1200, 3000] },
+  { id:"fusen",  name:"비상식량",   desc:"출발할 때 풍선 1개",        cost:[2500] }
+];
+let bank = 0, upgrades = {}, shopMsg = null;
+const upLv = (id) => upgrades[id] || 0;
+const reach = () => REACH * (1 + 0.06 * upLv("reach"));
+function buyUpgrade(u){
+  const lv = upLv(u.id);
+  if(lv >= u.cost.length){ shopMsg = { text: u.name + " — 이미 최고 단계", t: 90 }; return false; }
+  const c = u.cost[lv];
+  if(bank < c){ shopMsg = { text: "보물이 " + (c - bank) + " 모자라다", t: 90 }; return false; }
+  bank -= c;
+  upgrades[u.id] = lv + 1;
+  shopMsg = { text: u.name + " " + (lv + 1) + "단계 획득!", t: 90, good: true };
+  saveShop();
+  return true;
+}
 
 // 연습 모드 선택 — { type:"boss", bossType:N } 또는 { type:"king" }, 본게임은 null.
 // reset()으로 초기화되지 않는다 — R로 재시작해도 같은 연습 내용을 유지하기 위함.
@@ -351,8 +374,20 @@ function menuRows(){
   if(state === STATE.MENU){
     return [
       { y: H/2 - 10, label: "1) 본게임", action: startMainGame },
-      { y: H/2 + 34, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } }
+      { y: H/2 + 34, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
+      { y: H/2 + 78, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } }
     ];
+  }
+  if(state === STATE.SHOP){
+    const top = H/2 - 90, rowH = 44;
+    const rows = UPGRADES.map((u, i) => {
+      const lv = upLv(u.id), max = u.cost.length;
+      const price = lv >= max ? "최고 단계" : "보물 " + u.cost[lv];
+      return { y: top + i*rowH, label: (i+1) + ") " + u.name + " " + lv + "/" + max + " — " + u.desc + " · " + price,
+               action: () => buyUpgrade(u), dim: lv >= max || bank < u.cost[lv] };
+    });
+    rows.push({ y: top + UPGRADES.length*rowH + 10, label: (UPGRADES.length+1) + ") ← 뒤로가기", action: () => { state = STATE.MENU; } });
+    return rows;
   }
   if(state === STATE.PRACTICE_SELECT){
     const top = H/2 - 160, rowH = 34;
@@ -387,7 +422,7 @@ function reset(){
   anchors = [];
   coins = [];
   meats = [];
-  fusen = 0;
+  fusen = upLv("fusen");      // 비상식량 업그레이드 — 풍선 하나를 들고 출발
   fusenAnim = 0;
   perfectStreak = 0;
   perfects = 0;
@@ -738,7 +773,7 @@ function pickAnchor(){
   for(const a of anchors){
     const dx = a.x - p.x, dy = a.y - p.y;
     const d = Math.hypot(dx, dy);
-    if(d > REACH) continue;
+    if(d > reach()) continue;
     if(a.y > p.y + 130) continue;
     if(a.x < p.x - 100) continue;
     if(a.cut) continue;
@@ -756,7 +791,7 @@ function togglePause(){
 }
 
 function grab(){
-  if(state === STATE.MENU || state === STATE.PRACTICE_SELECT) return;   // 메뉴 선택은 클릭·숫자키로만
+  if(inMenu()) return;   // 메뉴 선택은 클릭·숫자키로만
   if(state === STATE.PAUSE){ togglePause(); return; }
   if(state === STATE.READY) state = STATE.PLAY;
   if(state === STATE.OVER){
@@ -846,8 +881,8 @@ function keyName(e){
 window.addEventListener("keydown", (e)=>{
   const k = keyName(e);
   if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); state = STATE.MENU; syncHUD(); return; }
-  if(state === STATE.MENU || state === STATE.PRACTICE_SELECT){
-    if(k === "Escape"){ e.preventDefault(); if(state === STATE.PRACTICE_SELECT) state = STATE.MENU; return; }
+  if(inMenu()){
+    if(k === "Escape"){ e.preventDefault(); if(state !== STATE.MENU) state = STATE.MENU; return; }
     const m = /^Digit([1-9])$/.exec(k);
     if(m){
       e.preventDefault();
@@ -884,7 +919,7 @@ let canvasHold = false;
 canvas.addEventListener("pointerdown", (e)=>{
   e.preventDefault();
   try{ window.focus(); canvas.focus({preventScroll:true}); }catch(err){}
-  if(state === STATE.MENU || state === STATE.PRACTICE_SELECT){
+  if(inMenu()){
     const pos = canvasPos(e);
     for(const row of menuRows()){
       if(pos.y > row.y - 16 && pos.y < row.y + 20){ row.action(); break; }
@@ -945,6 +980,8 @@ function die(reason){
   if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
     if(dist > best){ best = dist; saveBest(); }
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
+    bank += Math.floor(treasure);
+    saveShop();
   }
   syncHUD();
   for(let i=0;i<26;i++) spark(p.x, p.y, reason === "바다" ? "#8fd6d8" : "#f0a24e");
@@ -1540,9 +1577,11 @@ function pistolAim(){
   return p.face > 0 ? -0.10 : Math.PI + 0.10;      // 목표가 없으면 정면으로
 }
 
+function pistolCd(){ return SKILL_CD * (1 - 0.12 * upLv("pistol")); }
+
 function firePistol(){
   if(state !== STATE.PLAY || skillCd > 0 || fist || stun > 0) return;
-  skillCd = SKILL_CD;
+  skillCd = pistolCd();
   const a = pistolAim();
   fist = { x:p.x, y:p.y, px:p.x, py:p.y,
            vx:Math.cos(a)*FIST_SPD, vy:Math.sin(a)*FIST_SPD, life:FIST_LIFE, back:false };
@@ -1707,7 +1746,7 @@ function update(dt){
 
     if(keys.down) rope.len = Math.max(46, rope.len - ZIP*dt);
     else if(rope.len > REEL_MIN) rope.len = Math.max(REEL_MIN, rope.len - REEL*dt);
-    if(d > REACH*1.7) rope = null;
+    if(d > reach()*1.7) rope = null;
     airTime = 0;
   } else {
     if(keys.left)  p.vx -= AIR*dt;
@@ -1756,8 +1795,13 @@ function update(dt){
   if(boss) distOffset = p.x / 22 - dist;
   else dist = Math.max(dist, p.x / 22 - distOffset);
 
+  const magR = upLv("magnet") ? 60 + 45 * upLv("magnet") : 0;
   for(const c of coins){
     if(c.got) continue;
+    if(magR){
+      const dx = p.x - c.x, dy = p.y - c.y, dd = Math.hypot(dx, dy);
+      if(dd < magR && dd > 1){ const k = Math.min(dd, (6 + 10*(1 - dd/magR)) * dt); c.x += dx/dd*k; c.y += dy/dd*k; }
+    }
     if(Math.hypot(c.x - p.x, c.y - p.y) < 27){
       c.got = true;
       coinsGot++;
@@ -1884,6 +1928,31 @@ async function saveBestChain(){
   const v = String(Math.floor(bestChain));
   try{ if(window.storage){ await window.storage.set("swing:bestChain", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:bestChain", v); }catch(e){}
+}
+
+function applyShopRecord(v){
+  try{
+    const r = JSON.parse(v);
+    bank = r.bank || 0;
+    upgrades = r.up || {};
+  }catch(e){}
+}
+async function loadShop(){
+  try{
+    if(window.storage){
+      const r = await window.storage.get("swing:shop");
+      if(r && r.value){ applyShopRecord(r.value); return; }
+    }
+  }catch(e){}
+  try{
+    const v = window.localStorage && localStorage.getItem("swing:shop");
+    if(v) applyShopRecord(v);
+  }catch(e){}
+}
+async function saveShop(){
+  const v = JSON.stringify({ bank, up: upgrades });
+  try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
 
 function applyTitleRecord(v){
@@ -2693,7 +2762,7 @@ function drawSkillGauge(){
   if(!ready){
     ctx.strokeStyle = "rgba(217,184,119,.8)";
     ctx.beginPath();
-    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - skillCd/SKILL_CD));
+    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - skillCd/pistolCd()));
     ctx.stroke();
   }
   ctx.textAlign = "center";
@@ -3035,7 +3104,7 @@ function draw(){
       : "선단에 뒤처졌다";
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 68, "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     centerText(reasonText, H/2 - 40, "700 29px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    centerText(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), H/2 + 2, "600 17px 'Pretendard', system-ui, sans-serif", "#d9b877");
+    centerText(Math.floor(dist) + "m · 보물 " + Math.floor(treasure) + (practiceMode ? "" : "  (창고 " + Math.floor(bank) + ")"), H/2 + 2, "600 17px 'Pretendard', system-ui, sans-serif", "#d9b877");
     let overY = H/2 + 40;
     if(missions.length){
       const done = missions.filter(m => m.done).length;
@@ -3066,7 +3135,20 @@ function draw(){
     ctx.fillRect(0,0,W,H);
     centerText("고무팔 · 대항해", H/2 - 90, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
-    centerText("숫자 키 또는 클릭으로 선택", H/2 + 96, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("창고 보물 " + Math.floor(bank), H/2 - 56, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    centerText("숫자 키 또는 클릭으로 선택", H/2 + 120, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+  } else if(state === STATE.SHOP){
+    ctx.fillStyle = "rgba(13,27,38,0.82)";
+    ctx.fillRect(0,0,W,H);
+    centerText("보물 창고", H/2 - 180, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("가진 보물 " + Math.floor(bank), H/2 - 146, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
+    for(const row of menuRows()) centerText(row.label, row.y, "500 15px 'Pretendard', system-ui, sans-serif", row.dim ? "rgba(217,184,119,.45)" : "#d9b877");
+    if(shopMsg){
+      shopMsg.t -= 1;
+      centerText(shopMsg.text, H/2 + 150, "700 15px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
+      if(shopMsg.t <= 0) shopMsg = null;
+    }
+    centerText("본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키 또는 클릭으로 구매 · Esc 뒤로", H/2 + 184, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.PRACTICE_SELECT){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
@@ -3105,7 +3187,9 @@ window.__swing = {
   weak: () => (boss ? weakPoints(boss) : []),
   startMain: startMainGame,
   startPractice: startPractice,
-  toMenu: () => { state = STATE.MENU; }
+  toMenu: () => { state = STATE.MENU; },
+  shop: () => ({ bank, upgrades, buy: (i) => buyUpgrade(UPGRADES[i]), setBank: (v) => { bank = v; }, reach: reach(), pistolCd: pistolCd() }),
+  toShop: () => { state = STATE.SHOP; }
 };
 
 reset();
@@ -3113,6 +3197,7 @@ state = STATE.MENU;      // 첫 화면은 본게임/연습 모드 선택 메뉴
 loadBest();
 loadBestChain();
 loadTitles();
+loadShop();
 try{ canvas.focus({preventScroll:true}); }catch(e){}
 requestAnimationFrame(loop);
 

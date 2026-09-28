@@ -438,6 +438,35 @@ function swing(a, st){
   ok("해왕류를 아슬아슬하게 피하면 보너스", s.nearMisses === 1 && s.stun <= 0, "nearMisses=" + s.nearMisses + " stun=" + s.stun);
 }
 
+/* --- 보물 창고 --- */
+{
+  const a = A();
+  const sh = a.shop;
+  sh().setBank(0);
+  ok("보물이 모자라면 살 수 없다", sh().buy(0) === false && (sh().upgrades.reach || 0) === 0);
+  const reach0 = sh().reach, cd0 = sh().pistolCd;
+  sh().setBank(10000);
+  const okBuy = sh().buy(0) && sh().buy(1) && sh().buy(3);
+  ok("업그레이드를 사면 보물이 빠지고 효과가 붙는다",
+     okBuy && sh().bank === 10000 - 800 - 600 - 2500 && sh().reach > reach0 && sh().pistolCd < cd0,
+     "창고=" + sh().bank + " 팔 " + reach0 + "→" + Math.round(sh().reach) + " 쿨 " + cd0 + "→" + sh().pistolCd);
+  const st = start();
+  ok("비상식량을 사면 풍선 하나를 들고 출발한다", st.peek().fusen === 1, "fusen=" + st.peek().fusen);
+  // 판이 끝나면 보물이 창고로
+  const bank0 = sh().bank;
+  st.hold(false);
+  T().setFusen(0);
+  T().setTreasure(123);
+  T().P().y = st.peek().SEA + 10;
+  const beforeTr = st.peek().treasure;
+  run(st, 3);
+  ok("본게임이 끝나면 그 판의 보물이 창고에 쌓인다", st.peek().state === 2 && sh().bank === bank0 + Math.floor(beforeTr),
+     "창고 " + bank0 + "→" + sh().bank + " (이번 판 " + Math.floor(beforeTr) + ")");
+  // 다른 테스트에 영향 없도록 되돌린다
+  for(const k of Object.keys(sh().upgrades)) delete sh().upgrades[k];
+  sh().setBank(0);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
