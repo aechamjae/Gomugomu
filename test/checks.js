@@ -951,6 +951,31 @@ function swing(a, st){
   ok("한 번 본 힌트는 다시 나오지 않는다", !shownAgain);
 }
 
+/* --- 포격 구간 --- */
+{
+  const a = start();
+  T().teleport(300 * 22);     // 보스(500m)보다 앞 — 보스가 뜨면 포격이 걷힌다
+  T().setFusen(2);
+  T().setNextBarrage(0);
+  let started = false, shellSeen = false;
+  const s = run(a, 900, (st) => {
+    swing(a, st); T().setFusen(2);
+    if(st.barrage) started = true;
+    if(st.shells.length) shellSeen = true;
+  });
+  ok("포격 구간이 시작되면 조준 표식과 포탄이 나온다", started && shellSeen, "시작=" + started + " 표식=" + shellSeen);
+}
+{
+  // 표식 위에 가만히 있으면 착탄 때 휘청인다
+  const a = start();
+  const P = T().P();
+  a.hold(false);
+  a.peek().shells.push({ x:P.x, y:P.y, t:58, boom:false });
+  let stunned = false;
+  run(a, 8, (st) => { P.vx = 0; P.vy = 0; if(st.stun > 0) stunned = true; });
+  ok("포탄이 떨어진 자리에 있으면 휘청인다", stunned);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
