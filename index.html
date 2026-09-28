@@ -1364,15 +1364,24 @@ const BOSSES = [
 const MID_BOSSES = [0, 1, 2, 3, 4, 6];   // 크라켄(5)은 대형 슬롯 전용
 
 /* 보스 격파 랜덤 보상 — 매번 격파할 때마다 하나를 무작위로 준다 */
+// 가중치 뽑기 — 강한 것(보호막)은 드물게, 흔해도 괜찮은 것(보물 폭풍)은 자주
 const BOSS_REWARDS = [
-  { id:"shield",   name:"보호막" },
-  { id:"treasure", name:"보물 폭풍" },
-  { id:"recharge", name:"스킬 급속 재충전" },
-  { id:"chainup",  name:"연속 콤보 부스트" }
+  { id:"shield",   name:"보호막",           w:12 },
+  { id:"treasure", name:"보물 폭풍",        w:30 },
+  { id:"recharge", name:"스킬 급속 재충전", w:20 },
+  { id:"chainup",  name:"연속 콤보 부스트", w:18 },
+  { id:"gear",     name:"기어 2 충전",      w:10 },
+  { id:"meat",     name:"고기 한 덩이",     w:10 }
 ];
+function pickReward(){
+  const total = BOSS_REWARDS.reduce((a, r) => a + r.w, 0);
+  let x = Math.random() * total;
+  for(const r of BOSS_REWARDS){ x -= r.w; if(x < 0) return r; }
+  return BOSS_REWARDS[0];
+}
 
 function applyBossReward(b){
-  const r = BOSS_REWARDS[Math.floor(Math.random()*BOSS_REWARDS.length)];
+  const r = pickReward();
   if(r.id === "shield"){
     shield++;
     pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 보호막 획득!", color:"#8fd6d8" });
@@ -1388,6 +1397,12 @@ function applyBossReward(b){
     maxChain = Math.max(maxChain, chain);
     chainTimer = 0;
     pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 연속 콤보 +3!", color:"#ffd76a" });
+  } else if(r.id === "gear"){
+    gear = GEAR_MAX;
+    pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 기어 2 게이지 가득! (E)", color:"#ff8fa0" });
+  } else if(r.id === "meat"){
+    if(fusen < FUSEN_MAX){ fusen++; pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 고기 — 풍선 +1", color:"#f7a8a0" }); }
+    else { treasure += 120; pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 고기(배불러서 보물 +120)", color:"#d9b877" }); }
   }
   for(let i=0;i<20;i++) spark(b.x, b.y-60, "#ffd76a");
   return r;

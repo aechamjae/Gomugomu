@@ -769,6 +769,14 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 보스 보상 가중치 --- */
+{
+  const cnt = {};
+  for(let i = 0; i < 6000; i++){ const r = T().pickReward(); cnt[r.id] = (cnt[r.id] || 0) + 1; }
+  ok("보상 6종이 모두 나오고, 보호막은 보물 폭풍보다 드물다",
+     Object.keys(cnt).length === 6 && cnt.shield < cnt.treasure * 0.6, JSON.stringify(cnt));
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
