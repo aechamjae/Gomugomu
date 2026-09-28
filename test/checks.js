@@ -629,6 +629,28 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 금화 줄 --- */
+{
+  let done = false, found = false;
+  for(let attempt = 0; attempt < 10 && !done; attempt++){
+    const a = start();
+    run(a, 400, (st) => swing(a, st));      // 앞쪽에 아치가 생길 때까지 조금 달린다
+    const st = a.peek();
+    if(st.state === 2) continue;
+    const arcCoins = st.coins.filter(c => c.arc && !c.got);
+    if(!arcCoins.length) continue;
+    const id = arcCoins[0].arc;
+    const mine = st.coins.filter(c => c.arc === id);
+    if(mine.some(c => c.got)) continue;
+    found = true;
+    const P = T().P();
+    a.hold(false);
+    for(const c of mine){ P.vx = 0; P.vy = 0; c.x = P.x; c.y = P.y; H.step(); }
+    done = a.peek().arcsDone === 1;
+  }
+  ok("금화 줄을 전부 먹으면 완성 보너스", found && done, "아치발견=" + found);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

@@ -275,6 +275,7 @@ const REL_GOOD_K    = 1.04;
 /* 항해 미션 — 판마다 무작위 목표 3개. 목표 수치가 뒤로 갈수록 어렵고 보상도 크다 */
 const MISSIONS = [
   { kind:"coins",   goals:[8, 12, 16],       text:(n) => "금화 " + n + "개 줍기" },
+  { kind:"arc",     goals:[1, 2, 3],         text:(n) => "금화 줄 " + n + "번 완성" },
   { kind:"perfect", goals:[3, 5, 8],         text:(n) => "PERFECT 릴리즈 " + n + "회" },
   { kind:"air",     goals:[2, 2.5, 3],       text:(n) => "한 번에 " + n + "초 체공" },
   { kind:"chain",   goals:[3, 4, 5],         text:(n) => "연속 콤보 ×" + n },
@@ -334,6 +335,11 @@ const BARREL_R      = 20;
 /* 폭탄 갈매기 — 공중 잡몹. 앞에서 날아오며 위아래로 출렁인다 */
 const GULL_FROM = 250;
 const GULL_R    = 16;
+
+/* 금화 줄 — 고리 사이에 금화가 포물선으로 늘어선다. 한 줄을 다 먹으면 보너스 */
+const ARC_CHANCE = 0.14;
+const ARC_N      = 7;
+const ARC_BONUS  = 60;
 
 /* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
 const GEAR_MAX  = 100;
@@ -527,7 +533,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -541,6 +547,7 @@ function reset(){
   gulls = [];
   gullKills = 0;
   gullHits = 0;
+  arcs = {}; arcSeq = 0; arcsDone = 0;
   fusen = upLv("fusen");      // 비상식량 업그레이드 — 풍선 하나를 들고 출발
   fusenAnim = 0;
   perfectStreak = 0;
@@ -623,6 +630,7 @@ function pickMissions(){
 function missionValue(kind){
   switch(kind){
     case "coins":   return coinsGot;
+    case "arc":     return arcsDone;
     case "perfect": return perfects;
     case "air":     return Math.floor(maxAir/6)/10;
     case "chain":   return maxChain;
@@ -812,7 +820,17 @@ function generate(){
     else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && genRand() < ROT_CHANCE) an.rot = true;
     anchors.push(an);
 
-    if(genRand() < 0.5){
+    if(x/22 > 40 && genRand() < ARC_CHANCE){
+      // 두 고리 사이의 스윙 궤적을 흉내 낸 아치 — 가운데가 가장 높다
+      const id = ++arcSeq;
+      const base = Math.min(SEA - 100, (lastAY + y)/2 + 150 + genRand()*40);
+      const h = 70 + genRand()*50;
+      for(let i=0;i<ARC_N;i++){
+        const t = i / (ARC_N - 1);
+        coins.push({ x: lastAX + gap*(0.12 + 0.8*t), y: Math.max(70, base - h*4*t*(1-t)), got:false, arc:id });
+      }
+      arcs[id] = 0;
+    } else if(genRand() < 0.5){
       coins.push({
         x: lastAX + gap*0.52 + (genRand()-0.5)*46,
         y: Math.max(80, Math.min(SEA-70, (lastAY + y)/2 + 58 + genRand()*70)),
@@ -2147,6 +2165,17 @@ function update(dt){
     if(Math.hypot(c.x - p.x, c.y - p.y) < 27){
       c.got = true;
       coinsGot++;
+      if(c.arc && arcs[c.arc] !== undefined){
+        arcs[c.arc]++;
+        if(arcs[c.arc] === ARC_N){
+          arcsDone++;
+          const bonus = ARC_BONUS * chainMult();
+          treasure += bonus;
+          addGear("good");
+          pops.push({ x:c.x, y:c.y-40, t:80, text:"금화 줄 완성! +" + bonus, color:"#ffd76a" });
+          for(let i=0;i<16;i++) spark(c.x, c.y, "#ffd76a");
+        }
+      }
       const mult = chainMult() * (weather && weather.type === "storm" ? 2 : 1) * (gearT > 0 ? 2 : 1);
       const gain = Math.round(25 * mult);
       treasure += gain;
@@ -3874,7 +3903,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits }),
+                 practiceMode, dailyMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
