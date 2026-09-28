@@ -1140,6 +1140,19 @@ function swing(a, st){
   ok("300m에 보물 2100이면 S", s.runGrade && s.runGrade[0] === "S", "등급=" + (s.runGrade && s.runGrade[0]) + " 거리=" + Math.floor(s.dist));
 }
 
+/* --- 칭호 보상 스킨 --- */
+{
+  const sh = A().shop;
+  const U = T().titles();
+  const had = U.has("kraken1");
+  U.delete("kraken1");
+  ok("칭호가 없으면 칭호 보상 스킨은 잠겨 있다", sh().pickSkin(4) === false && sh().skin !== "kraken");
+  U.add("kraken1");
+  ok("칭호를 따면 칭호 보상 스킨을 공짜로 장착한다", sh().pickSkin(4) === true && sh().skin === "kraken");
+  if(!had) U.delete("kraken1");
+  sh().pickSkin(0);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

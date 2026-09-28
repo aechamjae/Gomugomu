@@ -435,8 +435,14 @@ const SKINS = [
   { id:"red",   name:"붉은 두건",   cost:0,    band:"#b03a34", coat:"#7a2f2b" },
   { id:"navy",  name:"해군 두건",   cost:1500, band:"#2f5fa8", coat:"#1f3a66" },
   { id:"gold",  name:"황금 두건",   cost:4000, band:"#d9a62c", coat:"#8a6a2c" },
-  { id:"black", name:"검은 수염",   cost:8000, band:"#26202c", coat:"#3a2a3a" }
+  { id:"black", name:"검은 수염",   cost:8000, band:"#26202c", coat:"#3a2a3a" },
+  // 칭호 보상 — 보물로는 못 사고, 칭호를 따면 공짜로 풀린다
+  { id:"kraken",  name:"크라켄 두건",     cost:0, title:"kraken1",   band:"#7a3fb0", coat:"#3e2458" },
+  { id:"bolt",    name:"번개 두건",       cost:0, title:"perfect50", band:"#f0c030", coat:"#6a5418" },
+  { id:"horizon", name:"하얀 수평선 두건", cost:0, title:"dist10k",   band:"#eef4f8", coat:"#5a7486" }
 ];
+let shopPage = 0;
+const skinLocked = (k) => k.title && !unlockedTitles.has(k.title);
 let parrotOn = true;
 const parrotUnlocked = () => lifeBossKills >= PARROT_UNLOCK;
 const parrotActive = () => parrotUnlocked() && parrotOn;
@@ -494,6 +500,12 @@ function drawHint(){
 let bank = 0, upgrades = {}, shopMsg = null, bestBounty = 0, ownedSkins = ["red"], skin = "red";
 const curSkin = () => SKINS.find(k => k.id === skin) || SKINS[0];
 function pickSkin(k){
+  if(skinLocked(k)){
+    const t = TITLES.find(q => q.id === k.title);
+    shopMsg = { text: "칭호 '" + (t ? t.name : k.title) + "'을(를) 따면 풀린다", t: 110 };
+    return false;
+  }
+  if(k.title && ownedSkins.indexOf(k.id) < 0) ownedSkins.push(k.id);
   if(ownedSkins.indexOf(k.id) >= 0){
     skin = k.id;
     shopMsg = { text: k.name + " 장착", t: 80, good: true };
@@ -625,7 +637,7 @@ function menuRows(){
     return [
       { y: H/2 - 80, label: "1) 본게임", action: startMainGame },
       { y: H/2 - 40, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
-      { y: H/2 + 0, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
+      { y: H/2 + 0, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
       { y: H/2 + 40, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
       { y: H/2 + 80, label: "5) 항해 일지", action: () => { state = STATE.LOG; } },
       { y: H/2 + 120, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
@@ -655,21 +667,27 @@ function menuRows(){
     return rows;
   }
   if(state === STATE.SHOP){
+    // 1쪽: 업그레이드, 2쪽: 두건 스킨 — 숫자 키 1~9 안에 들어가게 나눴다
     const top = H/2 - 92, rowH = 32;
-    const rows = UPGRADES.map((u, i) => {
-      const lv = upLv(u.id), max = u.cost.length;
-      const price = lv >= max ? "최고 단계" : "보물 " + u.cost[lv];
-      return { y: top + i*rowH, label: (i+1) + ") " + u.name + " " + lv + "/" + max + " — " + u.desc + " · " + price,
-               action: () => buyUpgrade(u), dim: lv >= max || bank < u.cost[lv] };
+    if(shopPage === 0){
+      const rows = UPGRADES.map((u, i) => {
+        const lv = upLv(u.id), max = u.cost.length;
+        const price = lv >= max ? "최고 단계" : "보물 " + u.cost[lv];
+        return { y: top + i*rowH, label: (i+1) + ") " + u.name + " " + lv + "/" + max + " — " + u.desc + " · " + price,
+                 action: () => buyUpgrade(u), dim: lv >= max || bank < u.cost[lv] };
+      });
+      rows.push({ y: top + UPGRADES.length*rowH + 16, label: (UPGRADES.length + 1) + ") 두건 스킨 보기 →", action: () => { shopPage = 1; shopMsg = null; } });
+      rows.push({ y: top + UPGRADES.length*rowH + 52, label: (UPGRADES.length + 2) + ") ← 메뉴로", action: () => { state = STATE.MENU; } });
+      return rows;
+    }
+    const rows = SKINS.map((k, i) => {
+      const own = ownedSkins.indexOf(k.id) >= 0 || (k.title && !skinLocked(k));
+      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
+      return { y: top - 20 + i*rowH, label: (i+1) + ") " + k.name + " — " + status,
+               action: () => pickSkin(k), dim: !own && (k.title ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
     });
-    const sTop = top + UPGRADES.length*rowH + 12;
-    SKINS.forEach((k, i) => {
-      const own = ownedSkins.indexOf(k.id) >= 0;
-      const n = UPGRADES.length + i + 1;
-      rows.push({ y: sTop + i*rowH, label: n + ") " + k.name + " — " + (skin === k.id ? "장착 중" : own ? "장착하기" : "보물 " + k.cost),
-                  action: () => pickSkin(k), dim: !own && bank < k.cost, swatch: k.band, on: skin === k.id });
-    });
-    rows.push({ y: sTop + SKINS.length*rowH + 8, label: (UPGRADES.length + SKINS.length + 1) + ") ← 뒤로가기", action: () => { state = STATE.MENU; } });
+    rows.push({ key: 8, y: top - 20 + SKINS.length*rowH + 12, label: "8) ← 업그레이드", action: () => { shopPage = 0; shopMsg = null; } });
+    rows.push({ key: 9, y: top - 20 + SKINS.length*rowH + 46, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; shopPage = 0; } });
     return rows;
   }
   if(state === STATE.PRACTICE_SELECT){
@@ -5236,7 +5254,7 @@ function draw(){
     }
     if(shopMsg){
       shopMsg.t -= 1;
-      centerText(shopMsg.text, H/2 - 126, "700 14px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
+      centerText(shopMsg.text, shopPage ? H - 62 : H/2 - 126, "700 14px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
       if(shopMsg.t <= 0) shopMsg = null;
     }
     centerText("본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키 또는 클릭으로 구매/장착 · Esc 뒤로", H - 20, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
