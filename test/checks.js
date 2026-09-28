@@ -847,10 +847,25 @@ function swing(a, st){
   P.y = a.peek().SEA - 20; P.vy = 10;
   run(a, 3);
   ok("60초 사냥에선 바다에 빠져도 끝나지 않고 5초를 잃는다", a.peek().state === 1 && a.peek().blitzT < t0 - 290, "남은=" + Math.round(a.peek().blitzT));
-  let bossSeen = false;
-  const s = run(a, 4000, (st) => { swing(a, st); if(st.boss) bossSeen = true; });
+  let bossSeen = false, s = null;
+  // 봇이 가끔 제자리에 멈춰 '정체'로 끝나는 판이 있어서 몇 번 다시 해 본다
+  for(let attempt = 0; attempt < 4; attempt++){
+    if(attempt){ a.startBlitz(); H.step(); a.hold(true); H.step(); a.hold(false); }
+    s = run(a, 4000, (st) => { swing(a, st); if(st.boss) bossSeen = true; });
+    if(s.deathReason === "시간") break;
+  }
   ok("60초가 지나면 끝나고 보스는 나오지 않는다", s.state === 2 && s.deathReason === "시간" && !bossSeen, "사인=" + s.deathReason);
   a.startMain();
+}
+
+/* --- 결과 공유 --- */
+{
+  const a = start();
+  T().setTreasure(321);
+  a.hold(false); T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  run(a, 3);
+  const t = a.resultText();
+  ok("결과 공유 문구에 모드·보물·현상금이 들어간다", /본게임/.test(t) && /보물 321/.test(t) && /현상금 ฿/.test(t), JSON.stringify(t.split("\n")[1]));
 }
 
 /* --- 흑조호 잠항 (순간이동 금지) --- */

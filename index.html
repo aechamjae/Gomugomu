@@ -1369,6 +1369,7 @@ window.addEventListener("keydown", (e)=>{
   }
   if(k === "KeyP" || k === "Escape"){ e.preventDefault(); togglePause(); return; }
   if(k === "KeyR"){ reset(); return; }
+  if(k === "KeyC" && state === STATE.OVER){ e.preventDefault(); shareResult(); return; }
   if(state === STATE.PAUSE){
     if(k === "Space"){ e.preventDefault(); togglePause(); }
     return;
@@ -1396,6 +1397,10 @@ let canvasHold = false;
 canvas.addEventListener("pointerdown", (e)=>{
   e.preventDefault();
   try{ window.focus(); canvas.focus({preventScroll:true}); }catch(err){}
+  if(state === STATE.OVER){
+    const pos = canvasPos(e), B = SHARE_BTN;
+    if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ shareResult(); return; }
+  }
   if(inMenu()){
     const pos = canvasPos(e);
     for(const row of menuRows()){
@@ -4084,6 +4089,76 @@ function drawStallWarning(){
   ctx.restore();
 }
 
+/* 결과 공유 — 모바일은 공유 시트, 아니면 클립보드. 둘 다 안 되면 안내만 */
+const SHARE_BTN = { x: W - 190, y: H - 66, w: 170, h: 38 };
+let shareMsg = null;
+function resultText(){
+  const title = currentTitleName();
+  const mode = blitzMode ? "60초 보물 사냥" : dailyMode ? "오늘의 항해 " + todayKey() : practiceMode ? "연습" : "본게임";
+  const lines = [
+    "🏴‍☠️ 고무팔 · 대항해 — " + mode,
+    blitzMode ? "보물 " + Math.floor(treasure) : Math.floor(dist) + "m · 보물 " + Math.floor(treasure),
+    "현상금 ฿ " + commas(runBounty) + (title ? " · '" + title + "'" : "")
+  ];
+  const extra = [];
+  if(perfects) extra.push("PERFECT " + perfects);
+  if(maxChain > 1) extra.push("콤보 ×" + maxChain);
+  if(bossKills) extra.push("보스 " + bossKills);
+  if(extra.length) lines.push(extra.join(" · "));
+  return lines.join("\n");
+}
+function shareResult(){
+  const text = resultText();
+  const done = (msg) => { shareMsg = { text: msg, t: 120 }; };
+  try{
+    if(navigator.share && IS_TOUCH){
+      navigator.share({ text }).then(() => done("공유했다!"), () => done("공유를 취소했다"));
+      return;
+    }
+  }catch(e){}
+  const ok = "결과를 복사했다 — 붙여넣어 자랑하자";
+  // 권한이 없는 환경(파일로 직접 연 경우 등)을 위한 옛 방식
+  const legacy = () => {
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      const r = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return r;
+    }catch(e){ return false; }
+  };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(() => done(ok), () => done(legacy() ? ok : "복사할 수 없는 환경이다"));
+      return;
+    }
+  }catch(e){}
+  done(legacy() ? ok : "복사할 수 없는 환경이다");
+}
+function drawShareButton(){
+  const B = SHARE_BTN;
+  ctx.save();
+  ctx.fillStyle = "rgba(217,184,119,.16)";
+  ctx.fillRect(B.x, B.y, B.w, B.h);
+  ctx.strokeStyle = "rgba(217,184,119,.7)"; ctx.lineWidth = 1.5;
+  ctx.strokeRect(B.x, B.y, B.w, B.h);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "700 14px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "#d9b877";
+  ctx.fillText("결과 공유 (C)", B.x + B.w/2, B.y + B.h/2);
+  if(shareMsg){
+    shareMsg.t -= 1;
+    ctx.globalAlpha = Math.min(1, shareMsg.t / 20);
+    ctx.font = "600 12px 'Pretendard', system-ui, sans-serif";
+    ctx.fillStyle = "#9fe0a0";
+    ctx.textAlign = "right";
+    ctx.fillText(shareMsg.text, B.x + B.w, B.y - 12);
+    if(shareMsg.t <= 0) shareMsg = null;
+  }
+  ctx.restore();
+}
+
 function leftText(t, x, y, font, color){
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
   ctx.font = font; ctx.fillStyle = color;
@@ -4354,6 +4429,7 @@ function draw(){
     }
     if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a", 26);
     centerText("클릭 · Space · R로 다시 · M 메뉴로", H - 44, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    drawShareButton();
   } else if(state === STATE.MENU){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
     ctx.fillRect(0,0,W,H);
@@ -4462,6 +4538,7 @@ window.__swing = {
   map: () => ({ pieces: mapPieces, done: mapsDone, set: (v) => { mapPieces = v; } }),
   parrot: () => ({ q: parrot, active: parrotActive(), setOn: (v) => { parrotOn = v; } }),
   toLog: () => { state = STATE.LOG; },
+  resultText: () => resultText(),
   ghost: () => ({ best: ghostBest, rec: ghostRec })
 };
 
