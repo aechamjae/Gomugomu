@@ -560,6 +560,22 @@ function swing(a, st){
   sh().ownedSkins.length = 1; sh().setBank(0);
 }
 
+/* --- 오늘의 항해 --- */
+{
+  const a = A();
+  const snap = () => { const st = a.peek(); return JSON.stringify({ an: st.anchors.slice(0, 12).map(q => [Math.round(q.x), Math.round(q.y), q.kind]), ms: st.missions.map(m => m.text) }); };
+  a.startDaily(); H.step();
+  const d1 = snap();
+  a.startDaily(); H.step();
+  const d2 = snap();
+  a.startMain(); H.step();
+  const m1 = snap();
+  a.startMain(); H.step();
+  const m2 = snap();
+  ok("오늘의 항해는 매번 같은 코스·미션", d1 === d2 && a.peek().dailyMode === false);
+  ok("본게임 코스는 매번 다르다", m1 !== m2);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

@@ -405,6 +405,29 @@ function buyUpgrade(u){
 // reset()으로 초기화되지 않는다 — R로 재시작해도 같은 연습 내용을 유지하기 위함.
 let practiceMode = null;
 
+// 오늘의 항해 — 날짜를 시드로 지형·잡몹·아이템·미션을 고정한다. practiceMode처럼 R로 재시작해도 유지
+let dailyMode = false, dailyBest = 0, dailyDate = "";
+let genRand = Math.random;
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function todaySeed(){ return parseInt(todayKey().replace(/-/g, ""), 10); }
+function dailyBestToday(){ return dailyDate === todayKey() ? dailyBest : 0; }
+function startDaily(){
+  practiceMode = null;
+  dailyMode = true;
+  reset();
+}
+
 /* 연습 대상 목록 — 인덱스는 BOSSES 배열과 동일, 마지막은 해왕류 폭주 */
 const PRACTICE_OPTIONS = [
   { type:"boss", bossType:0, label:"곡예사 선장 연습" },
@@ -425,11 +448,13 @@ function practiceLabel(){
 
 function startMainGame(){
   practiceMode = null;
+  dailyMode = false;
   reset();
 }
 function startPractice(idx){
   const opt = PRACTICE_OPTIONS[idx];
   if(!opt) return;
+  dailyMode = false;
   practiceMode = opt.type === "king" ? { type:"king" } : { type:"boss", bossType:opt.bossType };
   reset();
 }
@@ -440,7 +465,8 @@ function menuRows(){
     return [
       { y: H/2 - 10, label: "1) 본게임", action: startMainGame },
       { y: H/2 + 34, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
-      { y: H/2 + 78, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } }
+      { y: H/2 + 78, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
+      { y: H/2 + 122, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily }
     ];
   }
   if(state === STATE.SHOP){
@@ -487,9 +513,10 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip;
+    barrels, barrelsBroken, tip, newDailyRecord;
 
 function reset(){
+  genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
   cam = { x:0, z:1 };
   anchors = [];
@@ -510,7 +537,7 @@ function reset(){
   flash = 0;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
-  runBounty = 0; newBountyRecord = false;
+  runBounty = 0; newBountyRecord = false; newDailyRecord = false;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
   rope = null;
@@ -567,8 +594,8 @@ function pickMissions(){
   const pool = MISSIONS.slice();
   const out = [];
   while(out.length < MISSION_COUNT && pool.length){
-    const m = pool.splice(Math.floor(Math.random()*pool.length), 1)[0];
-    const tier = Math.floor(Math.random()*m.goals.length);
+    const m = pool.splice(Math.floor(genRand()*pool.length), 1)[0];
+    const tier = Math.floor(genRand()*m.goals.length);
     const n = m.goals[tier];
     out.push({ kind:m.kind, n, text:m.text(n), reward: 80 + (tier + (m.from||0))*60, done:false });
   }
@@ -750,7 +777,7 @@ function anchorBaseY(atDist){
 function gapFor(atDist){
   const t = Math.min(1, atDist / 3400);       // 간격이 벌어지는 속도도 함께 늦췄다 (1500 → 3400)
   const base = 176 + t * 104;
-  return Math.min(340, base + Math.random() * (62 + t*26));
+  return Math.min(340, base + genRand() * (62 + t*26));
 }
 
 function generate(){
@@ -759,26 +786,26 @@ function generate(){
     const gap = gapFor(lastAX / 22);
     const x = lastAX + gap;
     const baseY = anchorBaseY(x / 22);
-    const jitter = (Math.random() - 0.5) * 96;
+    const jitter = (genRand() - 0.5) * 96;
     const y = Math.max(64, Math.min(268, baseY*0.68 + lastAY*0.32 + jitter));
-    const an = { x, y, kind: Math.random() < 0.62 ? 0 : 1 };   // 0 돛대, 1 바위 기둥
-    if(!practiceMode && x/22 > 60 && Math.random() < GOLD_CHANCE) an.gold = true;
-    else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && Math.random() < ROT_CHANCE) an.rot = true;
+    const an = { x, y, kind: genRand() < 0.62 ? 0 : 1 };   // 0 돛대, 1 바위 기둥
+    if(!practiceMode && x/22 > 60 && genRand() < GOLD_CHANCE) an.gold = true;
+    else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && genRand() < ROT_CHANCE) an.rot = true;
     anchors.push(an);
 
-    if(Math.random() < 0.5){
+    if(genRand() < 0.5){
       coins.push({
-        x: lastAX + gap*0.52 + (Math.random()-0.5)*46,
-        y: Math.max(80, Math.min(SEA-70, (lastAY + y)/2 + 58 + Math.random()*70)),
+        x: lastAX + gap*0.52 + (genRand()-0.5)*46,
+        y: Math.max(80, Math.min(SEA-70, (lastAY + y)/2 + 58 + genRand()*70)),
         got:false
       });
     }
     // 고기는 일부러 바다 가까이 낮게 띄운다 — 먹으려면 위험을 감수해야 한다
-    if(x/22 > MEAT_FROM && Math.random() < MEAT_CHANCE){
-      meats.push({ x: lastAX + gap*(0.4 + Math.random()*0.2), y: SEA - 88 - Math.random()*56, got:false });
+    if(x/22 > MEAT_FROM && genRand() < MEAT_CHANCE){
+      meats.push({ x: lastAX + gap*(0.4 + genRand()*0.2), y: SEA - 88 - genRand()*56, got:false });
     }
-    if(!practiceMode && x/22 > BARREL_FROM && Math.random() < BARREL_CHANCE){
-      barrels.push({ x: lastAX + gap*(0.3 + Math.random()*0.4), gone:false });
+    if(!practiceMode && x/22 > BARREL_FROM && genRand() < BARREL_CHANCE){
+      barrels.push({ x: lastAX + gap*(0.3 + genRand()*0.4), gone:false });
     }
     spawnMobs(lastAX, x);
     lastAX = x; lastAY = y;
@@ -796,9 +823,9 @@ function spawnMobs(x0, x1){
   if(practiceMode && practiceMode.type === "boss") return;   // 보스 연습 중엔 잡몹 없이 그 보스만 상대한다
   if(practiceMode && practiceMode.type === "king"){
     // 해왕류 폭주 연습 — 최소 거리 제한 없이, 훨씬 자주·훨씬 촘촘하게 쏟아낸다
-    if(x1 - lastKingX > 480 && Math.random() < 0.85){
+    if(x1 - lastKingX > 480 && genRand() < 0.85){
       lastKingX = x1;
-      mobs.push({ kind:1, x: x1 + 120 + Math.random()*160, y: SEA, phase:0, t:0, h:0, gone:false });
+      mobs.push({ kind:1, x: x1 + 120 + genRand()*160, y: SEA, phase:0, t:0, h:0, gone:false });
     }
     return;   // 폭주 연습 중엔 식인 물고기는 끈다 — 오직 해왕류만
   }
@@ -806,22 +833,22 @@ function spawnMobs(x0, x1){
   const dm = x1 / 22;                          // 이 구간의 m 환산 거리
 
   // 식인 물고기 — 떼로 다니고, 지나갈 때 물 밖으로 튀어오른다
-  if(dm > 90 && Math.random() < (dm < 400 ? 0.20 : 0.30)){
-    const n = 1 + Math.floor(Math.random()*3);
-    const bx = x0 + (x1-x0)*0.35 + Math.random()*90;
+  if(dm > 90 && genRand() < (dm < 400 ? 0.20 : 0.30)){
+    const n = 1 + Math.floor(genRand()*3);
+    const bx = x0 + (x1-x0)*0.35 + genRand()*90;
     for(let i=0;i<n;i++){
       mobs.push({
-        kind:0, x: bx + i*(34 + Math.random()*26), y: SEA + 16 + Math.random()*22,
-        vy:0, air:false, t: Math.random()*60, cool: 20 + Math.random()*70, gone:false
+        kind:0, x: bx + i*(34 + genRand()*26), y: SEA + 16 + genRand()*22,
+        vy:0, air:false, t: genRand()*60, cool: 20 + genRand()*70, gone:false
       });
     }
   }
 
   // 해왕류 — 아주 드물게, 한참 간격을 두고 나온다 (예전 출현확률의 1/3)
-  if(dm > 520 && x1 - lastKingX > 2600 && Math.random() < 0.11){
+  if(dm > 520 && x1 - lastKingX > 2600 && genRand() < 0.11){
     lastKingX = x1;
     mobs.push({
-      kind:1, x: x1 + 120 + Math.random()*160, y: SEA,
+      kind:1, x: x1 + 120 + genRand()*160, y: SEA,
       phase:0, t:0, h:0, gone:false
     });
   }
@@ -1159,6 +1186,11 @@ function die(reason){
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
     bank += Math.floor(treasure);
     saveShop();
+    if(dailyMode){
+      if(dailyDate !== todayKey()){ dailyDate = todayKey(); dailyBest = 0; }
+      if(dist > dailyBest){ dailyBest = dist; newDailyRecord = true; }
+      saveDaily();
+    }
   }
   syncHUD();
   for(let i=0;i<26;i++) spark(p.x, p.y, reason === "바다" ? "#8fd6d8" : "#f0a24e");
@@ -2141,6 +2173,18 @@ async function saveBestChain(){
   const v = String(Math.floor(bestChain));
   try{ if(window.storage){ await window.storage.set("swing:bestChain", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:bestChain", v); }catch(e){}
+}
+
+async function loadDaily(){
+  let v = null;
+  try{ if(window.storage){ const r = await window.storage.get("swing:daily"); if(r && r.value) v = r.value; } }catch(e){}
+  try{ if(!v && window.localStorage) v = localStorage.getItem("swing:daily"); }catch(e){}
+  try{ if(v){ const r = JSON.parse(v); dailyDate = r.date || ""; dailyBest = r.best || 0; } }catch(e){}
+}
+async function saveDaily(){
+  const v = JSON.stringify({ date: dailyDate, best: Math.floor(dailyBest) });
+  try{ if(window.storage){ await window.storage.set("swing:daily", v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem("swing:daily", v); }catch(e){}
 }
 
 function applyShopRecord(v){
@@ -3539,6 +3583,7 @@ function draw(){
   } else if(state === STATE.READY){
     ctx.fillStyle = "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
+    if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 54, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 16, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
@@ -3563,6 +3608,7 @@ function draw(){
     let overY = 92;
     const line = (t, font, color, gap) => { leftText(t, lx, overY, font, color); overY += gap; };
     if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8", 26);
+    if(dailyMode) line((newDailyRecord ? "★ 오늘의 항해 신기록 " : "오늘의 항해 · 오늘 최고 ") + Math.floor(dailyBestToday()) + "m", "700 14px 'Pretendard', system-ui, sans-serif", newDailyRecord ? "#ffd76a" : "#8fd6d8", 26);
     line(reasonText, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
     line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
     if(!practiceMode) line("창고 보물 " + Math.floor(bank), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
@@ -3591,7 +3637,7 @@ function draw(){
     centerText("고무팔 · 대항해", H/2 - 90, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
     centerText("창고 보물 " + Math.floor(bank), H/2 - 56, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
-    centerText("숫자 키 또는 클릭으로 선택", H/2 + 120, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("숫자 키 또는 클릭으로 선택", H/2 + 164, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
@@ -3640,7 +3686,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken }),
+                 practiceMode, dailyMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
@@ -3655,7 +3701,8 @@ window.__swing = {
   toMenu: () => { state = STATE.MENU; },
   shop: () => ({ bank, upgrades, buy: (i) => buyUpgrade(UPGRADES[i]), setBank: (v) => { bank = v; }, reach: reach(), pistolCd: pistolCd(),
                  skin, ownedSkins, pickSkin: (i) => pickSkin(SKINS[i]) }),
-  toShop: () => { state = STATE.SHOP; }
+  toShop: () => { state = STATE.SHOP; },
+  startDaily: startDaily
 };
 
 reset();
@@ -3664,6 +3711,7 @@ loadBest();
 loadBestChain();
 loadTitles();
 loadShop();
+loadDaily();
 try{ canvas.focus({preventScroll:true}); }catch(e){}
 requestAnimationFrame(loop);
 
