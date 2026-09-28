@@ -275,7 +275,7 @@ function swing(a, st){
   let kingCount = 0, sawBoss = false, sawFish = false;
   for(let attempt=0; attempt<6 && kingCount < 20; attempt++){
     const a = A();
-    a.startPractice(7);   // 해왕류 폭주 연습 (PRACTICE_OPTIONS의 마지막 항목)
+    a.startPractice(8);   // 해왕류 폭주 연습 (PRACTICE_OPTIONS의 마지막 항목)
     H.step();
     a.hold(true); H.step(); a.hold(false);
     run(a, 2000, (st) => {
@@ -1113,6 +1113,16 @@ function swing(a, st){
     run(a, 400, (st) => { swing(a, st); T().setFusen(2); if(st.boss && st.boss.big && !st.boss._t){ st.boss._t = 1; types.push(st.boss.type); } if(st.boss){ st.boss.hp = 1; st.boss.invul = 0; T().dmg(true, "t"); } });
   }
   ok("대형 보스는 크라켄 다음 유령선", types.join(",") === "5,7", "순서=" + types.join(","));
+}
+
+/* --- 유령선 연습 --- */
+{
+  const a = A();
+  a.startPractice(7); H.step(); a.hold(true); H.step(); a.hold(false);
+  let t = null;
+  run(a, 600, (st) => { swing(a, st); if(st.boss) t = st.boss.type; });
+  ok("유령선 연습 — 유령선이 대형 보스로 나온다", t === 7, "type=" + t);
+  a.startMain();
 }
 
 /* --- 흑조호 잠항 (순간이동 금지) --- */

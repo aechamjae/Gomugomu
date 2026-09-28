@@ -526,6 +526,7 @@ function buyUpgrade(u){
 // 연습 모드 선택 — { type:"boss", bossType:N } 또는 { type:"king" }, 본게임은 null.
 // reset()으로 초기화되지 않는다 — R로 재시작해도 같은 연습 내용을 유지하기 위함.
 let practiceMode = null;
+let practicePage = 0;
 
 // 오늘의 항해 — 날짜를 시드로 지형·잡몹·아이템·미션을 고정한다. practiceMode처럼 R로 재시작해도 유지
 let dailyMode = false, dailyBest = 0, dailyDate = "";
@@ -590,6 +591,7 @@ const PRACTICE_OPTIONS = [
   { type:"boss", bossType:4, label:"돌풍술사 연습" },
   { type:"boss", bossType:5, label:"심해의 크라켄 연습 (대형)" },
   { type:"boss", bossType:6, label:"고리 도둑 문어 연습" },
+  { type:"boss", bossType:7, label:"망령의 유령선 연습 (대형)" },
   { type:"king", label:"해왕류 폭주 연습" }
 ];
 
@@ -622,7 +624,7 @@ function menuRows(){
   if(state === STATE.MENU){
     return [
       { y: H/2 - 80, label: "1) 본게임", action: startMainGame },
-      { y: H/2 - 40, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; } },
+      { y: H/2 - 40, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
       { y: H/2 + 0, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; } },
       { y: H/2 + 40, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), action: startDaily },
       { y: H/2 + 80, label: "5) 항해 일지", action: () => { state = STATE.LOG; } },
@@ -671,12 +673,16 @@ function menuRows(){
     return rows;
   }
   if(state === STATE.PRACTICE_SELECT){
-    const top = H/2 - 160, rowH = 34;
-    const rows = PRACTICE_OPTIONS.map((o, i) => ({
-      y: top + i*rowH, label: (i+1) + ") " + o.label, action: () => startPractice(i)
+    // 숫자 키는 1~9뿐이라 한 페이지에 7개씩 — 8) 다음/이전 페이지, 9) 뒤로가기
+    const PER = 7, pages = Math.ceil(PRACTICE_OPTIONS.length / PER);
+    const top = H/2 - 150, rowH = 34;
+    const slice = PRACTICE_OPTIONS.slice(practicePage*PER, practicePage*PER + PER);
+    const rows = slice.map((o, i) => ({
+      y: top + i*rowH, label: (i+1) + ") " + o.label, action: () => startPractice(practicePage*PER + i)
     }));
-    rows.push({ y: top + PRACTICE_OPTIONS.length*rowH + 14, label: (PRACTICE_OPTIONS.length+1) + ") ← 뒤로가기",
-                action: () => { state = STATE.MENU; } });
+    rows.push({ key: 8, y: top + PER*rowH + 10, label: "8) " + (practicePage < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (practicePage+1) + "/" + pages + ")",
+                action: () => { practicePage = (practicePage + 1) % pages; } });
+    rows.push({ key: 9, y: top + PER*rowH + 44, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; practicePage = 0; } });
     return rows;
   }
   return [];
@@ -766,7 +772,7 @@ function reset(){
   nextBigAt = 2000;
   if(practiceMode && practiceMode.type === "boss"){
     // 연습 대상만 빨리, 반복해서 나오도록 — 크라켄(5)은 대형 슬롯, 나머지는 중간보스 슬롯
-    if(practiceMode.bossType === 5){ nextBigAt = 30; nextBossAt = Infinity; }
+    if(BIG_BOSSES.indexOf(practiceMode.bossType) >= 0){ nextBigAt = 30; nextBossAt = Infinity; }
     else { nextBossAt = 30; nextBigAt = Infinity; }
   } else if(practiceMode && practiceMode.type === "king"){
     nextBossAt = Infinity; nextBigAt = Infinity;   // 폭주 연습 중엔 일반 보스는 끈다
@@ -1592,8 +1598,10 @@ window.addEventListener("keydown", (e)=>{
     const m = /^Digit([1-9])$/.exec(k);
     if(m){
       e.preventDefault();
-      const idx = parseInt(m[1], 10) - 1, rows = menuRows();
-      if(rows[idx]) rows[idx].action();
+      // 줄에 key가 있으면 그 번호, 없으면 순서대로 1부터 — 페이지를 나눈 연습 목록은 8·9가 고정 번호다
+      const n = parseInt(m[1], 10), rows = menuRows();
+      const row = rows.find((r, i) => (r.key || i + 1) === n);
+      if(row) row.action();
     }
     return;
   }
