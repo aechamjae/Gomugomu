@@ -669,6 +669,47 @@ function swing(a, st){
   T().setLifeBoss(before);
 }
 
+/* --- 리뷰에서 나온 버그 회귀 방지 --- */
+{
+  // 기어 2가 끝나는 순간 최고 속도 초과분 때문에 불꽃이 공짜로 붙지 않아야 한다
+  const a = start();
+  T().setGear(100); a.fireGear();
+  const P = T().P();
+  a.hold(false);
+  // 기어 동안엔 높은 곳에서 최고 속도 이상으로 날게 한다
+  for(let i = 0; i < 400 && a.peek().gearT > 0; i++){ P.vx = 30; P.vy = -1; P.y = 150; H.step(); }
+  let fireSeen = false;
+  for(let i = 0; i < 3; i++){ H.step(); if(a.peek().fire > 0) fireSeen = true; }
+  ok("기어 2가 끝나도 불꽃이 공짜로 붙지 않는다", a.peek().gearT <= 0 && !fireSeen, "불꽃=" + fireSeen);
+}
+{
+  // 오늘의 항해는 날씨도 같은 자리·같은 종류
+  const a = A();
+  const seen = [];
+  for(let k = 0; k < 2; k++){
+    a.startDaily(); H.step();
+    T().setNextWeather(5);   // 시작 지점만 당겨서 빨리 보고, 종류는 시드 그대로
+    a.hold(true); H.step(); a.hold(false);
+    let type = null;
+    run(a, 1500, (st) => { swing(a, st); if(!type && st.weather) type = st.weather.type; });
+    seen.push(type);
+  }
+  ok("오늘의 항해는 날씨 종류도 같다", seen[0] && seen[0] === seen[1], seen.join(" / "));
+  a.startMain();
+}
+{
+  // 보스가 뜨면 날씨가 걷힌다
+  const a = start();
+  T().setNextWeather(0);
+  run(a, 30, (st) => swing(a, st));
+  const hadWeather = !!a.peek().weather;
+  const P = T().P();
+  T().setBoss({ type:0, big:false, hp:2, maxHp:2, t:0, fire:90, invul:0, flash:0, x:P.x + 400, y:200, vy:0,
+                air:true, phase:0, sub:0, perch:null, tents:[], swing:0, sink:0, dive:0 });
+  run(a, 3, (st) => swing(a, st));
+  ok("보스가 뜨면 날씨가 걷힌다", hadWeather && !a.peek().weather, "날씨있었음=" + hadWeather);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

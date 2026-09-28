@@ -434,6 +434,7 @@ let dailyMode = false, dailyBest = 0, dailyDate = "";
 const GHOST_STEP = 4;
 let ghostBest = null, ghostRec = [], playT = 0;
 let genRand = Math.random;
+let weatherRand = Math.random;   // 날씨 시작 지점·종류 — 오늘의 항해에선 이것도 시드로 고정
 function mulberry32(a){
   return function(){
     a |= 0; a = a + 0x6D2B79F5 | 0;
@@ -551,6 +552,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
+  weatherRand = dailyMode ? mulberry32(todaySeed() * 7 + 13) : Math.random;
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
   cam = { x:0, z:1 };
   anchors = [];
@@ -572,7 +574,7 @@ function reset(){
   missions = pickMissions();
   tip = TIPS[Math.floor(Math.random()*TIPS.length)];
   weather = null;
-  nextWeatherAt = WEATHER_FIRST + Math.random()*300;
+  nextWeatherAt = WEATHER_FIRST + weatherRand()*300;
   flash = 0;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0;
@@ -719,13 +721,14 @@ function updateWeather(dt){
   if(flash > 0) flash -= 0.06*dt;
   if(weather){
     if(weather.type === "storm" && Math.random() < 0.005*dt) flash = 1;
-    if(dist > weather.to){
+    // 보스전 중엔 거리가 멈추니, 그대로 두면 날씨가 보스전 내내 이어진다 — 보스가 뜨면 걷힌다
+    if(dist > weather.to || boss){
       pops.push({ x:p.x, y:p.y-50, t:70, text: weather.type === "storm" ? "폭풍을 빠져나왔다" : "바람이 잦아든다", color:"#8fd6d8" });
       weather = null;
-      nextWeatherAt = dist + 500 + Math.random()*400;
+      nextWeatherAt = dist + 500 + weatherRand()*400;
     }
   } else if(!practiceMode && !boss && dist >= nextWeatherAt){
-    const type = Math.random() < 0.5 ? "wind" : "storm";
+    const type = weatherRand() < 0.5 ? "wind" : "storm";
     weather = { type, from: dist, to: dist + WEATHER_LEN };
     missionFlash = { text: type === "wind" ? "순풍이 분다! →" : "폭풍 구간 — 금화 2배", reward:0, t:150, weather:type };
   }
@@ -2259,6 +2262,12 @@ function update(dt){
   updateRot(dt);
   if(gearT > 0){
     gearT -= dt;
+    if(gearT <= 0){
+      // 기어 2 동안엔 최고 속도를 넘길 수 있었는데, 끝나는 순간 그 속도가 그대로면
+      // 다음 프레임에 불꽃이 공짜로 붙는다 — 보통 최고 속도보다 살짝 아래로 눌러 둔다
+      const sp2 = Math.hypot(p.vx, p.vy), cap = MAXV * 0.96;
+      if(sp2 > cap){ p.vx = p.vx/sp2*cap; p.vy = p.vy/sp2*cap; }
+    }
     if(Math.random() < 0.8) bits.push({ x:p.x + (Math.random()-0.5)*14, y:p.y + (Math.random()-0.5)*14,
                                          vx:-p.vx*0.2 + (Math.random()-0.5), vy:-1.5 - Math.random()*1.5, life:0.7, color:"#ffd0d8" });
   }
@@ -3928,8 +3937,8 @@ function draw(){
                t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
       leftText(t.desc, cx + 150, cy, "400 12px 'Pretendard', system-ui, sans-serif", has ? "rgba(244,236,217,.6)" : "rgba(244,236,217,.35)");
     });
-    for(const row of menuRows()) centerText(row.label, row.y, row === menuRows()[0] ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
-                                            row === menuRows()[0] ? "#d9b877" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)");
+    menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
+                                              i === 0 ? "#d9b877" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
@@ -3978,7 +3987,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins }),
+                 practiceMode, dailyMode, fire, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
