@@ -548,7 +548,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -564,6 +564,7 @@ function reset(){
   gullKills = 0;
   gullHits = 0;
   arcs = {}; arcSeq = 0; arcsDone = 0;
+  bossIntro = null; sinkBanner = null; slowT = 0;
   parrot = { x:150 - 30, y:110, vx:0, vy:0, target:null, cd:60, t:0 };
   fusen = upLv("fusen");      // 비상식량 업그레이드 — 풍선 하나를 들고 출발
   fusenAnim = 0;
@@ -1467,9 +1468,75 @@ function spawnBoss(big){
   if(type === 1) boss.y = SEA + 40;
   if(type === 2) boss.y = SEA - 8;
   if(type === 5){ boss.y = SEA - 40; boss.sub = 200; }
-  pops.push({ x:p.x + 60, y:p.y - 70, t:140,
-              text: (big ? "▲ 대형 ▲ " : "현상수배 · ") + BOSSES[type].name,
-              color: big ? "#8f4fd0" : "#b03a34" });
+  bossIntro = { type, big:!!big, t: 0, bounty: big ? (600 + bossKills*80) : (150 + bossKills*40) };
+}
+
+// 보스 등장 컷인 — 위아래 띠가 양옆에서 밀려 들어오고 이름이 찍힌다 (약 2초)
+const INTRO_T = 105;
+function drawBossIntro(){
+  if(!bossIntro) return;
+  const t = bossIntro.t;
+  const inK = Math.min(1, t / 14), outK = Math.min(1, (INTRO_T - t) / 16);
+  const k = Math.min(inK, outK);
+  if(k <= 0) return;
+  const ease = 1 - Math.pow(1 - k, 3);
+  const col = bossIntro.big ? "143,79,208" : "176,58,52";
+  ctx.save();
+  // 게임은 계속 돌아가니 화면을 다 가리지 않게 — 띠는 반투명, 전체 어둡게는 아주 살짝만
+  ctx.fillStyle = "rgba(8,12,20," + (0.15 * ease).toFixed(2) + ")";
+  ctx.fillRect(0, 0, W, H);
+  const bandY = H/2 - 60, bandH = 120;
+  ctx.fillStyle = "rgba(13,20,30,.58)";
+  ctx.fillRect(W * (1 - ease), bandY, W, bandH);
+  ctx.fillStyle = "rgba(" + col + ",.95)";
+  ctx.fillRect(-W * (1 - ease), bandY - 6, W, 6);
+  ctx.fillRect(W * (1 - ease), bandY + bandH, W, 6);
+  // 흐르는 경고 문구
+  ctx.globalAlpha = ease * 0.5;
+  ctx.fillStyle = "rgba(" + col + ",1)";
+  ctx.font = "900 12px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  const tape = (bossIntro.big ? "▲ DANGER ▲ 대형 해수 ▲ " : "WANTED · 현상수배 · ").repeat(8);
+  ctx.fillText(tape, -((t * 3) % 300), bandY - 16);
+  ctx.fillText(tape, -300 + ((t * 3) % 300), bandY + bandH + 16);
+  ctx.globalAlpha = ease;
+  const B = BOSSES[bossIntro.type];
+  const slide = (1 - ease) * 120;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(" + col + ",1)";
+  ctx.font = "700 13px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText(bossIntro.big ? "대형 보스 출현" : "현상수배범 출현", W/2 - slide, bandY + 22);
+  ctx.fillStyle = "#f4ecd9";
+  ctx.font = "900 36px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText(B.name, W/2 + slide, bandY + 60);
+  ctx.fillStyle = "rgba(244,236,217,.75)";
+  ctx.font = "400 14px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText(B.tag + "  ·  격침 현상금 " + bossIntro.bounty, W/2 - slide, bandY + 96);
+  ctx.restore();
+}
+
+// 격침 배너 — 슬로모션과 함께 크게 찍힌다
+function drawSinkBanner(){
+  if(!sinkBanner) return;
+  const t = sinkBanner.t;
+  const a = Math.min(1, t / 10, (90 - t) / 20);
+  if(a <= 0) return;
+  const sc = 1 + Math.max(0, 1 - t / 10) * 0.8;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.translate(W/2, H/2 - 40);
+  ctx.scale(sc, sc);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "900 54px 'Pretendard', system-ui, sans-serif";
+  ctx.lineWidth = 8; ctx.strokeStyle = "rgba(13,20,30,.85)";
+  ctx.strokeText("격침!", 0, 0);
+  ctx.fillStyle = sinkBanner.big ? "#d9a8f0" : "#ffd76a";
+  ctx.fillText("격침!", 0, 0);
+  ctx.font = "700 16px 'Pretendard', system-ui, sans-serif";
+  ctx.lineWidth = 5; ctx.strokeText(sinkBanner.name, 0, 42);
+  ctx.fillStyle = "#f4ecd9";
+  ctx.fillText(sinkBanner.name, 0, 42);
+  ctx.restore();
 }
 
 // 약점은 여러 개이고, 대부분 움직인다. 같은 자리만 노려선 안 되도록.
@@ -1593,6 +1660,8 @@ function damageBoss(ranged, mark){
     pops.push({ x:b.x, y:b.y-40, t:130, text:"격침 +" + bounty, color:"#d9b877" });
     for(let i=0;i<40;i++) spark(b.x, b.y, "#d9b877");
     bossKills++;
+    slowT = 42;
+    sinkBanner = { t: 0, name: BOSSES[b.type].name, big: b.big };
     if(!practiceMode){        // 연습 모드에서 무한 반복 격파해도 칭호·기록은 오염되지 않게
       lifeBossKills++;
       if(lifeBossKills === PARROT_UNLOCK)
@@ -2133,6 +2202,8 @@ function update(dt){
   }
   if(missAnim){ missAnim.t -= 0.09*dt; if(missAnim.t <= 0) missAnim = null; }
   if(shakeT > 0){ shakeT -= dt; if(shakeT <= 0){ shakeT = 0; shakeMag = 0; } }
+  if(bossIntro){ bossIntro.t += dt; if(bossIntro.t > INTRO_T) bossIntro = null; }
+  if(sinkBanner){ sinkBanner.t += dt; if(sinkBanner.t > 90) sinkBanner = null; }
 
   if(state !== STATE.PLAY) return;
 
@@ -3812,6 +3883,8 @@ function draw(){
   if(state === STATE.PLAY) drawGunGauge();
   if(state === STATE.PLAY) drawFusenGauge();
   if(state === STATE.PLAY) drawGearGauge();
+  if(state === STATE.PLAY) drawBossIntro();
+  if(state === STATE.PLAY) drawSinkBanner();
   if(state === STATE.PLAY) drawMissions();
   if(state === STATE.PLAY) drawMissionFlash();
   warnY = boss ? 68 : 22;
@@ -3975,6 +4048,8 @@ function loop(now){
   let dt = (now - last) / (1000/60);
   last = now;
   if(dt > 3) dt = 3;
+  // 보스 격침 순간의 슬로모션 — 실제 시간 기준으로 줄어든다
+  if(slowT > 0 && state === STATE.PLAY){ slowT -= dt; dt *= 0.3; }
   update(dt);
   draw();
   requestAnimationFrame(loop);
@@ -3987,7 +4062,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, fire, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins }),
+                 practiceMode, dailyMode, fire, slowT, bossIntro, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

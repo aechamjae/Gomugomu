@@ -710,6 +710,22 @@ function swing(a, st){
   ok("보스가 뜨면 날씨가 걷힌다", hadWeather && !a.peek().weather, "날씨있었음=" + hadWeather);
 }
 
+/* --- 보스 컷인 · 격침 슬로모션 --- */
+{
+  const a = A();
+  a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(false);
+  let introSeen = false;
+  run(a, 1200, (st) => { swing(a, st); if(st.bossIntro) introSeen = true; if(st.boss) {} });
+  ok("보스가 나오면 등장 컷인이 뜬다", introSeen);
+  const P = T().P();
+  if(a.peek().boss){
+    const b = a.peek().boss; b.hp = 1; b.invul = 0;
+    T().dmg(true, "테스트");
+    ok("보스를 격침하면 슬로모션이 걸린다", a.peek().slowT > 0 && !a.peek().boss, "slowT=" + a.peek().slowT);
+  }
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
