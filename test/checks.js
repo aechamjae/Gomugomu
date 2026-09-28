@@ -936,7 +936,7 @@ function swing(a, st){
     });
     if(s.deathReason === "완주") break;
   }
-  ok("보스 러시 — 7연전을 순서대로 치르고 완주한다", s.deathReason === "완주" && order.join(",") === "0,1,3,4,2,6,5" && !fishSeen,
+  ok("보스 러시 — 8연전을 순서대로 치르고 완주한다", s.deathReason === "완주" && order.join(",") === "0,1,3,4,2,6,5,7" && !fishSeen,
      "사인=" + s.deathReason + " 순서=" + order.join(","));
   a.startMain();
 }
@@ -1077,6 +1077,42 @@ function swing(a, st){
   const b = start();
   b.fireGun();
   ok("켜 두면 흔들린다", b.peek().shakeT > 0);
+}
+
+/* --- 망령의 유령선 (대형, type 7) --- */
+{
+  const a = start();
+  const P = T().P();
+  const mk = () => ({ type:7, big:true, hp:8, maxHp:8, t:0, fire:80, summon:90, walk:0, invul:0, flash:0,
+                      x:P.x + 330, y:a.peek().SEA - 14, vy:0, air:false, phase:0, sub:190, perch:null, tents:[], swing:0, sink:0, dive:0 });
+  const b = mk();
+  T().setBoss(b);
+  ok("유령선은 실체일 때 등불·선장이 약점", T().wp(b).map(w => w.mark).join(",") === "등불,선장");
+  b.phase = 1;
+  ok("유령 상태에선 약점이 없다(무적)", T().wp(b).length === 0);
+  // 유령 상태에선 유령 갈매기를 부른다
+  b.summon = 1; b.sub = 100;
+  const g0 = a.peek().gulls.length;
+  run(a, 3, (st) => swing(a, st));
+  ok("유령 상태에선 유령 갈매기를 부른다", a.peek().gulls.some(g => g.ghost), "갈매기 " + g0 + "→" + a.peek().gulls.length);
+  // 맞으면 유령으로 숨는다, 격침해도 크라켄 누적은 오르지 않는다
+  const ks = T().lifeStats().kraken;
+  b.phase = 0; b.invul = 0; b.hp = 2;
+  T().dmg(true, "t");
+  ok("맞으면 유령 상태로 숨는다", b.phase === 1);
+  b.invul = 0; T().dmg(true, "t");
+  ok("유령선 격침은 크라켄 누적에 들어가지 않는다", !a.peek().boss && T().lifeStats().kraken === ks);
+}
+{
+  // 대형 슬롯은 크라켄 → 유령선 번갈아
+  const a = start();
+  const types = [];
+  for(let k = 0; k < 2; k++){
+    T().teleport((2000 + k*2200) * 22);
+    T().setFusen(2);
+    run(a, 400, (st) => { swing(a, st); T().setFusen(2); if(st.boss && st.boss.big && !st.boss._t){ st.boss._t = 1; types.push(st.boss.type); } if(st.boss){ st.boss.hp = 1; st.boss.invul = 0; T().dmg(true, "t"); } });
+  }
+  ok("대형 보스는 크라켄 다음 유령선", types.join(",") === "5,7", "순서=" + types.join(","));
 }
 
 /* --- 흑조호 잠항 (순간이동 금지) --- */
