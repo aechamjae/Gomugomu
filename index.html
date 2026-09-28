@@ -279,6 +279,13 @@ const MISSIONS = [
 ];
 const MISSION_COUNT = 3;
 
+/* 날씨 구간 — 순풍(공중에서 앞으로 밀어준다) / 폭풍(돌풍·하강기류, 대신 금화 2배) */
+const WEATHER_FIRST = 350;   // 첫 날씨는 이 거리 이후에
+const WEATHER_LEN   = 120;   // 한 구간 길이(m)
+const TAILWIND      = 0.055; // 순풍 가속(공중에서만)
+const STORM_GUST    = 0.07;  // 폭풍 좌우 돌풍 세기
+const STORM_DOWN    = 0.045; // 폭풍 하강기류 세기
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const distEl = document.getElementById("dist");
@@ -363,7 +370,8 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     mobs, lastKingX, skillCd, fist, gunCd, gun, fire, stallX, stallT,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
-    missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken;
+    missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
+    weather, nextWeatherAt, flash;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -378,6 +386,9 @@ function reset(){
   coinsGot = 0; fishKills = 0; kingKills = 0; meatsGot = 0; maxAir = 0;
   missionFlash = null;
   missions = pickMissions();
+  weather = null;
+  nextWeatherAt = WEATHER_FIRST + Math.random()*300;
+  flash = 0;
   runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
   rope = null;
@@ -471,6 +482,22 @@ function checkMissions(){
       if(fusen < FUSEN_MAX) fusen++;
       pops.push({ x:p.x, y:p.y-70, t:150, text:"미션 올클리어! +" + bonus + " · 풍선 +1", color:"#9fe0a0" });
     }
+  }
+}
+
+function updateWeather(dt){
+  if(flash > 0) flash -= 0.06*dt;
+  if(weather){
+    if(weather.type === "storm" && Math.random() < 0.005*dt) flash = 1;
+    if(dist > weather.to){
+      pops.push({ x:p.x, y:p.y-50, t:70, text: weather.type === "storm" ? "폭풍을 빠져나왔다" : "바람이 잦아든다", color:"#8fd6d8" });
+      weather = null;
+      nextWeatherAt = dist + 500 + Math.random()*400;
+    }
+  } else if(!practiceMode && !boss && dist >= nextWeatherAt){
+    const type = Math.random() < 0.5 ? "wind" : "storm";
+    weather = { type, from: dist, to: dist + WEATHER_LEN };
+    missionFlash = { text: type === "wind" ? "순풍이 분다! →" : "폭풍 구간 — 금화 2배", reward:0, t:150, weather:type };
   }
 }
 
@@ -1646,6 +1673,11 @@ function update(dt){
     if(keys.left)  p.vx -= AIR*dt;
     if(keys.right) p.vx += AIR*dt;
     if(keys.down)  p.vy += DIVE*dt;
+    if(weather && weather.type === "wind") p.vx += TAILWIND*dt;
+    else if(weather && weather.type === "storm"){
+      p.vx += Math.sin(time*0.025) * STORM_GUST * dt;
+      p.vy += Math.max(0, Math.sin(time*0.017 + 1)) * STORM_DOWN * dt;
+    }
     airTime += dt;
     if(airTime > maxAir && stun <= 0) maxAir = airTime;
   }
@@ -1689,7 +1721,7 @@ function update(dt){
     if(Math.hypot(c.x - p.x, c.y - p.y) < 27){
       c.got = true;
       coinsGot++;
-      const mult = chainMult();
+      const mult = chainMult() * (weather && weather.type === "storm" ? 2 : 1);
       const gain = Math.round(25 * mult);
       treasure += gain;
       p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
@@ -1714,6 +1746,7 @@ function update(dt){
     }
   }
   if(fusenAnim > 0) fusenAnim -= dt;
+  updateWeather(dt);
   if(missionFlash){ missionFlash.t -= dt; if(missionFlash.t <= 0) missionFlash = null; }
 
   if(stun > 0) stun -= dt;
@@ -2676,6 +2709,39 @@ function drawMissions(){
   ctx.restore();
 }
 
+function drawWeather(){
+  if(!weather) return;
+  ctx.save();
+  if(weather.type === "wind"){
+    ctx.strokeStyle = "rgba(244,236,217,.28)"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    for(let i=0;i<22;i++){
+      const y = 30 + hash(i*3.7) * (SEA - 60);
+      const len = 40 + hash(i*1.3)*70;
+      const x = ((hash(i*7.1)*W*1.4 + time*(9 + hash(i)*6)) % (W*1.4)) - W*0.2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + len*0.5, y - 5, x + len, y); ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = "rgba(10,16,30,.32)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(180,200,230,.35)"; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for(let i=0;i<90;i++){
+      const x = (hash(i*5.3)*W*1.2 + time*(3 + Math.sin(time*0.025)*3)) % (W*1.2) - W*0.1;
+      const y = (hash(i*2.9)*H + time*(16 + hash(i)*6)) % H;
+      ctx.moveTo(x, y); ctx.lineTo(x - 6, y + 18);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  if(flash > 0){
+    ctx.fillStyle = "rgba(235,240,255," + (Math.max(0, flash)*0.55).toFixed(2) + ")";
+    ctx.fillRect(0, 0, W, H);
+  }
+  const left = Math.max(0, Math.ceil(weather.to - dist));
+  centerText((weather.type === "wind" ? "순풍 구간" : "폭풍 구간 · 금화 2배") + " — 남은 " + left + "m", H - 18,
+             "600 13px 'Pretendard', system-ui, sans-serif", weather.type === "wind" ? "#f4ecd9" : "#b8c8e8", 0.85);
+}
+
 function drawBestFlag(){
   if(practiceMode || runBest < 50) return;
   const x = (runBest + distOffset) * 22 - cam.x;
@@ -2708,10 +2774,11 @@ function drawMissionFlash(){
   ctx.globalAlpha = a;
   ctx.fillStyle = "rgba(13,27,38,0.78)";
   ctx.fillRect(W/2 - 170, y - 20, 340, 40);
-  ctx.strokeStyle = missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
+  ctx.strokeStyle = missionFlash.weather ? "#8fd6d8" : missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
   ctx.strokeRect(W/2 - 170, y - 20, 340, 40);
   ctx.restore();
-  if(missionFlash.record) centerText("★ " + missionFlash.text + " ★", y, "700 18px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
+  if(missionFlash.weather) centerText(missionFlash.text, y, "700 18px 'Pretendard', system-ui, sans-serif", missionFlash.weather === "wind" ? "#f4ecd9" : "#b8c8e8", a);
+  else if(missionFlash.record) centerText("★ " + missionFlash.text + " ★", y, "700 18px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
   else centerText("미션 완료 · " + missionFlash.text + "  +" + missionFlash.reward, y, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0", a);
 }
 
@@ -2859,6 +2926,7 @@ function draw(){
   sea();
   ctx.restore();
 
+  if(state === STATE.PLAY || state === STATE.PAUSE) drawWeather();
   if(boss && state === STATE.PLAY) drawBossBar();
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
@@ -2985,7 +3053,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken }),
+                 practiceMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

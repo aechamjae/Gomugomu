@@ -390,6 +390,28 @@ function swing(a, st){
   T().setBest(0);
 }
 
+/* --- 날씨 구간 --- */
+{
+  let started = null, ended = false;
+  for(let attempt = 0; attempt < 6 && !ended; attempt++){
+    const a = start();
+    T().setNextWeather(5);
+    run(a, 3000, (st) => {
+      swing(a, st);
+      if(st.weather && !started) started = st.weather.type;
+      if(started && !st.weather && st.dist > 130) ended = true;
+    });
+  }
+  ok("날씨 구간이 시작되고 일정 거리 뒤 끝난다", !!started && ended, "종류=" + started + " 종료=" + ended);
+  const a = A();
+  a.startPractice(0); H.step();
+  T().setNextWeather(0);
+  a.hold(true); H.step(); a.hold(false);
+  run(a, 60, (st) => swing(a, st));
+  ok("연습 모드엔 날씨가 없다", !a.peek().weather);
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
