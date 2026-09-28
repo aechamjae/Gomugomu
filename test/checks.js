@@ -312,6 +312,28 @@ function swing(a, st){
   ok("본게임으로 복귀하면 practiceMode가 다시 없다", !a.peek().practiceMode);
 }
 
+/* --- 고기 → 고무고무 풍선 --- */
+{
+  const a = start();
+  T().setFusen(1);
+  const P = T().P();
+  P.y = a.peek().SEA - 30; P.vy = 12; P.vx = 5;
+  const s = run(a, 3);
+  ok("풍선이 있으면 바다에 빠져도 튕겨 오른다", s.state === 1 && s.fusen === 0 && s.vy < 0,
+     "state=" + s.state + " fusen=" + s.fusen + " vy=" + s.vy.toFixed(1));
+  P.y = a.peek().SEA - 30; P.vy = 12;
+  const s2 = run(a, 3);
+  ok("풍선을 다 쓰면 바다에 빠진다", s2.state === 2 && s2.deathReason === "바다", "사인=" + s2.deathReason);
+}
+{
+  const a = start();
+  T().setFusen(0);
+  const P = T().P();
+  T().meats().push({ x:P.x, y:P.y, got:false });
+  const s = run(a, 1);
+  ok("고기를 먹으면 풍선이 생긴다", s.fusen === 1, "fusen=" + s.fusen);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

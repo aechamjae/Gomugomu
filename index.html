@@ -186,6 +186,7 @@
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
       <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초)</span>
+      <span><b>고기</b> 먹으면 바다에 빠질 때 한 번 튕겨 오른다(최대 2개)</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
     </div>
     <button id="pauseBtn">❚❚ 일시정지</button>
@@ -249,6 +250,12 @@ const GUN_KNOCK = 9.5;      // 발사 반동 — 쏘는 순간 이동 방향의 
 /* 잡몹 */
 const KING_H    = 300;      // 해왕류가 솟구치는 높이
 const KING_W    = 52;       // 목 굵기 (반지름)
+
+/* 고기 → 고무고무 풍선 — 바다에 빠지는 순간 한 번 부풀어 튕겨 오른다 */
+const MEAT_FROM   = 120;    // 이 거리(m)부터 고기가 나온다
+const MEAT_CHANCE = 0.035;  // 고리 구간마다 나올 확률 (0.07이면 봇 평균 거리가 33%나 뛰어서 절반으로)
+const FUSEN_MAX   = 2;      // 한 번에 들고 있을 수 있는 풍선 수
+const FUSEN_BOUNCE = 15.5;  // 튕겨 오르는 속도
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -332,13 +339,17 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     airTime, deathReason, chain, chainTimer, maxChain, bestChain = 0, shield,
     boss, shots, nextBossAt, nextBigAt, bossKills, stun, iframes, grabCd, pPrevX, pPrevY,
     mobs, lastKingX, skillCd, fist, gunCd, gun, fire, stallX, stallT,
-    lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY;
+    lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
+    meats, fusen, fusenAnim;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
   cam = { x:0, z:1 };
   anchors = [];
   coins = [];
+  meats = [];
+  fusen = 0;
+  fusenAnim = 0;
   rope = null;
   state = STATE.READY;
   dist = 0;
@@ -446,11 +457,16 @@ function generate(){
         got:false
       });
     }
+    // 고기는 일부러 바다 가까이 낮게 띄운다 — 먹으려면 위험을 감수해야 한다
+    if(x/22 > MEAT_FROM && Math.random() < MEAT_CHANCE){
+      meats.push({ x: lastAX + gap*(0.4 + Math.random()*0.2), y: SEA - 88 - Math.random()*56, got:false });
+    }
     spawnMobs(lastAX, x);
     lastAX = x; lastAY = y;
   }
   anchors = anchors.filter(a => a.x > cam.x - 320);
   coins   = coins.filter(c => c.x > cam.x - 320);
+  meats   = meats.filter(m => m.x > cam.x - 320 && !m.got);
   mobs    = mobs.filter(m => m.x > cam.x - 420 && !m.gone);
 }
 
@@ -1580,6 +1596,22 @@ function update(dt){
     }
   }
 
+  for(const m of meats){
+    if(m.got) continue;
+    if(Math.hypot(m.x - p.x, m.y - p.y) < 32){
+      m.got = true;
+      if(fusen < FUSEN_MAX){
+        fusen++;
+        pops.push({ x:m.x, y:m.y-24, t:70, text:"고기! 풍선 " + fusen + "개", color:"#f7a8a0" });
+      } else {
+        treasure += 60;
+        pops.push({ x:m.x, y:m.y-24, t:60, text:"배불러! 보물 +60", color:"#d9b877" });
+      }
+      for(let i=0;i<12;i++) spark(m.x, m.y, "#f7a8a0");
+    }
+  }
+  if(fusenAnim > 0) fusenAnim -= dt;
+
   if(stun > 0) stun -= dt;
   if(iframes > 0) iframes -= dt;
   if(grabCd > 0) grabCd -= dt;
@@ -1615,7 +1647,21 @@ function update(dt){
   generate();
   syncHUD();
 
-  if(p.y > SEA - 14) return die("바다");
+  if(p.y > SEA - 14){
+    if(fusen > 0){
+      // 고무고무 풍선 — 바다에 닿는 순간 몸을 부풀려 튕겨 오른다
+      fusen--;
+      rope = null;
+      p.y = SEA - 16;
+      p.vy = -FUSEN_BOUNCE;
+      p.vx = Math.max(Math.abs(p.vx), 7);
+      stun = 0;
+      iframes = Math.max(iframes, 40);
+      fusenAnim = 46;
+      pops.push({ x:p.x, y:p.y-40, t:80, text:"고무고무 풍선!", color:"#f7a8a0" });
+      for(let i=0;i<22;i++) spark(p.x, SEA, "#8fd6d8");
+    } else return die("바다");
+  }
   if(p.x < cam.x - 50) return die(stallT > STALL_PUSH_T ? "정체" : "뒤처짐");
 }
 
@@ -1856,6 +1902,58 @@ function drawCoin(c){
   ctx.fillStyle = "#d9b877";
   ctx.beginPath(); ctx.ellipse(x, y, 4 + squash*7, 11, 0, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = "#8a6a2c"; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function drawMeat(m){
+  const x = m.x - cam.x;
+  if(m.got || x < -40 || x > W+40) return;
+  const y = m.y + Math.sin(time*0.06 + m.x*0.03)*5;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(time*0.04 + m.x)*0.3);
+  ctx.fillStyle = "rgba(247,168,160,.18)";
+  ctx.beginPath(); ctx.arc(0, 0, 20 + Math.sin(time*0.12)*2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#f4ecd9";                     // 뼈
+  ctx.fillRect(-15, -2.5, 30, 5);
+  ctx.beginPath(); ctx.arc(-15, -3, 3.4, 0, Math.PI*2); ctx.arc(-15, 3, 3.4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(15, -3, 3.4, 0, Math.PI*2); ctx.arc(15, 3, 3.4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#9c3f2e";                     // 살코기
+  ctx.beginPath(); ctx.ellipse(0, 0, 11, 9, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#c8664b";
+  ctx.beginPath(); ctx.ellipse(-2, -2, 6, 4.5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawFusen(){
+  if(fusenAnim <= 0) return;
+  const k = fusenAnim / 46;
+  const x = p.x - cam.x, y = p.y;
+  const r = 18 + 22 * Math.sin(Math.min(1, (1-k)*2.2) * Math.PI/2) * k;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, k*1.6);
+  ctx.fillStyle = "#e8b48c";
+  ctx.beginPath(); ctx.arc(x, y + 2, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "#b03a34"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(x, y + 2, r, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawFusenGauge(){
+  if(fusen <= 0) return;
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.font = "700 13px 'Pretendard', system-ui, sans-serif";
+  for(let i=0;i<fusen;i++){
+    const x = 84 + i*26, y = H - 46;
+    ctx.fillStyle = "rgba(247,168,160,.9)";
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "#b03a34"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y + 9); ctx.lineTo(x - 2, y + 17); ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(244,236,217,.5)";
+  ctx.font = "400 10px 'Pretendard', system-ui, sans-serif";
+  ctx.fillText("풍선", 76, H - 46 + 34);
+  ctx.restore();
 }
 
 function drawArm(sx, sy, tx, ty, taut){
@@ -2531,6 +2629,7 @@ function draw(){
 
   for(const a of anchors) drawMast(a, a === target || (rope && rope.a === a));
   for(const c of coins) drawCoin(c);
+  for(const m of meats) drawMeat(m);
 
   const shx = p.x - cam.x + 4*p.face, shy = p.y - 2;
   if(rope){
@@ -2543,6 +2642,7 @@ function draw(){
   if(boss) drawBoss();
   drawMobs();
   drawShots();
+  drawFusen();
   drawPlayer();
   drawShield();
   drawFire();
@@ -2579,6 +2679,7 @@ function draw(){
   if(boss && state === STATE.PLAY) drawBossBar();
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
+  if(state === STATE.PLAY) drawFusenGauge();
   warnY = boss ? 68 : 22;
   if(state === STATE.PLAY) drawKingWarning();
   if(state === STATE.PLAY) drawStallWarning();
@@ -2688,7 +2789,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode }),
+                 practiceMode, meats, fusen }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,
