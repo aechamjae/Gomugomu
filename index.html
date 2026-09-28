@@ -78,6 +78,8 @@
       width:min(100vw, calc(100dvh * 1.6667));
     }
     .touch{display:block;position:absolute;inset:0;pointer-events:none;}
+    /* 실제로 조작하는 중이 아닐 땐(출항·일시정지·결과·메뉴) 조작 버튼을 숨겨 화면을 가리지 않게 */
+    .touch.idle .tb, .touch.idle .mhud, .touch.idle .tpause{display:none;}
     .tb,.tpause{
       pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;
       background:rgba(244,236,217,.10);border:2px solid rgba(217,184,119,.45);
@@ -1622,8 +1624,7 @@ function keyName(e){
 
 window.addEventListener("keydown", (e)=>{
   const k = keyName(e);
-  if(k === "KeyM" && state === STATE.REVIVE) declineRevive();   // 부활 창에서 메뉴로 나가도 판은 정상 종료(보물·기록 저장)
-  if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); state = STATE.MENU; syncHUD(); return; }
+  if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); goToMenu(); return; }
   if(inMenu()){
     if(k === "Escape"){ e.preventDefault(); if(state !== STATE.MENU) state = STATE.MENU; return; }
     const m = /^Digit([1-9])$/.exec(k);
@@ -1679,9 +1680,11 @@ canvas.addEventListener("pointerdown", (e)=>{
     else if(inB(GIVEUP_BTN)) declineRevive();
     return;
   }
-  if(state === STATE.OVER){
-    const pos = canvasPos(e), B = SHARE_BTN;
-    if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ shareResult(); return; }
+  {
+    const pos = canvasPos(e);
+    for(const B of screenButtons()){
+      if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ B.act(); return; }
+    }
   }
   if(inMenu()){
     const pos = canvasPos(e);
@@ -4810,7 +4813,32 @@ function drawStallWarning(){
 }
 
 /* 결과 공유 — 모바일은 공유 시트, 아니면 클립보드. 둘 다 안 되면 안내만 */
-const SHARE_BTN = { x: W - 190, y: H - 66, w: 170, h: 38 };
+/* 화면 위 버튼 줄 — 모바일엔 M·R·C 키가 없어서 출항·일시정지·결과 화면에 누를 수 있는 버튼을 둔다 */
+function goToMenu(){
+  if(state === STATE.REVIVE) declineRevive();   // 부활 창이면 판을 정상 종료(보물·기록 저장)하고 나간다
+  state = STATE.MENU; practicePage = 0; shopPage = 0;
+  syncHUD();
+}
+function screenButtons(){
+  const cx = W/2, bw = 128, gap = 10, h = 40, y = H - 60;   // 이 화면들에선 터치 조작 버튼을 숨기니 가운데에
+  const row = (items) => items.map((it, i) => ({ x: cx - (items.length*bw + (items.length-1)*gap)/2 + i*(bw + gap), y, w: bw, h, label: it[0], act: it[1], col: it[2] }));
+  if(state === STATE.READY) return row([["← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]]);
+  if(state === STATE.PAUSE) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 시작 (R)", reset, "#d9b877"], ["계속 (P)", togglePause, "#9fe0a0"]]);
+  if(state === STATE.OVER) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 (R)", reset, "#9fe0a0"], ["결과 공유 (C)", shareResult, "#d9b877"]]);
+  return [];
+}
+function drawScreenButtons(){
+  for(const B of screenButtons()){
+    ctx.save();
+    ctx.fillStyle = "rgba(13,27,38,.72)"; ctx.fillRect(B.x, B.y, B.w, B.h);
+    ctx.strokeStyle = B.col; ctx.lineWidth = 1.5; ctx.strokeRect(B.x, B.y, B.w, B.h);
+    ctx.fillStyle = B.col; ctx.font = "700 14px 'Pretendard', system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(B.label, B.x + B.w/2, B.y + B.h/2 + 1);
+    ctx.restore();
+  }
+}
+const SHARE_BTN = { x: W - 190, y: H - 66, w: 170, h: 38 };   // 공유 안내 문구 위치 기준
 let shareMsg = null;
 function resultText(){
   const title = currentTitleName();
@@ -4942,23 +4970,17 @@ function drawGradeStamp(x, y){
 }
 
 function drawShareButton(){
-  const B = SHARE_BTN;
+  const btns = screenButtons();
+  const S = btns[btns.length - 1];
+  if(!S) return;
   ctx.save();
-  ctx.fillStyle = "rgba(217,184,119,.16)";
-  ctx.fillRect(B.x, B.y, B.w, B.h);
-  ctx.strokeStyle = "rgba(217,184,119,.7)"; ctx.lineWidth = 1.5;
-  ctx.strokeRect(B.x, B.y, B.w, B.h);
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "700 14px 'Pretendard', system-ui, sans-serif";
-  ctx.fillStyle = "#d9b877";
-  ctx.fillText("결과 공유 (C)", B.x + B.w/2, B.y + B.h/2);
   if(shareMsg){
     shareMsg.t -= 1;
     ctx.globalAlpha = Math.min(1, shareMsg.t / 20);
     ctx.font = "600 12px 'Pretendard', system-ui, sans-serif";
     ctx.fillStyle = "#9fe0a0";
     ctx.textAlign = "right";
-    ctx.fillText(shareMsg.text, B.x + B.w, B.y + B.h + 13);
+    ctx.fillText(shareMsg.text, S.x + S.w, S.y + S.h + 13);
     if(shareMsg.t <= 0) shareMsg = null;
   }
   ctx.restore();
@@ -5068,7 +5090,13 @@ function centerText(t, y, font, color, alpha){
   ctx.globalAlpha = 1;
 }
 
+let uiState = -1;
 function draw(){
+  if(state !== uiState){
+    uiState = state;
+    const tc = document.querySelector(".touch");
+    if(tc) tc.classList.toggle("idle", state !== STATE.PLAY);
+  }
   sky();
 
   ctx.save();
@@ -5219,8 +5247,8 @@ function draw(){
         py += 21;
       }
     }
-    centerText("P · Esc · Space · 화면을 눌러 계속", H/2 + 110, "600 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.8)");
-    centerText("R 다시 시작 · M 메뉴(설정은 메뉴 8번)", H/2 + 134, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.5)");
+    centerText("화면 아무 곳이나 누르면 계속 · 설정은 메뉴 8번", H/2 + 112, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
+    drawScreenButtons();
   } else if(state === STATE.READY){
     ctx.fillStyle = "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
@@ -5234,12 +5262,13 @@ function draw(){
     centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 36, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
     centerText("Q 피스톨(5초) · W 엘리펀트 건(15초) — 원거리 공격, 해왕류·잡몹 처치", H/2 + 58, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
     centerText("식인 물고기는 휘청이게 하고, 해왕류는 원거리 스킬로 물리칠 수 있다", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
-    centerText("클릭 또는 Space로 출항 · M 메뉴로", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    centerText("화면을 누르거나 Space로 출항 · M 메뉴로", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 136, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
     if(tip) centerText("팁 · " + tip, H/2 + 164, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.8)");
     const readyTitle = currentTitleName();
     if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.8)");
+    drawScreenButtons();
   } else if(state === STATE.REVIVE){
     ctx.fillStyle = "rgba(13,27,38,0.62)";
     ctx.fillRect(0,0,W,H);
@@ -5298,8 +5327,8 @@ function draw(){
            newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
     if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a", 26);
-    if(runXp > 0) drawXpBar(lx, H - 96);
-    centerText("클릭 · Space · R로 다시 · M 메뉴로", H - 44, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    if(runXp > 0) drawXpBar(lx, H - 112);
+    drawScreenButtons();
     drawShareButton();
   } else if(state === STATE.MENU){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
