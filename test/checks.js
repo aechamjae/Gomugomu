@@ -939,6 +939,18 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 코치 힌트 --- */
+{
+  const a = start();
+  run(a, 200, (st) => swing(a, st));
+  const h = a.hints();
+  ok("처음 매달리면 그네 힌트가 뜨고 본 것으로 기록된다", h.seen.indexOf("swing") >= 0, "본 힌트=" + h.seen.join(","));
+  const a2 = start();
+  let shownAgain = false;
+  run(a2, 200, (st) => { swing(a2, st); const n = a2.hints().now; if(n && /그네를 밀어/.test(n.text)) shownAgain = true; });
+  ok("한 번 본 힌트는 다시 나오지 않는다", !shownAgain);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

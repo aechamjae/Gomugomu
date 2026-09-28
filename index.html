@@ -417,6 +417,56 @@ let parrotOn = true;
 const parrotUnlocked = () => lifeBossKills >= PARROT_UNLOCK;
 const parrotActive = () => parrotUnlocked() && parrotOn;
 let mapPieces = 0, mapsDone = 0;
+
+/* 코치 힌트 — 처음 겪는 순간에 한 번씩만. 본 것은 기기에 저장 */
+const HINTS = {
+  swing:   "← → 로 그네를 밀어 속도를 올려라 · ↓ 로 줄을 감아 오른다",
+  air:     "공중에서 다시 누르고 있으면 닿는 고리에 자동으로 걸린다",
+  perfect: "몸에 금빛 링이 떴다 — 지금 놓으면 PERFECT!",
+  sea:     "바다에 닿으면 끝! 빨리 다음 고리를 잡아라",
+  enemy:   "Q 피스톨로 적을 쏠 수 있다 (자동 조준)",
+  gear:    "기어 2 게이지가 가득 찼다 — E 로 발동!",
+  boss:    "보스는 빠른 속도로 약점(빨간 원)에 부딪쳐야 맞는다",
+  meat:    "고기를 먹으면 바다에 빠져도 한 번 튕겨 오른다"
+};
+let hintsSeen = new Set(), hintNow = null;
+function hint(id){
+  if(hintsSeen.has(id) || hintNow || practiceMode || state !== STATE.PLAY) return;
+  hintsSeen.add(id);
+  hintNow = { text: HINTS[id], t: 200 };
+  try{ if(window.localStorage) localStorage.setItem("swing:hints", JSON.stringify([...hintsSeen])); }catch(e){}
+}
+function loadHints(){
+  try{ const v = window.localStorage && localStorage.getItem("swing:hints"); if(v) hintsSeen = new Set(JSON.parse(v)); }catch(e){}
+}
+function updateHints(dt){
+  if(hintNow){ hintNow.t -= dt; if(hintNow.t <= 0) hintNow = null; return; }
+  if(rope) hint("swing");
+  if(!rope && airTime > 40 && hintsSeen.has("swing")) hint("air");
+  if(releaseGrade() === 2) hint("perfect");
+  if(!rope && p.y > SEA - 110 && p.vy > 3) hint("sea");
+  if(skillCd <= 0 && (mobs.some(m => m.kind === 1 && m.h > 40 && m.x > p.x) || gulls.some(g => g.x > p.x && g.x - p.x < 500))) hint("enemy");
+  if(gear >= GEAR_MAX) hint("gear");
+  if(boss && !bossIntro) hint("boss");
+  if(meats.some(m => !m.got && Math.abs(m.x - p.x) < 400)) hint("meat");
+}
+function drawHint(){
+  if(!hintNow) return;
+  const a = Math.min(1, hintNow.t / 25, (200 - hintNow.t) / 12);
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.font = "600 14px 'Pretendard', system-ui, sans-serif";
+  const w = ctx.measureText(hintNow.text).width + 36;
+  const y = IS_TOUCH ? 168 : H - 62;      // 터치 기기는 아래쪽 가운데에 미션 목록이 있다
+  ctx.fillStyle = "rgba(13,27,38,.82)";
+  ctx.fillRect(W/2 - w/2, y - 17, w, 34);
+  ctx.strokeStyle = "rgba(143,214,216,.7)"; ctx.lineWidth = 1.5;
+  ctx.strokeRect(W/2 - w/2, y - 17, w, 34);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#bfe8ea";
+  ctx.fillText("💡 " + hintNow.text, W/2, y + 1);
+  ctx.restore();
+}
 let bank = 0, upgrades = {}, shopMsg = null, bestBounty = 0, ownedSkins = ["red"], skin = "red";
 const curSkin = () => SKINS.find(k => k.id === skin) || SKINS[0];
 function pickSkin(k){
@@ -624,7 +674,7 @@ function reset(){
   jellies = []; bounces = 0;
   mapItems = []; mapGot = 0;
   blitzT = BLITZ_T; newBlitzRecord = false;
-  trail = []; rings = []; happyT = 0;
+  trail = []; rings = []; happyT = 0; hintNow = null;
   rushIdx = 0; rushT = 0; rushDone = false; newRushRecord = false;
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
@@ -2616,6 +2666,7 @@ function update(dt){
   }
   if(fusenAnim > 0) fusenAnim -= dt;
   if(happyT > 0) happyT -= dt;
+  updateHints(dt);
   updateBonus();
   updateWeather(dt);
   updateSkim(dt, sp);
@@ -4480,6 +4531,7 @@ function draw(){
   if(state === STATE.PLAY) drawBossIntro();
   if(state === STATE.PLAY) drawSinkBanner();
   if(state === STATE.PLAY) drawMissions();
+  if(state === STATE.PLAY) drawHint();
   if(state === STATE.PLAY) drawMissionFlash();
   warnY = boss ? 68 : 22;
   if(state === STATE.PLAY) drawKingWarning();
@@ -4687,6 +4739,7 @@ window.__swing = {
   startRush: startRush,
   log: () => lifeLog,
   level: () => levelOf(lifeLog.xp || 0),
+  hints: () => ({ seen: [...hintsSeen], now: hintNow }),
   map: () => ({ pieces: mapPieces, done: mapsDone, set: (v) => { mapPieces = v; } }),
   parrot: () => ({ q: parrot, active: parrotActive(), setOn: (v) => { parrotOn = v; } }),
   toLog: () => { state = STATE.LOG; },
@@ -4700,6 +4753,7 @@ loadBest();
 loadBestChain();
 loadTitles();
 loadShop();
+loadHints();
 loadDaily();
 loadLog();
 try{ canvas.focus({preventScroll:true}); }catch(e){}
