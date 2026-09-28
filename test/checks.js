@@ -868,6 +868,42 @@ function swing(a, st){
   ok("결과 공유 문구에 모드·보물·현상금이 들어간다", /본게임/.test(t) && /보물 321/.test(t) && /현상금 ฿/.test(t), JSON.stringify(t.split("\n")[1]));
 }
 
+/* --- 문어가 끌고 가던 고리를 잡으면 놓아 준다 (리뷰에서 나온 버그) --- */
+{
+  const a = A();
+  let released = null;
+  for(let attempt = 0; attempt < 4 && released !== true; attempt++){
+    a.startPractice(6); H.step(); a.hold(true); H.step(); a.hold(false);
+    for(let f = 0; f < 1500; f++){
+      const st = a.peek();
+      if(st.state === 2) break;
+      const b = st.boss;
+      if(b && b.grab){
+        // 붙잡힌 고리 바로 아래로 옮겨 놓고 그 고리를 잡는다
+        const an = b.grab, P = T().P();
+        P.x = an.x - 10; P.y = an.y + 80; P.vx = 0; P.vy = 0;
+        a.hold(false);
+        // 플레이어만 옮기면 보스가 뒤처진 걸로 보고 재배치하면서 고리를 놓아 버리니 보스도 옆에 둔다
+        for(let k = 0; k < 12; k++){ b.x = P.x + 250; b.dive = 0; H.step(); }
+        a.hold(true); H.step();
+        const s2 = a.peek();
+        // 끌기 시간이 넉넉히 남은 상태에서 잡았을 때만 판정 — 시간이 다 돼서 놓은 것과 구분
+        if(s2.rope && s2.rope.a === an && s2.boss && (s2.boss.grab ? s2.boss.grabT > 40 : true)){
+          const leftBefore = b.grabT;
+          b.x = P.x + 250; b.dive = 0;
+          H.step();
+          if(leftBefore > 40) released = !(a.peek().boss && a.peek().boss.grab);
+        }
+        break;
+      }
+      swing(a, st);
+      H.step();
+    }
+  }
+  ok("끌려가는 고리를 잡으면 문어가 놓아 준다", released === true, "released=" + released);
+  a.startMain();
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;

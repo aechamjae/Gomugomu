@@ -2062,8 +2062,15 @@ function updateBoss(dt){
       if(b.grab){
         const a = b.grab;
         b.grabT -= dt;
-        a.y += (a.stealY - a.y) * 0.07 * dt;
-        if(b.grabT <= 0 || a.x < p.x - 60){ b.grab = null; b.fire = Math.max(70, 120 - bossKills*4); }
+        // 플레이어가 끌려가는 고리를 잡으면 놓아 준다 — 줄 길이는 잡는 순간의 높이로 정해져서,
+        // 계속 끌어내리면 스윙 바닥이 바다에 닿아 억울하게 빠진다
+        if(rope && rope.a === a){
+          b.grab = null; b.fire = Math.max(70, 120 - bossKills*4);
+          pops.push({ x:a.x, y:a.y - 30, t:50, text:"문어가 고리를 놓쳤다!", color:"#c9a0d8" });
+        } else {
+          a.y += (a.stealY - a.y) * 0.07 * dt;
+          if(b.grabT <= 0 || a.x < p.x - 60){ b.grab = null; b.fire = Math.max(70, 120 - bossKills*4); }
+        }
       } else {
         b.fire -= dt;
         if(b.fire <= 0){
