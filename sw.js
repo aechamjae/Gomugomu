@@ -1,4 +1,4 @@
-const CACHE = "gomupal-v22";
+const CACHE = "gomupal-v23";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e)=>{
