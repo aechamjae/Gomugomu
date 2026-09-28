@@ -193,11 +193,8 @@
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
       <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초) · <b>E</b> 기어 2(게이지가 차면)</span>
-      <span>놓을 때 몸이 <b>금빛</b>으로 빛나면 PERFECT 릴리즈(가속+보물)</span>
-      <span><b>수면</b> 바로 위를 빠르게 스치거나 해왕류를 <b>아슬아슬</b>하게 피하면 보너스</span>
-      <span><b>황금 고리</b>는 보물 폭발, 금 간 <b>삭은 돛대</b>는 잡고 1초 남짓이면 부러진다</span>
-      <span>바다에 뜬 <b>보물 통</b>은 쏘거나 스치며 들이받으면 금화가 쏟아진다</span>
-      <span><b>고기</b> 먹으면 바다에 빠질 때 한 번 튕겨 오른다(최대 2개)</span>
+      <span><b>금빛 링</b>일 때 놓으면 PERFECT · <b>수면 스치기</b> · 해왕류 <b>아슬아슬</b> 회피 보너스</span>
+      <span><b>고기</b> 바다에서 한 번 튕김 · <b>보물 통</b> 쏘거나 들이받기 · <b>황금 고리</b> 보물 폭발 · 금 간 돛대는 곧 부러짐</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
     </div>
     <button id="pauseBtn">❚❚ 일시정지</button>
@@ -290,6 +287,22 @@ const MISSIONS = [
   { kind:"barrel",  goals:[1, 2, 3],         text:(n) => "보물 통 " + n + "개 부수기" }
 ];
 const MISSION_COUNT = 3;
+
+/* 출항 화면에 판마다 하나씩 보여주는 팁 */
+const TIPS = [
+  "고리를 지나 솟구칠 때 몸에 금빛 링이 뜨면 바로 놓아라 — PERFECT 릴리즈",
+  "PERFECT를 연달아 성공하면 보물이 점점 커진다",
+  "바다 바로 위를 빠르게 스치면 물보라와 함께 보물이 쌓인다",
+  "고기는 일부러 낮게 떠 있다 — 먹어 두면 바다에 빠져도 한 번 튕겨 오른다",
+  "기어 2 게이지가 차면 E — 5초 동안 무엇에도 휘청이지 않는다",
+  "보물 통은 피스톨로 쏘면 금화가 공중에 흩뿌려진다",
+  "금이 간 돛대는 잡자마자 삐걱댄다 — 빨리 다음 고리로",
+  "폭풍 구간은 돌풍이 거세지만 금화가 2배다",
+  "해왕류를 맞지 않고 아슬아슬하게 스쳐 지나가면 보너스",
+  "본게임이 끝나면 보물이 창고에 쌓인다 — 메뉴의 보물 창고에서 업그레이드",
+  "미션 세 개를 전부 깨면 보너스 보물과 풍선을 준다",
+  "노란 깃발은 내 최고 기록 지점이다 — 넘어서면 신기록"
+];
 
 /* 날씨 구간 — 순풍(공중에서 앞으로 밀어준다) / 폭풍(돌풍·하강기류, 대신 금화 2배) */
 const WEATHER_FIRST = 350;   // 첫 날씨는 이 거리 이후에
@@ -443,7 +456,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken;
+    barrels, barrelsBroken, tip;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -460,6 +473,7 @@ function reset(){
   coinsGot = 0; fishKills = 0; kingKills = 0; meatsGot = 0; maxAir = 0;
   missionFlash = null;
   missions = pickMissions();
+  tip = TIPS[Math.floor(Math.random()*TIPS.length)];
   weather = null;
   nextWeatherAt = WEATHER_FIRST + Math.random()*300;
   flash = 0;
@@ -3500,6 +3514,7 @@ function draw(){
     centerText("식인 물고기는 휘청이게 하고, 해왕류는 원거리 스킬로 물리칠 수 있다", H/2 + 80, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(143,208,214,.9)");
     centerText("클릭 또는 Space로 출항 · M 메뉴로", H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 136, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
+    if(tip) centerText("팁 · " + tip, H/2 + 164, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.8)");
     const readyTitle = currentTitleName();
     if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.8)");
