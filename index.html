@@ -435,7 +435,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
-    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord;
+    weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0;
 
 function reset(){
   p = { x:150, y:150, vx:7.4, vy:0, face:1 };
@@ -583,6 +583,7 @@ function updateRot(dt){
         rope = null;
         grabCd = Math.max(grabCd, 6);
         pops.push({ x:a.x, y:a.y-20, t:60, text:"뚝!", color:"#c9a27a" });
+        addShake(4, 10);
       }
       for(let i=0;i<16;i++) spark(a.x, a.y, "#6b4426");
     }
@@ -605,6 +606,11 @@ function updateWeather(dt){
   }
 }
 
+// 화면 흔들림 — 더 센 흔들림이 들어오면 덮어쓴다
+function addShake(mag, t){
+  if(mag >= shakeMag * (shakeT > 0 ? 1 : 0)){ shakeMag = mag; shakeT = t; }
+}
+
 function addGear(kind){
   if(gearT > 0 || state !== STATE.PLAY) return;
   const was = gear;
@@ -617,6 +623,7 @@ function fireGear(){
   if(state !== STATE.PLAY || gear < GEAR_MAX || gearT > 0) return;
   gear = 0;
   gearT = GEAR_T;
+  addShake(6, 16);
   gears++;
   stun = 0;
   missionFlash = { text: "기어 2 — 고무고무 제트!", reward: 0, t: 110, gear: true };
@@ -1232,6 +1239,7 @@ function knock(hard, mild){
   iframes = mild ? 60 : 78;
   rope = null;
   chain = 0;
+  addShake(hard ? 9 : mild ? 4 : 6, hard ? 22 : 14);
   p.vx *= hard ? 0.34 : mild ? 0.74 : 0.52;
   p.vy = Math.min(p.vy, -3.2);
   pops.push({ x:p.x, y:p.y-28, t:50, text:"휘청", color:"#b03a34" });
@@ -1259,6 +1267,7 @@ function knockKing(){
   }
   stun = STUN_STRONG;
   iframes = 90;
+  addShake(11, 26);
   rope = null;
   chain = 0;
   p.vx *= 0.22;
@@ -1271,6 +1280,7 @@ function knockKing(){
 function damageBoss(ranged, mark){
   const b = boss;
   b.hp--; b.flash = 16; b.invul = b.big ? 44 : 30;
+  addShake(b.hp <= 0 ? 12 : 6, b.hp <= 0 ? 30 : 14);
   treasure += b.big ? 60 : 40;
   if(!ranged){
     p.vy = -7.6;
@@ -1744,6 +1754,7 @@ function updateFist(dt){
 function fireGun(){
   if(state !== STATE.PLAY || gunCd > 0 || stun > 0) return;
   gunCd = GUN_CD;
+  addShake(8, 18);
   const gx = p.x + 200*p.face, gy = p.y - 6;
   gun = { x:gx, y:gy, t:GUN_LIFE };
 
@@ -1798,6 +1809,7 @@ function update(dt){
     if(pops[i].t <= 0) pops.splice(i,1);
   }
   if(missAnim){ missAnim.t -= 0.09*dt; if(missAnim.t <= 0) missAnim = null; }
+  if(shakeT > 0){ shakeT -= dt; if(shakeT <= 0){ shakeT = 0; shakeMag = 0; } }
 
   if(state !== STATE.PLAY) return;
 
@@ -1987,6 +1999,7 @@ function update(dt){
       stun = 0;
       iframes = Math.max(iframes, 40);
       fusenAnim = 46;
+      addShake(5, 14);
       pops.push({ x:p.x, y:p.y-40, t:80, text:"고무고무 풍선!", color:"#f7a8a0" });
       for(let i=0;i<22;i++) spark(p.x, SEA, "#8fd6d8");
     } else return die("바다");
@@ -3024,6 +3037,29 @@ function drawMissions(){
   ctx.restore();
 }
 
+// 고속 비행 중 화면 가장자리에 흐르는 속도선
+function drawSpeedLines(){
+  const sp = Math.hypot(p.vx, p.vy);
+  const k = Math.max(0, Math.min(1, (sp - 17) / 9));
+  if(k <= 0 || rope) return;
+  ctx.save();
+  ctx.strokeStyle = gearT > 0 ? "rgba(255,190,200," + (0.35*k).toFixed(2) + ")" : "rgba(244,236,217," + (0.28*k).toFixed(2) + ")";
+  ctx.lineWidth = 2; ctx.lineCap = "round";
+  const ang = Math.atan2(p.vy, p.vx);
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  ctx.beginPath();
+  for(let i=0;i<18;i++){
+    const seed = i*13.7 + Math.floor(time/3)*0.91;
+    const edge = hash(seed) < 0.5;           // 위쪽·아래쪽 가장자리 중 하나
+    const x = hash(seed*1.7) * W;
+    const y = edge ? hash(seed*2.3) * H*0.22 : H - hash(seed*2.3) * H*0.22;
+    const len = 40 + hash(seed*3.1) * 80 * k;
+    ctx.moveTo(x, y); ctx.lineTo(x - ca*len, y - sa*len);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawWeather(){
   if(!weather) return;
   ctx.save();
@@ -3266,6 +3302,10 @@ function draw(){
   sky();
 
   ctx.save();
+  if(shakeT > 0){
+    const m = shakeMag * Math.min(1, shakeT / 12);
+    ctx.translate((Math.random()*2 - 1) * m, (Math.random()*2 - 1) * m);
+  }
   ctx.translate(W*0.32, H*0.5);
   ctx.scale(cam.z, cam.z);
   ctx.translate(-W*0.32, -H*0.5);
@@ -3326,6 +3366,7 @@ function draw(){
   ctx.restore();
 
   if(state === STATE.PLAY || state === STATE.PAUSE) drawWeather();
+  if(state === STATE.PLAY) drawSpeedLines();
   if(boss && state === STATE.PLAY) drawBossBar();
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
