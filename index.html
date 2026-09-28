@@ -5058,14 +5058,18 @@ function drawPoster(x, y, w, h){
   ctx.font = "700 16px Georgia, 'Times New Roman', serif";
   ctx.fillText("DEAD OR ALIVE", w/2, py + ph + 24);
   const title = currentTitleName();
-  ctx.font = "700 21px 'Pretendard', system-ui, sans-serif";
-  ctx.fillText((title ? "'" + title + "' " : "") + "고무팔 Lv." + levelOf(lifeLog.xp || 0).L, w/2, py + ph + 56, w - 30);
+  // fillText의 최대 폭 인자는 iOS Safari에서 무시되는 경우가 있어서, 직접 재고 글씨 크기를 줄인다
+  const fit = (text, y, weight, size, family, maxW) => {
+    let sz = size;
+    ctx.font = weight + " " + sz + "px " + family;
+    while(sz > 9 && ctx.measureText(text).width > maxW){ sz -= 1; ctx.font = weight + " " + sz + "px " + family; }
+    ctx.fillText(text, w/2, y);
+  };
+  fit((title ? "'" + title + "' " : "") + "고무팔 Lv." + levelOf(lifeLog.xp || 0).L, py + ph + 56, "700", 21, "'Pretendard', system-ui, sans-serif", w - 30);
   // 현상금
-  ctx.font = "900 26px Georgia, 'Times New Roman', serif";
-  ctx.fillText("฿ " + commas(runBounty), w/2, py + ph + 96, w - 24);
-  ctx.font = "400 11px 'Pretendard', system-ui, sans-serif";
+  fit("฿ " + commas(runBounty), py + ph + 96, "900", 26, "Georgia, 'Times New Roman', serif", w - 30);
   ctx.fillStyle = "rgba(58,38,24,.7)";
-  ctx.fillText(practiceMode ? "연습 항해 — 기록되지 않음" : "최고 현상금 ฿ " + commas(bestBounty), w/2, py + ph + 124, w - 24);
+  fit(practiceMode ? "연습 항해 — 기록되지 않음" : "최고 현상금 ฿ " + commas(bestBounty), py + ph + 124, "400", 11, "'Pretendard', system-ui, sans-serif", w - 30);
   ctx.restore();
   if(newBountyRecord){
     // 신기록 도장
@@ -5306,7 +5310,13 @@ function draw(){
     if(blitzMode) line((newBlitzRecord ? "★ 60초 사냥 신기록 " : "60초 보물 사냥 · 최고 ") + Math.floor(blitzBest), "700 14px 'Pretendard', system-ui, sans-serif", newBlitzRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(dailyMode && streakReward) line("🔥 " + streak + "일 연속 출석! 창고 보물 +" + streakReward, "700 14px 'Pretendard', system-ui, sans-serif", "#ffb070", 26);
     if(dailyMode) line((newDailyRecord ? "★ 오늘의 항해 신기록 " : "오늘의 항해 · 오늘 최고 ") + Math.floor(dailyBestToday()) + "m", "700 14px 'Pretendard', system-ui, sans-serif", newDailyRecord ? "#ffd76a" : "#8fd6d8", 26);
-    line(reasonText, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
+    {
+      // 오른쪽 등급 도장(x≈W/2+258부터)과 겹치지 않게 폭을 재서 줄인다
+      let sz = 27;
+      ctx.font = "700 " + sz + "px 'Pretendard', system-ui, sans-serif";
+      while(sz > 14 && ctx.measureText(reasonText).width > W/2 + 250 - lx){ sz--; ctx.font = "700 " + sz + "px 'Pretendard', system-ui, sans-serif"; }
+      line(reasonText, "700 " + sz + "px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
+    }
     line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
     if(!practiceMode) line("창고 보물 " + Math.floor(bank), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
     if(missions.length){
