@@ -631,6 +631,7 @@ function swing(a, st){
 
 /* --- 금화 줄 --- */
 {
+  A().parrot().setOn(false);     // 앵무새가 아치 금화를 먼저 물어 가면 판정이 흔들린다
   let done = false, found = false;
   for(let attempt = 0; attempt < 10 && !done; attempt++){
     const a = start();
@@ -649,6 +650,7 @@ function swing(a, st){
     done = a.peek().arcsDone === 1;
   }
   ok("금화 줄을 전부 먹으면 완성 보너스", found && done, "아치발견=" + found);
+  A().parrot().setOn(true);
 }
 
 /* --- 앵무새 동료 --- */
