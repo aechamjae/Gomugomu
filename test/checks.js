@@ -275,7 +275,7 @@ function swing(a, st){
   let kingCount = 0, sawBoss = false, sawFish = false;
   for(let attempt=0; attempt<6 && kingCount < 20; attempt++){
     const a = A();
-    a.startPractice(6);   // 해왕류 폭주 연습 (PRACTICE_OPTIONS의 마지막 항목)
+    a.startPractice(7);   // 해왕류 폭주 연습 (PRACTICE_OPTIONS의 마지막 항목)
     H.step();
     a.hold(true); H.step(); a.hold(false);
     run(a, 2000, (st) => {
@@ -723,6 +723,49 @@ function swing(a, st){
     T().dmg(true, "테스트");
     ok("보스를 격침하면 슬로모션이 걸린다", a.peek().slowT > 0 && !a.peek().boss, "slowT=" + a.peek().slowT);
   }
+  a.startMain();
+}
+
+/* --- 고리 도둑 문어 (신규 중간보스, type 6) --- */
+{
+  const a = A();
+  let seenType = null, grabbed = false, moved = 0, sucker = false;
+  for(let attempt = 0; attempt < 4 && !(grabbed && moved > 30); attempt++){
+    a.startPractice(6); H.step(); a.hold(true); H.step(); a.hold(false);
+    run(a, 1500, (st) => {
+      swing(a, st);
+      const b = st.boss;
+      if(b){
+        seenType = b.type;
+        if(b.grab){
+          grabbed = true;
+          if(b.grab.y0 === undefined) b.grab.y0 = b.grab.y;
+          moved = Math.max(moved, Math.abs(b.grab.y - b.grab.y0));
+          if(a.weak().some(w => w.mark === "빨판")) sucker = true;
+        }
+      }
+    });
+  }
+  ok("고리 도둑 문어 연습 — 문어가 나온다", seenType === 6, "type=" + seenType);
+  ok("문어가 앞쪽 고리를 붙잡아 끌고 간다", grabbed && moved > 30, "최대 이동=" + Math.round(moved) + "px");
+  ok("고리를 붙잡은 동안엔 빨판도 약점이다", sucker);
+  a.startMain();
+}
+
+/* --- 보스 재배치 속도 (빠른 플레이어를 못 따라잡아 거리가 멈추던 버그) --- */
+{
+  const a = A();
+  const worst = {};
+  for(const t of [0, 1, 4, 6]){
+    a.startPractice(t); H.step(); a.hold(true); H.step(); a.hold(false);
+    let streak = 0, maxStreak = 0;
+    run(a, 2400, (st) => {
+      swing(a, st);
+      if(st.boss && st.boss.dive === 2){ streak++; maxStreak = Math.max(maxStreak, streak); } else streak = 0;
+    });
+    worst[t] = maxStreak;
+  }
+  ok("보스가 재배치 중에 오래 갇히지 않는다(플레이어보다 빨리 따라온다)", Object.values(worst).every(v => v < 200), JSON.stringify(worst));
   a.startMain();
 }
 
