@@ -279,6 +279,7 @@ const MISSIONS = [
   { kind:"air",     goals:[2, 2.5, 3],       text:(n) => "한 번에 " + n + "초 체공" },
   { kind:"chain",   goals:[3, 4, 5],         text:(n) => "연속 콤보 ×" + n },
   { kind:"fish",    goals:[2, 4, 6],         text:(n) => "식인 물고기 " + n + "마리 처치" },
+  { kind:"gull",    goals:[1, 2, 3],         text:(n) => "폭탄 갈매기 " + n + "마리 격추" },
   { kind:"king",    goals:[1],               text:()  => "해왕류 물리치기", from:1 },
   { kind:"dist",    goals:[400, 700, 1000],  text:(n) => n + "m 항해" },
   { kind:"boss",    goals:[1, 2],            text:(n) => "보스 " + n + "마리 격파", from:1 },
@@ -301,7 +302,9 @@ const TIPS = [
   "해왕류를 맞지 않고 아슬아슬하게 스쳐 지나가면 보너스",
   "본게임이 끝나면 보물이 창고에 쌓인다 — 메뉴의 보물 창고에서 업그레이드",
   "미션 세 개를 전부 깨면 보너스 보물과 풍선을 준다",
-  "노란 깃발은 내 최고 기록 지점이다 — 넘어서면 신기록"
+  "노란 깃발은 내 최고 기록 지점이다 — 넘어서면 신기록",
+  "폭탄 갈매기는 가까워지면 내 높이로 내려온다 — 피스톨 한 방이면 떨어진다",
+  "오늘의 항해는 하루 종일 같은 코스다 — 반투명 고스트가 오늘의 내 최고 기록"
 ];
 
 /* 날씨 구간 — 순풍(공중에서 앞으로 밀어준다) / 폭풍(돌풍·하강기류, 대신 금화 2배) */
@@ -327,6 +330,10 @@ const ROT_T       = 72;      // 잡고 나서 부러지기까지(프레임)
 const BARREL_FROM   = 150;
 const BARREL_CHANCE = 0.06;
 const BARREL_R      = 20;
+
+/* 폭탄 갈매기 — 공중 잡몹. 앞에서 날아오며 위아래로 출렁인다 */
+const GULL_FROM = 250;
+const GULL_R    = 16;
 
 /* 기어 2 — 멋진 플레이로 게이지를 채워 E로 발동. 5초간 가속·피격 무시·금화 2배 */
 const GEAR_MAX  = 100;
@@ -516,7 +523,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
-    barrels, barrelsBroken, tip, newDailyRecord;
+    barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -527,6 +534,9 @@ function reset(){
   meats = [];
   barrels = [];
   barrelsBroken = 0;
+  gulls = [];
+  gullKills = 0;
+  gullHits = 0;
   fusen = upLv("fusen");      // 비상식량 업그레이드 — 풍선 하나를 들고 출발
   fusenAnim = 0;
   perfectStreak = 0;
@@ -613,6 +623,7 @@ function missionValue(kind){
     case "air":     return Math.floor(maxAir/6)/10;
     case "chain":   return maxChain;
     case "fish":    return fishKills;
+    case "gull":    return gullKills;
     case "king":    return kingKills;
     case "dist":    return Math.floor(dist);
     case "boss":    return bossKills;
@@ -818,6 +829,7 @@ function generate(){
   coins   = coins.filter(c => c.x > cam.x - 320);
   meats   = meats.filter(m => m.x > cam.x - 320 && !m.got);
   barrels = barrels.filter(b => b.x > cam.x - 320 && !b.gone);
+  gulls   = gulls.filter(g => g.x > cam.x - 320 && !g.gone);
   mobs    = mobs.filter(m => m.x > cam.x - 420 && !m.gone);
 }
 
@@ -848,6 +860,15 @@ function spawnMobs(x0, x1){
     }
   }
 
+  // 폭탄 갈매기 — 공중에서 날아온다. 보통은 한 마리, 가끔 두 마리
+  if(dm > GULL_FROM && genRand() < (dm < 800 ? 0.10 : 0.16)){
+    const n = genRand() < 0.25 ? 2 : 1;
+    const gy = 120 + genRand()*170;
+    for(let i=0;i<n;i++){
+      gulls.push({ x: x1 + 160 + i*70, base: gy + i*36, y: gy + i*36, t: genRand()*60, vx: -(2.0 + genRand()*1.2), gone:false });
+    }
+  }
+
   // 해왕류 — 아주 드물게, 한참 간격을 두고 나온다 (예전 출현확률의 1/3)
   if(dm > 520 && x1 - lastKingX > 2600 && genRand() < 0.11){
     lastKingX = x1;
@@ -863,6 +884,41 @@ function segToCapsule(cx, top, bot){
   const near = (px, py) => Math.hypot(px - cx, Math.max(top, Math.min(bot, py)) - py);
   const mx = (pPrevX + p.x)/2, my = (pPrevY + p.y)/2;
   return Math.min(near(p.x, p.y), near(pPrevX, pPrevY), near(mx, my));
+}
+
+function killGull(g, gain){
+  g.gone = true; gullKills++;
+  treasure += gain;
+  addGear("kill");
+  pops.push({ x:g.x, y:g.y-22, t:44, text:"갈매기 격추 +" + gain, color:"#d9b877" });
+  for(let k=0;k<12;k++) spark(g.x, g.y, k % 2 ? "#f4ecd9" : "#f0a24e");
+}
+
+function updateGulls(dt){
+  for(const g of gulls){
+    if(g.gone) continue;
+    if(g.x - p.x > 1000) continue;               // 화면 가까이 올 때까지는 대기
+    g.t += dt;
+    g.x += g.vx * dt;
+    // 가까워지면 플레이어 높이 쪽으로 슬금슬금 내려온다(올라간다)
+    if(g.x > p.x && g.x - p.x < 420){
+      const want = Math.max(60, Math.min(SEA - 60, p.y));
+      g.base += Math.max(-3.2*dt, Math.min(3.2*dt, (want - g.base) * 0.08 * dt));
+    }
+    g.y = g.base + Math.sin(g.t*0.08) * 20;
+    if(state !== STATE.PLAY || stun > 0 || iframes > 0) continue;
+    const d = distOriginToSeg(pPrevX - g.x, pPrevY - g.y, p.x - g.x, p.y - g.y);
+    if(d < GULL_R + 13){
+      if(fire > 0 || gearT > 0) killGull(g, 20);
+      else {
+        g.gone = true;
+        gullHits++;
+        knock(false, true);
+        for(let k=0;k<14;k++) spark(g.x, g.y, "#f0a24e");
+        pops.push({ x:g.x, y:g.y-20, t:40, text:"펑!", color:"#f0a24e" });
+      }
+    }
+  }
 }
 
 function updateMobs(dt){
@@ -1791,6 +1847,11 @@ function pistolAim(){
     const d = Math.hypot(m.x - p.x, m.y - p.y);
     if(d < bd && d < 860){ bd = d; best = { x:m.x, y:m.y }; }
   }
+  for(const g of gulls){
+    if(g.gone || g.x < p.x - 60) continue;
+    const d = Math.hypot(g.x - p.x, g.y - p.y);
+    if(d < bd && d < 860){ bd = d; best = { x:g.x, y:g.y }; }
+  }
   if(best) return Math.atan2(best.y - p.y, best.x - p.x);
   // 물고기도 없으면 앞쪽 보물 통을 노린다
   for(const b of barrels){
@@ -1833,6 +1894,9 @@ function updateFist(dt){
 
   for(const b of barrels){
     if(!b.gone && near(b.x, barrelY(b)) < FIST_R + BARREL_R){ breakBarrel(b, "피스톨"); fist.back = true; return; }
+  }
+  for(const g of gulls){
+    if(!g.gone && near(g.x, g.y) < FIST_R + GULL_R) killGull(g, 20);   // 관통 — 한 줄로 늘어선 갈매기는 한 번에
   }
 
   // 날아오는 탄을 쳐낸다
@@ -1916,6 +1980,9 @@ function fireGun(){
   }
   for(const b of barrels){
     if(!b.gone && Math.hypot(b.x - gx, barrelY(b) - gy) < GUN_R + BARREL_R) breakBarrel(b, "엘리펀트 건");
+  }
+  for(const g of gulls){
+    if(!g.gone && Math.hypot(g.x - gx, g.y - gy) < GUN_R + GULL_R) killGull(g, 20);
   }
   if(boss && Math.hypot(boss.x-gx, boss.y-gy) < GUN_R + 40){
     damageBoss(true, "엘리펀트 건");
@@ -2102,6 +2169,7 @@ function update(dt){
   updateFist(dt);
   updateGun(dt);
   updateMobs(dt);
+  updateGulls(dt);
   checkMissions();
   if(!recordBroken && !practiceMode && runBest >= 50 && dist > runBest){
     recordBroken = true;
@@ -2987,6 +3055,33 @@ function drawBoss(){
   }
 }
 
+function drawGulls(){
+  for(const g of gulls){
+    const x = g.x - cam.x;
+    if(g.gone || x < -60 || x > W/cam.z + 60) continue;
+    const flap = Math.sin(g.t*0.35) * 9;
+    ctx.save();
+    ctx.translate(x, g.y);
+    ctx.strokeStyle = "#f4ecd9"; ctx.lineWidth = 3.4; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-20, -flap); ctx.quadraticCurveTo(-9, -6 - flap*0.4, 0, 0);
+    ctx.quadraticCurveTo(9, -6 - flap*0.4, 20, -flap);
+    ctx.stroke();
+    ctx.fillStyle = "#f4ecd9";
+    ctx.beginPath(); ctx.ellipse(0, 1, 9, 5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#f0a24e";
+    ctx.beginPath(); ctx.moveTo(-9, 0); ctx.lineTo(-15, 2); ctx.lineTo(-9, 3); ctx.closePath(); ctx.fill();
+    // 매달린 폭탄
+    ctx.strokeStyle = "#1b1218"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(0, 5); ctx.lineTo(0, 11); ctx.stroke();
+    ctx.fillStyle = "#1b1218";
+    ctx.beginPath(); ctx.arc(0, 16, 6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = (Math.floor(g.t/8) % 2) ? "#f0a24e" : "#b03a34";
+    ctx.beginPath(); ctx.arc(2, 11, 1.8, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawMobs(){
   for(const m of mobs){
     const x = m.x - cam.x;
@@ -3523,6 +3618,7 @@ function draw(){
   }
   if(boss) drawBoss();
   drawMobs();
+  drawGulls();
   drawShots();
   drawGhost();
   drawFusen();
@@ -3714,7 +3810,7 @@ document.addEventListener("visibilitychange", ()=>{
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
-                 practiceMode, dailyMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken }),
+                 practiceMode, dailyMode, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, barrels, barrelsBroken, gulls, gullKills, gullHits }),
   hold: (v) => { if(v){ if(!holding) grab(); } else release(false); },
   pause: togglePause,
   keys,

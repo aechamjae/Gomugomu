@@ -588,6 +588,29 @@ function swing(a, st){
   a.startMain();
 }
 
+/* --- 폭탄 갈매기 --- */
+{
+  const a = start();
+  const P = T().P();
+  let s = a.peek();
+  s.mobs.length = 0; s.barrels.length = 0; s.gulls.length = 0;
+  s.gulls.push({ x:P.x + 300, base:P.y, y:P.y, t:0, vx:-2, gone:false });
+  a.fire();
+  s = run(a, 30);
+  ok("피스톨로 폭탄 갈매기를 격추한다", s.gullKills === 1, "격추=" + s.gullKills);
+}
+{
+  const a = start();
+  const P = T().P();
+  let s = a.peek();
+  s.gulls.length = 0; s.mobs.length = 0;
+  s.gulls.push({ x:P.x + 30, base:P.y, y:P.y, t:0, vx:-2, gone:false });
+  a.hold(false);
+  let stunned = false;
+  s = run(a, 20, (st) => { P.vy = 0; if(st.stun > 0) stunned = true; });
+  ok("폭탄 갈매기에 부딪히면 휘청인다", stunned && s.gullHits === 1, "hits=" + s.gullHits);
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
