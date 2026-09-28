@@ -1730,7 +1730,7 @@ const TITLES = [
 ];
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
-let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0 };
+let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[] };
 
 /* 선장 레벨 — 판마다 모은 보물(+거리)이 경험치. 레벨 L에서 L+1까지 필요한 경험치는 점점 늘어난다 */
 const xpNeed = (L) => Math.round(400 + 180 * Math.pow(L, 1.35));
@@ -1745,6 +1745,11 @@ function logRun(){
   runXp = Math.floor(treasure) + Math.floor(dist);
   lifeLog.xp = (lifeLog.xp || 0) + runXp;
   lifeLog.runs++;
+  if(!blitzMode && !rushMode){             // 거리로 겨루는 판만 최근 기록 그래프에 남긴다
+    if(!Array.isArray(lifeLog.recent)) lifeLog.recent = [];
+    lifeLog.recent.push(Math.floor(dist));
+    if(lifeLog.recent.length > 20) lifeLog.recent.shift();
+  }
   lifeLog.dist += Math.floor(dist);
   lifeLog.perfects += perfects;
   lifeLog.missions += missions.filter(m => m.done).length;
@@ -4595,6 +4600,39 @@ function drawXpBar(x, y){
   ctx.restore();
 }
 
+// 항해 일지 — 최근 20판 거리 막대. 한 계열이라 범례 없이 제목으로, 값은 최고·최근 막대에만
+function drawRecentChart(x, y, w, h){
+  const R = lifeLog.recent || [];
+  ctx.save();
+  leftText("최근 " + R.length + "판 거리", x, y - 6, "600 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
+  if(R.length < 2){
+    leftText("두 판 이상 하면 그래프가 생긴다", x + 110, y - 6, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.35)");
+    ctx.restore(); return;
+  }
+  const maxV = Math.max(...R, 1), slot = w / 20, bw = Math.max(4, slot - 2);   // 막대 사이 2px 간격
+  const top = y + 4, base = y + 4 + h;
+  ctx.strokeStyle = "rgba(244,236,217,.18)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x, base + 0.5); ctx.lineTo(x + w, base + 0.5); ctx.stroke();
+  const bestI = R.indexOf(maxV);
+  R.forEach((v, i) => {
+    const bh = Math.max(2, (v / maxV) * h);
+    const bx = x + i * slot;
+    ctx.fillStyle = i === R.length - 1 ? "#ffd76a" : "rgba(217,184,119,.55)";
+    const r = Math.min(4, bw / 2, bh);
+    ctx.beginPath();
+    ctx.moveTo(bx, base); ctx.lineTo(bx, base - bh + r);
+    ctx.quadraticCurveTo(bx, base - bh, bx + r, base - bh);
+    ctx.lineTo(bx + bw - r, base - bh); ctx.quadraticCurveTo(bx + bw, base - bh, bx + bw, base - bh + r);
+    ctx.lineTo(bx + bw, base); ctx.closePath(); ctx.fill();
+    if(i === bestI || i === R.length - 1){
+      ctx.font = "600 10px ui-monospace, Menlo, monospace"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.fillStyle = "rgba(244,236,217,.8)";
+      ctx.fillText((i === bestI ? "최고 " : "") + v + "m", bx + bw/2, base - bh - 2);
+    }
+  });
+  ctx.restore();
+}
+
 function drawShareButton(){
   const B = SHARE_BTN;
   ctx.save();
@@ -4929,12 +4967,13 @@ function draw(){
     centerText("칭호", 256, "700 17px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     const cur = currentTitleName();
     TITLES.forEach((t, i) => {
-      const cx = i % 2 ? W/2 + 30 : W/2 - 310, cy = 288 + Math.floor(i / 2) * 28;
+      const cx = i % 2 ? W/2 + 30 : W/2 - 310, cy = 282 + Math.floor(i / 2) * 24;
       const has = unlockedTitles.has(t.id);
       leftText((has ? "★ " : "☆ ") + t.name, cx, cy, "700 14px 'Pretendard', system-ui, sans-serif",
                t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
       leftText(t.desc, cx + 150, cy, "400 12px 'Pretendard', system-ui, sans-serif", has ? "rgba(244,236,217,.6)" : "rgba(244,236,217,.35)");
     });
+    drawRecentChart(W/2 - 310, 414, 620, 32);
     menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
                                               i === 0 ? "#d9b877" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
   } else if(state === STATE.SHOP){

@@ -998,6 +998,16 @@ function swing(a, st){
   ok("분출 중인 용암 분수에 닿으면 휘청인다", stunned && a.peek().geyserHits >= 1, "hits=" + a.peek().geyserHits);
 }
 
+/* --- 최근 기록 그래프 --- */
+{
+  const a = start();
+  const L = a.log();
+  a.hold(false); T().setFusen(0); T().P().y = a.peek().SEA + 10;
+  const s = run(a, 3);
+  ok("판이 끝나면 최근 기록에 거리가 쌓인다(최대 20)", Array.isArray(L.recent) && L.recent[L.recent.length - 1] === Math.floor(s.dist) && L.recent.length <= 20,
+     "recent=" + L.recent.slice(-3).join(","));
+}
+
 /* --- 흑조호 잠항 (순간이동 금지) --- */
 {
   let maxJump = 0, sank = false, fast = false, up = false, wpDown = 0;
