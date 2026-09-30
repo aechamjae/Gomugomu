@@ -228,7 +228,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v31";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v32";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -5171,7 +5171,7 @@ function drawShareButton(){
 
 // 메뉴·일시정지 화면 왼쪽 아래 구석의 버전 표시 — 업데이트가 들어왔는지 확인용
 function drawVersion(){
-  leftText("버전 " + GAME_VER, 12, H - 14, "600 12px ui-monospace, Menlo, monospace", "rgba(244,236,217,.45)");
+  leftText("버전 " + GAME_VER, 12, H - 16, "700 15px ui-monospace, Menlo, monospace", "rgba(244,236,217,.75)");
 }
 
 function leftText(t, x, y, font, color){
