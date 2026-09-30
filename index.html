@@ -229,7 +229,8 @@ const DIVE   = 0.30;
 const MAXV   = 27;
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
-const STUN_STRONG  = 60; // 해왕류·크라켄(촉수)에 맞았을 때만 이 시간
+const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
+const STUN_KRAKEN  = 42; // 크라켄 촉수·유령선 망령 사슬 — 해왕류(60)의 7/10
 const STUN_MOB     = 15; // 식인 물고기에 스쳤을 때만 이 시간
 
 /* 콤보(연속 스윙) 스타일 점수 */
@@ -1875,7 +1876,7 @@ const BOSSES = [
   { name:"돌풍술사",     tag:"돌풍으로 스윙 궤적을 흔든다" },
   { name:"심해의 크라켄", tag:"눈이 드러난 순간에만 통한다", big:true },
   { name:"고리 도둑 문어", tag:"앞쪽 고리를 붙잡아 위아래로 끌고 간다" },
-  { name:"망령의 유령선", tag:"유령일 땐 무적 — 실체로 돌아온 순간 등불·선장을 노려라", big:true }
+  { name:"망령의 유령선", tag:"유령일 땐 무적·망령 사슬 — 실체일 때 등불·선장을 노려라", big:true }
 ];
 const BIG_BOSSES = [5, 7];   // 대형 슬롯은 크라켄 ↔ 유령선 번갈아
 const GHOST_S = 1.4;         // 유령선 그림 배율 — 약점 좌표도 같은 배율을 쓴다
@@ -2196,8 +2197,8 @@ function knock(hard, mild){
     for(let i=0;i<14;i++) spark(p.x, p.y, "#8fd6d8");
     return;
   }
-  // hard는 오직 크라켄 촉수, mild는 오직 식인 물고기 피격에서만 들어온다
-  const base = hard ? STUN_STRONG : mild ? STUN_MOB : STUN_FRAMES;
+  // hard는 오직 크라켄 촉수·유령선 사슬, mild는 오직 식인 물고기 피격에서만 들어온다
+  const base = hard ? STUN_KRAKEN : mild ? STUN_MOB : STUN_FRAMES;
   stun = fire > 0 ? base / 2 : base;       // 불꽃 효과 = 스턴 시간 절반
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 넉백·무적시간도 가볍게 넘긴다(스턴 시간은 위에서 이미 반영)
   const def = buff() ? buff().def : 0;       // 기어 2·4의 방어력 — 스턴과 감속을 그만큼 줄인다
@@ -2214,7 +2215,7 @@ function knock(hard, mild){
   for(let i=0;i<12;i++) spark(p.x, p.y, "#b03a34");
 }
 
-// 해왕류 접촉 — 크라켄 촉수와 같은 강한 스턴(STUN_STRONG). 즉사는 아니다
+// 해왕류 접촉 — 가장 강한 스턴(STUN_STRONG). 즉사는 아니다
 function knockKing(){
   if(stun > 0 || iframes > 0) return;
   if(invinc()) return;
@@ -2472,7 +2473,8 @@ function updateBoss(dt){
 
   } else if(b.type === 7){
     // 망령의 유령선 — 뒤처지면 가라앉아 앞으로 흘러간 뒤 다시 떠오른다
-    if(b.dive === 0 && b.x < p.x - 240) b.dive = 1;
+    if(!b.chains) b.chains = [];
+    if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.chains = []; }
     if(b.dive === 1){
       b.sink = Math.min(170, (b.sink || 0) + 3*dt);
       if(b.sink >= 168) b.dive = 2;
@@ -2499,7 +2501,14 @@ function updateBoss(dt){
           for(let i=-1;i<=1;i++) aimShot({x:b.x - 20, y:b.y - 40}, 6.2, i*0.2, 1, 11);
         }
         if(b.sub <= 0){ b.phase = 1; b.sub = 110; }
-      } else {                                 // 유령 — 무적, 유령 갈매기를 부른다
+      } else {                                 // 유령 — 무적, 유령 갈매기와 망령 사슬
+        // 망령 사슬 — 플레이어가 갈 자리 위에 표식을 띄운 뒤 하늘에서 사슬을 내리꽂는다
+        b.fire -= dt;
+        if(b.fire <= 0){
+          b.fire = 56 * rage;
+          const tx = p.x + p.vx*30 + (Math.random()-0.5)*80;
+          b.chains.push({ x:tx, t:0, warn:40, life:95, drop:0 });
+        }
         b.summon -= dt;
         if(b.summon <= 0){
           b.summon = 100 * rage;
@@ -2509,6 +2518,21 @@ function updateBoss(dt){
           }
         }
         if(b.sub <= 0){ b.phase = 0; b.sub = 190 * rage; b.fire = 40; }
+      }
+    }
+    for(let i=b.chains.length-1;i>=0;i--){
+      const c = b.chains[i];
+      c.t += dt;
+      if(c.t < c.warn){ c.x += (p.x + p.vx*8 - c.x) * 0.02 * dt; continue; }   // 표식 동안엔 살짝 따라온다
+      if(c.drop === 0) for(const a of anchors) if(Math.abs(a.x - c.x) < 62) a.cut = 80;   // 내리꽂히며 근처 고리를 끊는다
+      c.drop = Math.min(1, c.drop + 0.16 * dt);
+      c.life -= dt;
+      if(c.life <= 0){ b.chains.splice(i,1); continue; }
+      if(stun <= 0 && c.drop > 0.3){
+        const bot = SEA * c.drop;
+        const near = (px,py)=> Math.hypot(px - c.x, py - Math.max(0, Math.min(bot, py)));
+        const mx = (pPrevX + p.x)/2, my = (pPrevY + p.y)/2;
+        if(Math.min(near(p.x,p.y), near(pPrevX,pPrevY), near(mx,my)) < 14 + 13) knock(true);
       }
     }
 
@@ -4075,6 +4099,33 @@ function drawBoss(){
 
   } else if(b.type === 7){
     // 망령의 유령선 — 유령일 땐 반투명, 실체로 돌아오기 직전엔 깜빡인다
+    for(const c of (b.chains || [])){               // 망령 사슬 — 표식(점선) 뒤 하늘에서 내리꽂힌다
+      const cx = c.x - cam.x;
+      if(cx < -60 || cx > W + 60) continue;
+      ctx.save();
+      if(c.t < c.warn){
+        const blink = Math.floor(c.t / 5) % 2 === 0;
+        ctx.strokeStyle = "rgba(140,255,200," + (blink ? 0.7 : 0.3) + ")";
+        ctx.lineWidth = 3; ctx.setLineDash([10, 10]);
+        ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, SEA); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(200,255,230,.9)";
+        ctx.font = "700 20px 'Pretendard', system-ui, sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("!", cx, 26);
+      } else {
+        const bot = SEA * c.drop;
+        ctx.globalAlpha = Math.min(1, c.life / 20);
+        ctx.strokeStyle = "rgba(60,110,100,.9)"; ctx.lineWidth = 14;
+        ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, bot); ctx.stroke();
+        ctx.strokeStyle = "rgba(160,255,210,.85)"; ctx.lineWidth = 3;
+        for(let yy = 0; yy < bot - 10; yy += 22){          // 사슬 고리
+          ctx.beginPath(); ctx.ellipse(cx, yy + 11, 6, 10, 0, 0, Math.PI*2); ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(160,255,210,.9)";            // 끝에 달린 닻
+        ctx.beginPath(); ctx.moveTo(cx - 16, bot - 6); ctx.lineTo(cx + 16, bot - 6); ctx.lineTo(cx, bot + 14); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
     const sink = b.sink || 0;
     const ghost = b.phase === 1;
     const flicker = ghost && b.sub < 30 && Math.floor(b.sub / 4) % 2 === 0;

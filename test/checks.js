@@ -1174,6 +1174,16 @@ function swing(a, st){
   const g0 = a.peek().gulls.length;
   run(a, 3, (st) => swing(a, st));
   ok("유령 상태에선 유령 갈매기를 부른다", a.peek().gulls.some(g => g.ghost), "갈매기 " + g0 + "→" + a.peek().gulls.length);
+  // 유령 상태에선 표식 뒤 망령 사슬을 내리꽂는다 — 맞으면 크라켄급 스턴(42)
+  b.fire = 1; b.sub = 100; b.chains = [];
+  run(a, 3, (st) => swing(a, st));
+  ok("유령 상태에선 망령 사슬 표식을 띄운다", b.chains.length > 0 && b.chains[0].drop === 0);
+  b.chains = [{ x:P.x, t:40, warn:40, life:95, drop:1 }]; b.fire = 999;
+  a.peek().stun = 0;
+  let maxStun = 0;
+  run(a, 4, (st) => { if(st.stun > maxStun) maxStun = st.stun; });
+  ok("망령 사슬에 닿으면 크라켄급 스턴(42)", maxStun > 30 && maxStun <= 42, "최대 스턴=" + maxStun.toFixed(1));
+  b.chains = [];
   // 맞으면 유령으로 숨는다, 격침해도 크라켄 누적은 오르지 않는다
   const ks = T().lifeStats().kraken;
   b.phase = 0; b.invul = 0; b.hp = 2;
