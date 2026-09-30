@@ -1355,6 +1355,9 @@ function swing(a, st){
   ok("보스(중간·대형)는 시간 초과로 퇴각하지 않는다", !src.includes("물러났다"));
   ok("직전과 같은 중간보스 종류도 다시 나올 수 있다 (lastBossType 필터 제거)", !src.includes("lastBossType"));
   ok("베리어/돌진 스킬 코드 없음", !/fireBarrier|fireDash|BARRIER_CD|DASH_CD/.test(src));
+  const ver = (src.match(/const GAME_VER = "v(\d+)"/) || [])[1];
+  const cache = (require("fs").readFileSync(require("path").join(__dirname, "..", "sw.js"), "utf8").match(/gomupal-v(\d+)/) || [])[1];
+  ok("화면 버전(GAME_VER)과 sw.js 캐시 버전이 같다", ver && ver === cache, "GAME_VER=v" + ver + " 캐시=v" + cache);
 }
 
 console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");
