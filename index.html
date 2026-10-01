@@ -53,7 +53,40 @@
     margin-top:12px;border:1px solid rgba(217,184,119,.3);
     border-radius:4px;overflow:hidden;background:#0a1620;touch-action:none;
   }
+  .stage{position:relative;}
   canvas{display:block;width:100%;height:auto;outline:none;cursor:crosshair;}
+  /* ---- 계정 창 — 글자를 입력해야 해서 캔버스가 아닌 진짜 입력칸으로 띄운다 ---- */
+  .acct{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+        background:rgba(8,16,24,.82);-webkit-user-select:text;user-select:text;}
+  .acct[hidden]{display:none;}
+  .acct .box{width:min(380px,92%);background:#132532;border:1px solid rgba(217,184,119,.5);border-radius:8px;
+             padding:18px 20px;display:flex;flex-direction:column;gap:10px;max-height:96%;overflow:auto;}
+  .acct h2{margin:0;font-size:20px;text-align:center;}
+  .acct .who{text-align:center;font-size:13px;color:var(--rope);}
+  .acct label{font-size:12px;color:var(--cream-dim);display:flex;flex-direction:column;gap:4px;}
+  .acct input[type=text],.acct input[type=password]{
+    font:inherit;font-size:16px;padding:8px 10px;border-radius:5px;border:1px solid rgba(217,184,119,.45);
+    background:#0a1620;color:var(--cream);-webkit-user-select:text;user-select:text;}
+  .acct .chk{flex-direction:row;align-items:center;gap:6px;font-size:12px;}
+  .acct .btns{display:flex;gap:8px;flex-wrap:wrap;}
+  .acct button{flex:1;min-width:90px;font:inherit;font-size:14px;font-weight:700;padding:9px 8px;border-radius:5px;cursor:pointer;
+               background:rgba(217,184,119,.16);border:1px solid rgba(217,184,119,.55);color:var(--cream);}
+  .acct button.main{background:rgba(240,162,78,.35);border-color:#f0a24e;}
+  .acct button:active{background:rgba(217,184,119,.4);}
+  .acct .msg{min-height:18px;font-size:13px;text-align:center;color:#f7a8a0;}
+  .acct .msg.good{color:#9fe0a0;}
+  .acct .note{font-size:11px;color:var(--cream-dim);text-align:center;line-height:1.5;}
+  /* 가로 폰은 높이가 낮아서 — 아이디·비번을 한 줄에, 버튼 넷도 한 줄에 */
+  @media (pointer:coarse) and (max-height:500px){
+    .acct .box{width:min(560px,94%);padding:10px 14px;gap:6px;display:grid;grid-template-columns:1fr 1fr;}
+    .acct h2,.acct .who,.acct .chk,.acct .btns,.acct .msg,.acct .note{grid-column:1 / -1;}
+    .acct h2{font-size:16px;}
+    .acct .btns{gap:6px;}
+    .acct .btns + .btns{margin-top:-2px;}
+    .acct input[type=text],.acct input[type=password]{padding:6px 8px;}
+    .acct button{padding:7px 6px;font-size:13px;}
+    .acct .note{display:none;}
+  }
   .row{margin-top:12px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;}
   .bar{font-size:13px;color:var(--cream-dim);display:flex;flex-wrap:wrap;gap:6px 18px;flex:1;min-width:240px;}
   .bar b{
@@ -164,6 +197,25 @@
 
   <div class="stage">
     <canvas id="game" tabindex="0" aria-label="해적선 스윙 게임"></canvas>
+    <div class="acct" id="acct" hidden>
+      <form class="box" id="acctForm" autocomplete="on" onsubmit="return false">
+        <h2>계정</h2>
+        <div class="who" id="acctWho">게스트로 플레이 중</div>
+        <label>아이디 <input type="text" id="acctId" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+        <label>비밀번호 <input type="password" id="acctPw" maxlength="40" autocomplete="current-password"></label>
+        <label class="chk"><input type="checkbox" id="acctCarry" checked> 새 계정을 만들 때 지금 진행 상황을 그대로 가져가기</label>
+        <div class="btns">
+          <button type="button" class="main" id="acctLogin">로그인</button>
+          <button type="button" id="acctSignup">새 계정 만들기</button>
+        </div>
+        <div class="btns">
+          <button type="button" id="acctLogout">로그아웃</button>
+          <button type="button" id="acctClose">닫기</button>
+        </div>
+        <div class="msg" id="acctMsg"></div>
+        <div class="note">계정은 이 기기(브라우저)에 저장된다 · 기록·보물·기술·칭호·일지가 계정마다 따로 쌓인다</div>
+      </form>
+    </div>
 
     <div class="touch">
       <div class="mhud"><b id="mdist">0</b><b id="mspd">0</b><span id="mtre">보물 0</span></div>
@@ -228,7 +280,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v33";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v34";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -323,7 +375,7 @@ const TIPS = [
   "폭풍 구간은 돌풍이 거세지만 금화가 2배다",
   "해왕류를 맞지 않고 아슬아슬하게 스쳐 지나가면 보너스",
   "본게임이 끝나면 보물이 창고에 쌓인다 — 메뉴의 보물 창고에서 업그레이드",
-  "보물 창고의 기술 뽑기 — 근거리·원거리·기어 팩에서 새 기술이나 비급이 나온다",
+  "보물 창고의 기술 뽑기 — 근거리·원거리 팩에서 새 기술, 특성 팩에서 새 특성이 나온다",
   "해왕류를 물리치면 보물 " + KING_REWARD + " — 피하지만 말고 쏴라",
   "근거리 기술은 W — 기본 채찍은 조준 없이 몸 앞쪽 반원을 휩쓴다",
   "미션 세 개를 전부 깨면 보너스 보물과 풍선을 준다",
@@ -435,12 +487,13 @@ function selectGear(n){
   saveShop();
 }
 
-/* 기술 뽑기 — 창고 보물로 근거리·원거리·기어 팩을 사면 무작위로 기술 하나, 아니면 그 분류의 비급(강화 재료)이 나온다.
-   기술은 비급으로 Lv.5까지 강화한다. 근거리는 W, 원거리는 Q에 하나씩 장착하고, 기어 기술은 가지고만 있으면 늘 걸린다 */
+/* 기술 뽑기 — 창고 보물로 근거리·원거리·특성 팩을 사면 무작위로 기술(특성) 하나, 아니면 그 분류의 비급(강화 재료)이 나온다.
+   비급으로 Lv.5까지 강화한다. 근거리는 W, 원거리는 Q에 하나씩 장착하고, 특성(기어를 돕는 패시브)은 가지고만 있으면 늘 걸린다.
+   내부 분류 id는 그대로 "gear" */
 const TECH_CATS = {
-  melee:  { name:"근거리", mat:"근거리 비급", col:"#c08af0", price:1200 },
-  ranged: { name:"원거리", mat:"원거리 비급", col:"#f0a24e", price:1200 },
-  gear:   { name:"기어",   mat:"기어 비급",   col:"#ff8fa0", price:1800 }
+  melee:  { name:"근거리", unit:"근거리 기술", mat:"근거리 비급", col:"#c08af0", price:1200 },
+  ranged: { name:"원거리", unit:"원거리 기술", mat:"원거리 비급", col:"#f0a24e", price:1200 },
+  gear:   { name:"특성",   unit:"특성",        mat:"특성 비급",   col:"#ff8fa0", price:1800 }
 };
 const TECH_ORDER = ["melee", "ranged", "gear"];
 const TECHS = [
@@ -506,7 +559,7 @@ function equipTech(id){
   const t = techOf(id);
   if(!t) return false;
   if(!tlv(id)){ shopMsg = { text: t.name + " — 아직 뽑지 못한 기술이다", t: 100 }; return false; }
-  if(t.cat === "gear"){ shopMsg = { text: "기어 기술은 가지고만 있으면 늘 걸린다", t: 100, good: true }; return true; }
+  if(t.cat === "gear"){ shopMsg = { text: "특성은 가지고만 있으면 늘 걸린다", t: 100, good: true }; return true; }
   if(t.cat === "ranged") eqRanged = id; else eqMelee = id;
   shopMsg = { text: t.name + " 장착 (" + (t.cat === "ranged" ? "Q" : "W") + ")", t: 90, good: true };
   saveShop();
@@ -764,14 +817,15 @@ function startPractice(idx){
 function menuRows(){
   if(state === STATE.MENU){
     return [
-      { y: H/2 - 80, label: "1) 본게임", action: startMainGame },
-      { y: H/2 - 40, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
-      { y: H/2 + 0, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
-      { y: H/2 + 40, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
-      { y: H/2 + 80, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; } },
-      { y: H/2 + 120, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
-      { y: H/2 + 160, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
-      { y: H/2 + 200, label: "8) 설정", action: () => { state = STATE.SETTINGS; } }
+      { y: H/2 - 92, label: "1) 본게임", action: startMainGame },
+      { y: H/2 - 56, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
+      { y: H/2 - 20, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
+      { y: H/2 + 16, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
+      { y: H/2 + 52, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; } },
+      { y: H/2 + 88, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
+      { y: H/2 + 124, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
+      { y: H/2 + 160, label: "8) 설정", action: () => { state = STATE.SETTINGS; } },
+      { y: H/2 + 196, label: "9) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount }
     ];
   }
   if(state === STATE.SETTINGS){
@@ -829,10 +883,10 @@ function menuRows(){
       // 기술 뽑기 — 1~3 팩 구매, 4~6 분류별 기술 보기, 9 창고로
       const rows = TECH_ORDER.map((c, i) => {
         const C = TECH_CATS[c];
-        return { y: top - 6 + i*rowH, label: (i+1) + ") " + C.name + " 팩 — 보물 " + C.price + "  (기술 " + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + ")",
+        return { y: top - 6 + i*rowH, label: (i+1) + ") " + C.name + " 팩 — 보물 " + C.price + "  (" + (c === "gear" ? "특성 " : "기술 ") + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + ")",
                  action: () => openPack(c), dim: bank < C.price, col: C.col };
       });
-      TECH_ORDER.forEach((c, i) => rows.push({ y: top + 3*rowH + 14 + i*rowH, label: (i+4) + ") " + TECH_CATS[c].name + " 기술 보기 · 강화 →",
+      TECH_ORDER.forEach((c, i) => rows.push({ y: top + 3*rowH + 14 + i*rowH, label: (i+4) + ") " + TECH_CATS[c].unit + " 보기 · 강화 →",
                                                  action: () => { techCat = c; shopPage = 3; shopMsg = null; } }));
       rows.push({ key: 9, y: top + 6*rowH + 30, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
       return rows;
@@ -852,7 +906,7 @@ function menuRows(){
         rows.push({ y: top + 3*rowH + 6 + i*rowH, label, action: () => upgradeTech(t.id), dim: !lv || lv >= TECH_MAX || mats[t.cat] < need });
       });
       const next = TECH_ORDER[(TECH_ORDER.indexOf(techCat) + 1) % TECH_ORDER.length];
-      rows.push({ key: 7, y: top + 6*rowH + 20, label: "7) " + TECH_CATS[next].name + " 기술 보기 →", action: () => { techCat = next; shopMsg = null; } });
+      rows.push({ key: 7, y: top + 6*rowH + 20, label: "7) " + TECH_CATS[next].unit + " 보기 →", action: () => { techCat = next; shopMsg = null; } });
       rows.push({ key: 8, y: top + 7*rowH + 20, label: "8) ← 기술 뽑기", action: () => { shopPage = 2; shopMsg = null; } });
       rows.push({ key: 9, y: top + 8*rowH + 20, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
       return rows;
@@ -1270,7 +1324,7 @@ function collectMapPiece(m){
 function addGear(kind){
   if(gearT > 0 || state !== STATE.PLAY) return;
   const was = gear;
-  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0) * (1 + 0.10 * tlv("gcharge")));   // 기어 기술 '투지'
+  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0) * (1 + 0.10 * tlv("gcharge")));   // 특성 '투지'
   if(was < gearMax() && gear >= gearMax())
     pops.push({ x:p.x, y:p.y-56, t:90, text:GEARS[gearSel].name + " 준비! (E)", color:GEARS[gearSel].col });
 }
@@ -1280,7 +1334,7 @@ function fireGear(){
   const g = GEARS[gearSel];
   gear = 0;
   gearOn = gearSel;
-  gearT = g.t * (1 + 0.08 * tlv("gtime"));   // 기어 기술 '지구력'
+  gearT = g.t * (1 + 0.08 * tlv("gtime"));   // 특성 '지구력'
   gears++;
   if(gearSel === 3){ gigantPistol(); return; }
   stun = 0;
@@ -1692,7 +1746,7 @@ function grab(){
   if(state === STATE.PAUSE){ togglePause(); return; }
   if(state === STATE.READY){
     state = STATE.PLAY;
-    // 기어 기술 '예열' — 출항 화면에서 기어를 바꿀 수 있어서 출발하는 순간에 채운다
+    // 특성 '예열' — 출항 화면에서 기어를 바꿀 수 있어서 출발하는 순간에 채운다
     if(tlv("gstart") && !practiceMode) gear = Math.max(gear, gearMax() * Math.min(0.9, 0.12 * tlv("gstart")));
   }
   if(state === STATE.OVER){
@@ -1817,6 +1871,7 @@ function keyName(e){
 }
 
 window.addEventListener("keydown", (e)=>{
+  if(acctOpen) return;          // 계정 창에 글자를 치는 동안엔 게임 조작을 받지 않는다
   const k = keyName(e);
   if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); goToMenu(); return; }
   if(inMenu()){
@@ -1866,6 +1921,7 @@ window.addEventListener("keydown", (e)=>{
 }, {passive:false});
 
 window.addEventListener("keyup", (e)=>{
+  if(acctOpen) return;
   const k = keyName(e);
   if(k === "Space") release(false);
   else if(k === "ArrowLeft" || k === "KeyA") keys.left = false;
@@ -2126,14 +2182,14 @@ function logRun(){
 }
 async function loadLog(){
   let v = null;
-  try{ if(window.storage){ const r = await window.storage.get("swing:log"); if(r && r.value) v = r.value; } }catch(e){}
-  try{ if(!v && window.localStorage) v = localStorage.getItem("swing:log"); }catch(e){}
+  try{ if(window.storage){ const r = await window.storage.get(K("swing:log")); if(r && r.value) v = r.value; } }catch(e){}
+  try{ if(!v && window.localStorage) v = localStorage.getItem(K("swing:log")); }catch(e){}
   try{ if(v) Object.assign(lifeLog, JSON.parse(v)); }catch(e){}
 }
 async function saveLog(){
   const v = JSON.stringify(lifeLog);
-  try{ if(window.storage){ await window.storage.set("swing:log", v); return; } }catch(e){}
-  try{ if(window.localStorage) localStorage.setItem("swing:log", v); }catch(e){}
+  try{ if(window.storage){ await window.storage.set(K("swing:log"), v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem(K("swing:log"), v); }catch(e){}
 }
 
 // 칭호 고르기 — titleSel이 비어 있으면(자동) 딴 것 중 가장 높은 칭호를 단다
@@ -3440,52 +3496,218 @@ function update(dt){
 }
 
 /* ---------- 저장 ---------- */
+/* ---------- 계정 ----------
+   아이디·비밀번호로 이 기기 안에서 진행 상황을 나눠 저장한다(서버가 없어서 다른 기기와는 공유되지 않는다).
+   계정마다 저장 키 앞에 "acct:<아이디>:"를 붙인다 — 로그인하지 않은 게스트는 예전 키 그대로라 기존 기록이 그대로 남는다.
+   설정·코치 힌트는 기기 단위라 계정과 무관하게 공유한다.
+   비밀번호는 원문을 저장하지 않고 무작위 소금(salt)을 섞은 SHA-256 해시만 남긴다 */
+let account = null;   // 로그인한 아이디, 게스트면 null
+const K = (k) => account ? "acct:" + account + ":" + k : k;
+const ACCT_LIST = "swing:accounts", ACCT_CUR = "swing:account";
+
+function sha256(str){
+  const bytes = unescape(encodeURIComponent(str)), n = bytes.length;
+  const kk = [], h = [];
+  let c = 2, found = 0;
+  const frac = (x) => ((x - Math.floor(x)) * 4294967296) | 0;
+  while(found < 64){
+    let prime = true;
+    for(let d = 2; d*d <= c; d++) if(c % d === 0){ prime = false; break; }
+    if(prime){ if(found < 8) h[found] = frac(Math.pow(c, 1/2)); kk[found] = frac(Math.pow(c, 1/3)); found++; }
+    c++;
+  }
+  const words = [];
+  for(let i = 0; i < n; i++) words[i >> 2] |= bytes.charCodeAt(i) << (24 - (i % 4) * 8);
+  words[n >> 2] |= 0x80 << (24 - (n % 4) * 8);
+  const total = (((n + 8) >> 6) + 1) * 16;
+  for(let i = words.length; i < total; i++) words[i] = words[i] | 0;
+  words[total - 1] = n * 8;
+  const rot = (x, r) => (x >>> r) | (x << (32 - r));
+  for(let j = 0; j < total; j += 16){
+    const w = words.slice(j, j + 16);
+    let [a, b, cc, d, e, f, g, hh] = h;
+    for(let i = 0; i < 64; i++){
+      if(i >= 16){
+        const w15 = w[i-15], w2 = w[i-2];
+        w[i] = (w[i-16] + (rot(w15, 7) ^ rot(w15, 18) ^ (w15 >>> 3)) + w[i-7] + (rot(w2, 17) ^ rot(w2, 19) ^ (w2 >>> 10))) | 0;
+      }
+      const t1 = (hh + (rot(e, 6) ^ rot(e, 11) ^ rot(e, 25)) + ((e & f) ^ (~e & g)) + kk[i] + w[i]) | 0;
+      const t2 = ((rot(a, 2) ^ rot(a, 13) ^ rot(a, 22)) + ((a & b) ^ (a & cc) ^ (b & cc))) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = cc; cc = b; b = a; a = (t1 + t2) | 0;
+    }
+    h[0] = (h[0] + a) | 0; h[1] = (h[1] + b) | 0; h[2] = (h[2] + cc) | 0; h[3] = (h[3] + d) | 0;
+    h[4] = (h[4] + e) | 0; h[5] = (h[5] + f) | 0; h[6] = (h[6] + g) | 0; h[7] = (h[7] + hh) | 0;
+  }
+  return h.map(x => (x >>> 0).toString(16).padStart(8, "0")).join("");
+}
+// 같은 비밀번호라도 계정마다 해시가 다르게, 그리고 한 번 더 늘려서(1000회) 대입을 조금 더 느리게
+function pwHash(pw, salt){
+  let x = salt + ":" + pw;
+  for(let i = 0; i < 1000; i++) x = sha256(x + salt);
+  return x;
+}
+function acctList(){
+  try{ const v = window.localStorage && localStorage.getItem(ACCT_LIST); return v ? JSON.parse(v) : {}; }catch(e){ return {}; }
+}
+function saveAcctList(list){
+  try{ if(window.localStorage) localStorage.setItem(ACCT_LIST, JSON.stringify(list)); }catch(e){}
+}
+function saveAcctCur(){
+  try{ if(window.localStorage){ if(account) localStorage.setItem(ACCT_CUR, account); else localStorage.removeItem(ACCT_CUR); } }catch(e){}
+}
+const ACCT_ID_RE = /^[A-Za-z0-9가-힣_]{2,16}$/;
+
+// 계정을 바꿀 때 — 메모리에 있는 진행 상황을 처음 상태로 돌린 다음 새 계정의 저장분을 읽는다
+// (저장분이 없는 항목은 읽기가 아무것도 안 하므로 먼저 비워 두지 않으면 앞 계정 값이 남는다)
+function resetProfile(){
+  best = 0; bestChain = 0;
+  lifeBossKills = 0; lifeKrakenKills = 0; unlockedTitles = new Set(); titleSel = null;
+  bank = 0; upgrades = {}; bestBounty = 0; ownedSkins = ["red"]; skin = "red"; parrotOn = true;
+  mapPieces = 0; mapsDone = 0; blitzBest = 0; rushBest = 0; bestGrade = "";
+  gearUnlocked = 2; gearSel = 2;
+  techLv = { pistol:1, whip:1 }; mats = { melee:0, ranged:0, gear:0 }; eqRanged = "pistol"; eqMelee = "whip";
+  lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[] };
+  dailyDate = ""; dailyBest = 0; ghostBest = null; streakDate = ""; streak = 0;
+}
+function loadProfile(){
+  return Promise.all([loadBest(), loadBestChain(), loadTitles(), loadShop(), loadDaily(), loadLog()]).then(() => syncHUD());
+}
+function saveProfile(){
+  return Promise.all([saveBest(), saveBestChain(), saveTitles(), saveShop(), saveDaily(), saveLog()]);
+}
+function switchAccount(id){
+  account = id;
+  saveAcctCur();
+  resetProfile();
+  if(state !== STATE.MENU) reset();
+  return loadProfile();
+}
+
+// 결과는 { ok, msg } — 화면 문구와 테스트가 같이 쓴다
+function signup(id, pw, carry){
+  id = (id || "").trim();
+  if(!ACCT_ID_RE.test(id)) return Promise.resolve({ ok:false, msg:"아이디는 2~16자, 한글·영문·숫자·_ 만" });
+  if((pw || "").length < 4) return Promise.resolve({ ok:false, msg:"비밀번호는 4자 이상" });
+  const list = acctList();
+  if(list[id]) return Promise.resolve({ ok:false, msg:"이미 있는 아이디다" });
+  const salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  list[id] = { salt, hash: pwHash(pw, salt), made: todayKey() };
+  saveAcctList(list);
+  account = id;
+  saveAcctCur();
+  if(!carry){ resetProfile(); reset(); }
+  // 가져가기를 고르면 지금 메모리의 진행 상황을, 아니면 빈 상태를 새 계정 이름으로 저장
+  return saveProfile().then(() => { syncHUD(); return { ok:true, msg:"'" + id + "' 계정을 만들고 로그인했다" + (carry ? " — 지금까지의 진행 상황을 가져왔다" : "") }; });
+}
+function login(id, pw){
+  id = (id || "").trim();
+  const rec = acctList()[id];
+  if(!rec || pwHash(pw || "", rec.salt) !== rec.hash) return Promise.resolve({ ok:false, msg:"아이디나 비밀번호가 맞지 않는다" });
+  if(account === id) return Promise.resolve({ ok:true, msg:"이미 '" + id + "'(으)로 로그인해 있다" });
+  return switchAccount(id).then(() => ({ ok:true, msg:"'" + id + "'(으)로 로그인 — 진행 상황을 불러왔다" }));
+}
+function logout(){
+  if(!account) return Promise.resolve({ ok:false, msg:"게스트로 플레이 중이다" });
+  const was = account;
+  return switchAccount(null).then(() => ({ ok:true, msg:"'" + was + "' 로그아웃 — 게스트로 돌아왔다" }));
+}
+
+/* 계정 창 */
+const acctEl = document.getElementById("acct");
+let acctOpen = false;
+function acctRefresh(msg, good){
+  const who = document.getElementById("acctWho");
+  if(who) who.textContent = account ? "👤 " + account + " 로 로그인 중" : "게스트로 플레이 중 (이 기기의 기본 저장)";
+  const lo = document.getElementById("acctLogout");
+  if(lo) lo.disabled = !account;
+  const m = document.getElementById("acctMsg");
+  if(m && msg !== undefined){ m.textContent = msg; m.className = "msg" + (good ? " good" : ""); }
+}
+function openAccount(){
+  acctOpen = true;
+  holding = false; keys.left = keys.right = keys.down = keys.up = false;
+  if(acctEl) acctEl.hidden = false;
+  acctRefresh("");
+  const idEl = document.getElementById("acctId");
+  if(idEl){ idEl.value = account || ""; try{ idEl.focus(); }catch(e){} }
+}
+function closeAccount(){
+  acctOpen = false;
+  if(acctEl) acctEl.hidden = true;
+  const pw = document.getElementById("acctPw");
+  if(pw) pw.value = "";
+  try{ canvas.focus({preventScroll:true}); }catch(e){}
+}
+function acctAct(fn){
+  const id = document.getElementById("acctId").value, pw = document.getElementById("acctPw").value;
+  fn(id, pw).then((r) => {
+    acctRefresh(r.msg, r.ok);
+    if(r.ok) document.getElementById("acctPw").value = "";
+  });
+}
+(() => {
+  const on = (id, f) => { const el = document.getElementById(id); if(el) el.addEventListener("click", (e) => { e.preventDefault(); f(); }); };
+  on("acctLogin",  () => acctAct(login));
+  on("acctSignup", () => acctAct((id, pw) => signup(id, pw, document.getElementById("acctCarry").checked)));
+  on("acctLogout", () => logout().then((r) => acctRefresh(r.msg, r.ok)));
+  on("acctClose",  closeAccount);
+  if(acctEl) acctEl.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if(e.key === "Escape") closeAccount();
+    else if(e.key === "Enter"){ e.preventDefault(); acctAct(login); }
+  });
+  // 계정 창 위의 터치·클릭이 뒤쪽 캔버스로 새지 않게
+  if(acctEl) acctEl.addEventListener("pointerdown", (e) => e.stopPropagation());
+})();
+// 마지막으로 쓰던 계정으로 자동 로그인 — 목록에 없는 아이디면 게스트
+try{ const cur = window.localStorage && localStorage.getItem(ACCT_CUR); if(cur && acctList()[cur]) account = cur; }catch(e){}
+
 async function loadBest(){
   try{
     if(window.storage){
-      const r = await window.storage.get("swing:best");
+      const r = await window.storage.get(K("swing:best"));
       if(r && r.value){ best = parseFloat(r.value) || 0; syncHUD(); return; }
     }
   }catch(e){}
   try{                                     // 파일로 직접 열었을 때
-    const v = window.localStorage && localStorage.getItem("swing:best");
+    const v = window.localStorage && localStorage.getItem(K("swing:best"));
     if(v){ best = parseFloat(v) || 0; syncHUD(); }
   }catch(e){}
 }
 async function saveBest(){
   const v = String(Math.floor(best));
-  try{ if(window.storage){ await window.storage.set("swing:best", v); return; } }catch(e){}
-  try{ if(window.localStorage) localStorage.setItem("swing:best", v); }catch(e){}
+  try{ if(window.storage){ await window.storage.set(K("swing:best"), v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem(K("swing:best"), v); }catch(e){}
 }
 async function loadBestChain(){
   try{
     if(window.storage){
-      const r = await window.storage.get("swing:bestChain");
+      const r = await window.storage.get(K("swing:bestChain"));
       if(r && r.value){ bestChain = parseFloat(r.value) || 0; return; }
     }
   }catch(e){}
   try{
-    const v = window.localStorage && localStorage.getItem("swing:bestChain");
+    const v = window.localStorage && localStorage.getItem(K("swing:bestChain"));
     if(v) bestChain = parseFloat(v) || 0;
   }catch(e){}
 }
 async function saveBestChain(){
   const v = String(Math.floor(bestChain));
-  try{ if(window.storage){ await window.storage.set("swing:bestChain", v); return; } }catch(e){}
-  try{ if(window.localStorage) localStorage.setItem("swing:bestChain", v); }catch(e){}
+  try{ if(window.storage){ await window.storage.set(K("swing:bestChain"), v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem(K("swing:bestChain"), v); }catch(e){}
 }
 
 async function loadDaily(){
   let v = null;
-  try{ if(window.storage){ const r = await window.storage.get("swing:daily"); if(r && r.value) v = r.value; } }catch(e){}
-  try{ if(!v && window.localStorage) v = localStorage.getItem("swing:daily"); }catch(e){}
+  try{ if(window.storage){ const r = await window.storage.get(K("swing:daily")); if(r && r.value) v = r.value; } }catch(e){}
+  try{ if(!v && window.localStorage) v = localStorage.getItem(K("swing:daily")); }catch(e){}
   try{ if(v){ const r = JSON.parse(v); dailyDate = r.date || ""; dailyBest = r.best || 0; ghostBest = Array.isArray(r.ghost) ? r.ghost : null;
                streakDate = r.streakDate || ""; streak = r.streak || 0; } }catch(e){}
 }
 async function saveDaily(){
   const v = JSON.stringify({ date: dailyDate, best: Math.floor(dailyBest), ghost: ghostBest || [], streakDate, streak });
-  try{ if(window.storage){ await window.storage.set("swing:daily", v); return; } }catch(e){}
-  try{ if(window.localStorage) localStorage.setItem("swing:daily", v); }catch(e){}
+  try{ if(window.storage){ await window.storage.set(K("swing:daily"), v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem(K("swing:daily"), v); }catch(e){}
 }
 
 function applyShopRecord(v){
@@ -3512,20 +3734,20 @@ function applyShopRecord(v){
 async function loadShop(){
   try{
     if(window.storage){
-      const r = await window.storage.get("swing:shop");
+      const r = await window.storage.get(K("swing:shop"));
       if(r && r.value){ applyShopRecord(r.value); return; }
     }
   }catch(e){}
   try{
-    const v = window.localStorage && localStorage.getItem("swing:shop");
+    const v = window.localStorage && localStorage.getItem(K("swing:shop"));
     if(v) applyShopRecord(v);
   }catch(e){}
 }
 async function saveShop(){
   const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
                            tech: techLv, mats, eqR: eqRanged, eqM: eqMelee });
-  try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
-  try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
+  try{ if(window.storage){ await window.storage.set(K("swing:shop"), v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem(K("swing:shop"), v); }catch(e){}
 }
 
 function applyTitleRecord(v){
@@ -3540,19 +3762,19 @@ function applyTitleRecord(v){
 async function loadTitles(){
   try{
     if(window.storage){
-      const r = await window.storage.get("swing:titles");
+      const r = await window.storage.get(K("swing:titles"));
       if(r && r.value){ applyTitleRecord(r.value); return; }
     }
   }catch(e){}
   try{
-    const v = window.localStorage && localStorage.getItem("swing:titles");
+    const v = window.localStorage && localStorage.getItem(K("swing:titles"));
     if(v) applyTitleRecord(v);
   }catch(e){}
 }
 async function saveTitles(){
   const v = JSON.stringify({ boss: lifeBossKills, kraken: lifeKrakenKills, unlocked: [...unlockedTitles], sel: titleSel });
-  try{ if(window.storage){ await window.storage.set("swing:titles", v); return; } }catch(e){}
-  try{ if(window.localStorage) localStorage.setItem("swing:titles", v); }catch(e){}
+  try{ if(window.storage){ await window.storage.set(K("swing:titles"), v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem(K("swing:titles"), v); }catch(e){}
 }
 
 /* ---------- 그리기 ---------- */
@@ -5840,8 +6062,8 @@ function draw(){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
     ctx.fillRect(0,0,W,H);
     centerText("고무팔 · 대항해", H/2 - 160, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    for(const row of menuRows()) centerText(row.label, row.y, "600 21px 'Pretendard', system-ui, sans-serif", "#f0a24e");
-    centerText("선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 126, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    for(const row of menuRows()) centerText(row.label, row.y, "600 20px 'Pretendard', system-ui, sans-serif", /^9\)/.test(row.label) ? "#8fd6d8" : "#f0a24e");
+    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 126, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
     centerText("숫자 키 또는 클릭으로 선택", H/2 + 236, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     drawVersion();
   } else if(state === STATE.SETTINGS){
@@ -5899,7 +6121,7 @@ function draw(){
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
-    const shopTitle = shopPage === 2 ? "기술 뽑기" : shopPage === 3 ? TECH_CATS[techCat].name + " 기술" : "보물 창고";
+    const shopTitle = shopPage === 2 ? "기술 뽑기" : shopPage === 3 ? TECH_CATS[techCat].unit : "보물 창고";
     centerText(shopTitle, H/2 - 200, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("가진 보물 " + Math.floor(bank), H/2 - 168, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
     if(shopPage >= 2){
@@ -5994,7 +6216,8 @@ window.__swing = {
                  set: (id, lv) => { techLv[id] = lv; }, rangedCd: rangedCd(), meleeCd: meleeCd(), volley, aim: (spd, range) => pickAimTarget(spd, range, PISTOL_BOSS_RANGE) }),
   title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage }),
   rows: () => menuRows(),
-  shopPage: (n) => { state = STATE.SHOP; shopPage = n; }
+  shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
+  acct: () => ({ cur: account, signup, login, logout, open: openAccount, close: closeAccount, isOpen: acctOpen, list: acctList, hash: sha256 })
 };
 
 reset();

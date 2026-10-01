@@ -1421,10 +1421,10 @@ function swing(a, st){
   ok("비급으로 기술을 강화하면 재충전이 짧아진다", tc().up(r1.id) === true && tc().lv[r1.id] === 2 && tc().mats.melee === 4 && tc().meleeCd < cd1,
      "Lv=" + tc().lv[r1.id] + " 비급=" + tc().mats.melee + " 쿨 " + Math.round(cd1) + "→" + Math.round(tc().meleeCd));
   ok("없는 기술은 장착·강화할 수 없다", tc().equip("gatling") === false && tc().up("gatling") === false);
-  // 기어 기술 — 예열: 출항하면 게이지가 차 있다
+  // 특성 — 예열: 출항하면 게이지가 차 있다
   tc().set("gstart", 5);
   (a.reset)(); H.step(); a.hold(true); H.step(); a.hold(false);
-  ok("기어 기술 '예열'은 출항할 때 게이지를 채워 둔다", a.peek().gear >= a.gearInfo().max * 0.59, "게이지=" + Math.round(a.peek().gear) + "/" + a.gearInfo().max);
+  ok("특성 '예열'은 출항할 때 게이지를 채워 둔다", a.peek().gear >= a.gearInfo().max * 0.59, "게이지=" + Math.round(a.peek().gear) + "/" + a.gearInfo().max);
   for(const k of Object.keys(tc().lv)) delete tc().lv[k];
   Object.assign(tc().lv, savedLv); Object.assign(tc().mats, savedM);
   tc().equip("whip"); tc().equip("pistol");
