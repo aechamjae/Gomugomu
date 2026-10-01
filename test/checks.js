@@ -1183,7 +1183,7 @@ function swing(a, st){
   a.peek().stun = 0;
   let maxStun = 0;
   run(a, 4, (st) => { if(st.stun > maxStun) maxStun = st.stun; });
-  ok("망령 사슬에 닿으면 크라켄급 스턴(42)", maxStun > 30 && maxStun <= 42, "최대 스턴=" + maxStun.toFixed(1));
+  ok("망령 사슬에 닿으면 스턴 42", maxStun > 30 && maxStun <= 42, "최대 스턴=" + maxStun.toFixed(1));
   b.chains = [];
   // 맞으면 유령으로 숨는다, 격침해도 크라켄 누적은 오르지 않는다
   const ks = T().lifeStats().kraken;
@@ -1194,15 +1194,12 @@ function swing(a, st){
   ok("유령선 격침은 크라켄 누적에 들어가지 않는다", !a.peek().boss && T().lifeStats().kraken === ks);
 }
 {
-  // 대형 슬롯은 크라켄 → 유령선 번갈아
-  const a = start();
-  const types = [];
-  for(let k = 0; k < 2; k++){
-    T().teleport((2000 + k*2200) * 22);
-    T().setFusen(2);
-    run(a, 400, (st) => { swing(a, st); T().setFusen(2); if(st.boss && st.boss.big && !st.boss._t){ st.boss._t = 1; types.push(st.boss.type); } if(st.boss){ st.boss.hp = 1; st.boss.invul = 0; T().dmg(true, "t"); } });
-  }
-  ok("대형 보스는 크라켄 다음 유령선", types.join(",") === "5,7", "순서=" + types.join(","));
+  // 대형 슬롯(2000m마다)은 크라켄·유령선이 같은 확률로
+  start();
+  const n = { 5:0, 7:0 };
+  for(let k = 0; k < 400; k++){ const ty = T().spawnBig(); n[ty] = (n[ty] || 0) + 1; }
+  ok("크라켄 촉수 스턴은 해왕류와 같은 60", T().hit(true) === 60 && T().hit("chain") === 42, "촉수=" + T().hit(true) + " 사슬=" + T().hit("chain"));
+  ok("대형 보스는 크라켄·유령선이 반반 확률", n[5] + n[7] === 400 && n[5] > 160 && n[7] > 160, "크라켄 " + n[5] + " · 유령선 " + n[7]);
 }
 
 /* --- 유령선 연습 --- */

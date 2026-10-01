@@ -280,11 +280,12 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v34";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v35";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
-const STUN_KRAKEN  = 42; // 크라켄 촉수·유령선 망령 사슬 — 해왕류(60)의 7/10
+const STUN_KRAKEN  = STUN_STRONG; // 크라켄 촉수 — 해왕류와 같은 60 (한때 42로 줄였다가 되돌림)
+const STUN_CHAIN   = 42; // 유령선 망령 사슬 — 해왕류(60)의 7/10
 const STUN_MOB     = 15; // 식인 물고기에 스쳤을 때만 이 시간
 
 /* 콤보(연속 스윙) 스타일 점수 */
@@ -324,7 +325,7 @@ const GATLING_RANGE = 440, GATLING_ARC = 0.42;   // 개틀링 — 조준 방향 
 /* 해왕류 처치 보상 — 위험한 대형 잡몹이라 금화 한두 개보다 훨씬 커야 공정하다 */
 const KING_REWARD = 600;
 /* 금화 — 기본 보물원이 너무 후해서 단가를 낮추고 콤보 배율도 금화엔 절반만 붙인다 */
-const COIN_VALUE = 15;   // 예전 25 × 콤보 최대 6배
+const COIN_VALUE = 5;    // 예전 25 → 15 → 5
 const coinChain = () => 1 + (chainMult() - 1) * 0.5;
 
 /* 잡몹 */
@@ -1771,7 +1772,7 @@ function grab(){
       goldRings++;
       addGear("gold");
       happyT = 50;
-      const g = 70 * chainMult();
+      const g = 50 * chainMult();
       treasure += g;
       chainTimer = 0;
       pops.push({ x:a.x, y:a.y-30, t:80, text:"황금 고리 +" + g, color:"#ffd76a" });
@@ -2080,7 +2081,7 @@ const BOSSES = [
   { name:"고리 도둑 문어", tag:"앞쪽 고리를 붙잡아 위아래로 끌고 간다" },
   { name:"망령의 유령선", tag:"유령일 땐 무적·망령 사슬 — 실체일 때 등불·선장을 노려라", big:true }
 ];
-const BIG_BOSSES = [5, 7];   // 대형 슬롯은 크라켄 ↔ 유령선 번갈아
+const BIG_BOSSES = [5, 7];   // 대형 슬롯은 크라켄·유령선 중 무작위(반반)
 const GHOST_S = 1.4;         // 유령선 그림 배율 — 약점 좌표도 같은 배율을 쓴다
 const MID_BOSSES = [0, 1, 2, 3, 4, 6];   // 크라켄(5)은 대형 슬롯 전용
 
@@ -2232,7 +2233,7 @@ function spawnBoss(big){
   let type;
   if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
   else if(rushMode) type = RUSH_ORDER[rushIdx];
-  else if(big){ type = BIG_BOSSES[bigSpawns % BIG_BOSSES.length]; bigSpawns++; }
+  else if(big){ type = BIG_BOSSES[Math.floor(Math.random()*BIG_BOSSES.length)]; bigSpawns++; }   // 2000m마다 크라켄·유령선 같은 확률
   else type = MID_BOSSES[Math.floor(Math.random()*MID_BOSSES.length)];
   boss = { type, big:!!big, hp: big ? 8 : 2, maxHp: big ? 8 : 2,
            t:0, fire: big ? 90 : 90, harpoon: 70, fishSkill: 200,
@@ -2413,8 +2414,8 @@ function knock(hard, mild){
     for(let i=0;i<14;i++) spark(p.x, p.y, "#8fd6d8");
     return;
   }
-  // hard는 오직 크라켄 촉수·유령선 사슬, mild는 오직 식인 물고기 피격에서만 들어온다
-  const base = hard ? STUN_KRAKEN : mild ? STUN_MOB : STUN_FRAMES;
+  // hard는 크라켄 촉수(true)·유령선 사슬("chain")에서만, mild는 오직 식인 물고기 피격에서만 들어온다
+  const base = hard === "chain" ? STUN_CHAIN : hard ? STUN_KRAKEN : mild ? STUN_MOB : STUN_FRAMES;
   stun = fire > 0 ? base / 2 : base;       // 불꽃 효과 = 스턴 시간 절반
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 넉백·무적시간도 가볍게 넘긴다(스턴 시간은 위에서 이미 반영)
   const def = buff() ? buff().def : 0;       // 기어 2·4의 방어력 — 스턴과 감속을 그만큼 줄인다
@@ -2748,7 +2749,7 @@ function updateBoss(dt){
         const bot = SEA * c.drop;
         const near = (px,py)=> Math.hypot(px - c.x, py - Math.max(0, Math.min(bot, py)));
         const mx = (pPrevX + p.x)/2, my = (pPrevY + p.y)/2;
-        if(Math.min(near(p.x,p.y), near(pPrevX,pPrevY), near(mx,my)) < 14 + 13) knock(true);
+        if(Math.min(near(p.x,p.y), near(pPrevX,pPrevY), near(mx,my)) < 14 + 13) knock("chain");
       }
     }
 
