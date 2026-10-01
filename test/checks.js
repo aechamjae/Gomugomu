@@ -111,7 +111,7 @@ function swing(a, st){
   ok("피스톨이 보스 약점에 명중한다", hitOk, "보스 조우 프레임=" + met);
 }
 
-/* --- 고무고무 엘리펀트 건 (쿨타임 60초) --- */
+/* --- 고무고무 채찍 (W 기본 근거리 기술, 쿨타임 15초) --- */
 {
   const a = start();
   let s = a.peek();
@@ -136,7 +136,7 @@ function swing(a, st){
     if(!st.mobs.some(m => m.kind===0)) fishGone = true;
     if(!st.mobs.some(m => m.kind===1)) kingGone = true;
   });
-  ok("엘리펀트 건이 근처 잡몹·해왕류를 광역 처치한다", fishGone && kingGone,
+  ok("근거리 기술(채찍)이 근처 잡몹·해왕류를 광역 처치한다", fishGone && kingGone,
      "물고기제거=" + fishGone + " 해왕류제거=" + kingGone);
 }
 {
@@ -155,7 +155,7 @@ function swing(a, st){
       } else if(hpBefore !== null) hitOk = true;
     });
   }
-  ok("엘리펀트 건이 보스에게 명중한다", hitOk, "보스 조우 프레임=" + met);
+  ok("근거리 기술(채찍)이 보스에게 명중한다", hitOk, "보스 조우 프레임=" + met);
 }
 
 /* --- 보스 약점 --- */
@@ -912,7 +912,8 @@ function swing(a, st){
   ok("지도 조각을 주우면 판을 넘어 쌓인다", M().pieces === 4, "조각=" + M().pieces);
   a.peek().mapItems.push({ x:T().P().x + 10, y:T().P().y, got:false });
   run(a, 2, () => { P.vx = 5; P.vy = 0; });
-  ok("5조각을 모으면 지도 완성 — 창고에 보물", M().pieces === 0 && M().done >= 1 && sh().bank === bank0 + 5000,
+  // 조각마다 창고 +400, 완성하면 +20000 — 4·5번째 조각을 주웠으니 400×2 + 20000
+  ok("5조각을 모으면 지도 완성 — 창고에 보물", M().pieces === 0 && M().done >= 1 && sh().bank === bank0 + 20800,
      "조각=" + M().pieces + " 완성=" + M().done + " 창고 " + bank0 + "→" + sh().bank);
   sh().setBank(0); M().set(0);
 }
@@ -1151,7 +1152,7 @@ function swing(a, st){
   const a = start();
   a.settings.shake = false;
   a.fireGun();
-  ok("화면 흔들림을 끄면 엘리펀트 건을 쏴도 흔들리지 않는다", a.peek().shakeT === 0);
+  ok("화면 흔들림을 끄면 근거리 기술(채찍)을 쏴도 흔들리지 않는다", a.peek().shakeT === 0);
   a.settings.shake = true;
   const b = start();
   b.fireGun();
@@ -1301,14 +1302,14 @@ function swing(a, st){
   ok("첫 판이 D 등급이어도 최고 등급으로 기록된다", s.runGrade && s.runGrade[0] === "D" && a.shop().grade === "D", "최고=" + a.shop().grade);
 }
 {
-  // 유령 상태 유령선은 엘리펀트 건에도 안 맞는다
+  // 유령 상태 유령선은 근거리 기술(채찍)에도 안 맞는다
   const a = start();
   const P = T().P();
   const b = { type:7, big:true, hp:8, maxHp:8, t:0, fire:80, summon:90, walk:0, invul:0, flash:0,
               x:P.x + 200, y:P.y, vy:0, air:false, phase:1, sub:100, perch:null, tents:[], swing:0, sink:0, dive:0 };
   T().setBoss(b);
   a.fireGun();
-  ok("유령 상태 유령선은 엘리펀트 건에도 무적", b.hp === 8, "hp=" + b.hp);
+  ok("유령 상태 유령선은 근거리 기술(채찍)에도 무적", b.hp === 8, "hp=" + b.hp);
 }
 
 /* --- 흑조호 잠항 (순간이동 금지) --- */
@@ -1342,6 +1343,140 @@ function swing(a, st){
   ok("잠항 → 물밑 이동 → 부상", sank && fast && up,
      "잠항=" + sank + " 이동=" + fast + " 부상=" + up);
   ok("잠항 중엔 약점이 없다", wpDown === 0, "약점 " + wpDown + "개");
+}
+
+/* --- 칭호 고르기 --- */
+{
+  const a = start();
+  const U = T().titles();
+  const saved = [...U];
+  U.clear(); U.add("novice"); U.add("hunter");
+  ok("칭호를 고르지 않으면(자동) 딴 것 중 가장 높은 칭호", a.title().name === "현상금 사냥꾼" && a.title().sel === null, a.title().name);
+  ok("딴 칭호는 골라서 달 수 있다", a.title().pick("novice") === true && a.title().name === "풋내기 사냥꾼", a.title().name);
+  ok("못 딴 칭호는 고를 수 없다", a.title().pick("kraken10") === false && a.title().name === "풋내기 사냥꾼");
+  a.title().pick(null);
+  ok("자동으로 되돌리면 다시 가장 높은 칭호", a.title().name === "현상금 사냥꾼" && a.title().sel === null);
+  U.clear(); saved.forEach(t => U.add(t));
+}
+
+/* --- 예측 조준 --- */
+{
+  const a = start();
+  const s = a.peek(), P = T().P();
+  s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0;
+  s.gulls.push({ x:P.x + 520, y:P.y - 40, base:P.y - 40, vx:-6, t:0, gone:false });
+  const g = s.gulls[0];
+  const aim = a.tech().aim(33, 860);
+  ok("움직이는 목표는 날아가는 동안 올 자리를 노린다(예측 조준)", aim && aim.x < g.x - 40, "목표 x=" + Math.round(g.x) + " 조준 x=" + (aim && Math.round(aim.x)));
+  a.fire();
+  let hit = false;
+  run(a, 40, () => { if(g.gone) hit = true; P.vx = 0; P.vy = 0; });
+  ok("피스톨이 다가오는 갈매기를 맞힌다", hit);
+}
+{
+  const a = start();
+  const s = a.peek(), P = T().P();
+  s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0;
+  P.vx = 0; P.vy = 0;
+  s.mobs.push({ kind:0, x:P.x + 380, y:P.y + 40, vy:-8, air:true, t:0, cool:0, gone:false });
+  a.fire();
+  let hit = false;
+  run(a, 30, (st) => { if(!st.mobs.some(m => m.kind === 0)) hit = true; P.vx = 0; P.vy = 0; });
+  ok("피스톨이 포물선으로 뛰어오르는 물고기를 맞힌다", hit);
+}
+{
+  // 예전 기간트 피스톨은 정면 250px 고정이라 이 해왕류는 빗나갔다
+  const a = start();
+  a.gearSel(3, true);
+  const s = a.peek(), P = T().P();
+  s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0;
+  s.mobs.push({ kind:1, x:P.x + 540, y:s.SEA, phase:3, t:0, h:200, gone:false });
+  T().setGear(999);
+  a.fireGear();
+  const g = a.gearInfo().giant;
+  ok("기어 3 거대 주먹이 목표 쪽으로 조준된다", g && Math.abs(g.cx - (P.x + 540)) < 120, g ? "주먹 x=" + Math.round(g.cx - P.x) : "없음");
+  ok("조준한 해왕류를 거대 주먹이 쓰러뜨린다", !a.peek().mobs.some(m => m.kind === 1 && !m.gone));
+  a.gearSel(2);
+}
+
+/* --- 기술 뽑기 --- */
+{
+  const a = start(), sh = a.shop, tc = a.tech;
+  const savedLv = Object.assign({}, tc().lv), savedM = Object.assign({}, tc().mats);
+  for(const k of Object.keys(tc().lv)) delete tc().lv[k];
+  tc().lv.pistol = 1; tc().lv.whip = 1;
+  tc().mats.melee = 0; tc().mats.ranged = 0; tc().mats.gear = 0;
+  sh().setBank(500);
+  ok("보물이 모자라면 팩을 못 산다", tc().open("melee") === null && sh().bank === 500);
+  sh().setBank(10000);
+  const r1 = tc().open("melee", () => 0);
+  ok("팩에서 새 기술을 뽑는다", r1.kind === "tech" && tc().lv[r1.id] === 1 && sh().bank === 8800, r1.id + " 창고=" + sh().bank);
+  const r2 = tc().open("melee", () => 0);
+  ok("가진 기술이 또 나오면 비급으로 바뀐다", r2.kind === "dup" && tc().mats.melee === 4, "근거리 비급=" + tc().mats.melee);
+  const r3 = tc().open("melee", () => 0.5);
+  ok("기술이 아니면 비급 2~4개", r3.kind === "mat" && tc().mats.melee === 7, "근거리 비급=" + tc().mats.melee);
+  ok("기본 기술(채찍·피스톨)은 팩에서 나오지 않는다", ["whip", "pistol"].indexOf(r1.id) < 0);
+  const cd1 = (tc().equip(r1.id), tc().meleeCd);
+  ok("뽑은 기술을 W에 장착한다", tc().eqM === r1.id);
+  ok("비급으로 기술을 강화하면 재충전이 짧아진다", tc().up(r1.id) === true && tc().lv[r1.id] === 2 && tc().mats.melee === 4 && tc().meleeCd < cd1,
+     "Lv=" + tc().lv[r1.id] + " 비급=" + tc().mats.melee + " 쿨 " + Math.round(cd1) + "→" + Math.round(tc().meleeCd));
+  ok("없는 기술은 장착·강화할 수 없다", tc().equip("gatling") === false && tc().up("gatling") === false);
+  // 기어 기술 — 예열: 출항하면 게이지가 차 있다
+  tc().set("gstart", 5);
+  (a.reset)(); H.step(); a.hold(true); H.step(); a.hold(false);
+  ok("기어 기술 '예열'은 출항할 때 게이지를 채워 둔다", a.peek().gear >= a.gearInfo().max * 0.59, "게이지=" + Math.round(a.peek().gear) + "/" + a.gearInfo().max);
+  for(const k of Object.keys(tc().lv)) delete tc().lv[k];
+  Object.assign(tc().lv, savedLv); Object.assign(tc().mats, savedM);
+  tc().equip("whip"); tc().equip("pistol");
+  sh().setBank(0);
+}
+{
+  // 창고 → 기술 뽑기 → 기술 목록, 숫자 키와 같은 줄 배열
+  const a = A();
+  a.shopPage(2);
+  ok("기술 뽑기 화면에 팩 세 개가 있다", a.rows().filter(r => /팩 — 보물/.test(r.label)).length === 3);
+  a.shopPage(3);
+  ok("기술 목록 화면에 장착 3줄·강화 3줄", a.rows().filter(r => /^[1-3]\) /.test(r.label)).length === 3 && a.rows().filter(r => /^[4-6]\) 강화/.test(r.label)).length === 3);
+  a.toMenu();
+}
+
+/* --- 근거리·원거리 기술 동작 --- */
+{
+  const a = start(), tc = a.tech;
+  tc().set("axe", 1); tc().equip("axe");
+  const s = a.peek(), P = T().P();
+  s.mobs.length = 0;
+  s.mobs.push({ kind:1, x:P.x + 60, y:s.SEA, phase:3, t:0, h:150, gone:false });
+  const tr0 = s.treasure;
+  a.fireGun();
+  ok("도끼가 발밑의 해왕류를 내리찍는다", !a.peek().mobs.some(m => m.kind === 1 && !m.gone) && a.peek().gun.kind === "axe");
+  ok("해왕류 처치 보상은 600", a.peek().treasure - tr0 === 600, "+" + (a.peek().treasure - tr0));
+  tc().equip("whip"); delete tc().lv.axe;
+}
+{
+  const a = start(), tc = a.tech;
+  tc().set("gatling", 1); tc().equip("gatling");
+  const s = a.peek(), P = T().P();
+  s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0;
+  for(const dx of [160, 260, 360]) s.gulls.push({ x:P.x + dx, y:P.y - dx*0.1, base:P.y - dx*0.1, vx:0, t:0, gone:false });
+  a.fire();
+  ok("개틀링이 부채꼴 안의 갈매기를 한꺼번에 떨어뜨린다", a.peek().gulls.every(g => g.gone) && !!tc().volley, "격추=" + a.peek().gullKills);
+  ok("개틀링은 주먹을 남기지 않고 바로 재충전에 들어간다", !a.peek().fist && a.peek().skillCd > 400, "쿨=" + Math.round(a.peek().skillCd));
+  tc().equip("pistol"); delete tc().lv.gatling;
+}
+{
+  const a = start(), tc = a.tech;
+  tc().set("rifle", 1); tc().equip("rifle");
+  const s = a.peek(), P = T().P();
+  s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0;
+  P.vx = 0; P.vy = 0;
+  const h = s.SEA - 26 - P.y;
+  s.mobs.push({ kind:1, x:P.x + 300, y:s.SEA, phase:3, t:0, h, gone:false });
+  s.mobs.push({ kind:1, x:P.x + 650, y:s.SEA, phase:3, t:0, h, gone:false });
+  a.fire();
+  run(a, 40, () => { P.vx = 0; P.vy = 0; });
+  ok("라이플은 꿰뚫고 날아가 해왕류 둘을 한 번에", !a.peek().mobs.some(m => m.kind === 1 && !m.gone), "남은 해왕류=" + a.peek().mobs.filter(m => m.kind === 1 && !m.gone).length);
+  tc().equip("pistol"); delete tc().lv.rifle;
 }
 
 /* --- 프로젝트 원칙 --- */

@@ -173,7 +173,7 @@
         <button class="tb" data-k="right">▶</button>
       </div>
       <button class="tb tskill" id="skillBtn" data-k="skill">피스톨</button>
-      <button class="tb tskill2" id="gunBtn" data-k="gun">건</button>
+      <button class="tb tskill2" id="gunBtn" data-k="gun">채찍</button>
       <button class="tb tskill3" id="gearBtn" data-k="gear">기어</button>
       <div class="tright">
         <button class="tb small" data-k="up">▲</button>
@@ -195,7 +195,7 @@
       <span><b>← →</b> 매달렸을 땐 그네 밀기, 공중에선 방향 조절</span>
       <span><b>↓</b> 줄 감아 오르기 / 공중에선 급강하</span>
       <span><b>↑</b> 도약하며 놓기</span>
-      <span><b>Q</b> 피스톨(5초) · <b>W</b> 엘리펀트 건(15초) · <b>E</b> 기어(출항 전 2~5 선택, 게이지가 차면)</span>
+      <span><b>Q</b> 원거리 기술(기본 피스톨) · <b>W</b> 근거리 기술(기본 채찍) · <b>E</b> 기어(출항 전 2~5 선택, 게이지가 차면) · 창고에서 기술 뽑기</span>
       <span><b>↓</b> 끝까지 감고 계속 누른 뒤 놓으면 <b>고무고무 로켓</b></span>
       <span><b>금빛 링</b>일 때 놓으면 PERFECT · <b>수면 스치기</b> · 해왕류 <b>아슬아슬</b> 회피 보너스</span>
       <span><b>고기</b> 바다에서 한 번 튕김 · <b>보물 통</b> 쏘거나 들이받기 · <b>황금 고리</b> 보물 폭발 · 금 간 돛대는 곧 부러짐</span>
@@ -228,7 +228,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v32";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v33";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -256,11 +256,24 @@ const STALL_WARN_T   = 240;  // 4초 정체 시 경고 표시
 const STALL_PUSH_T   = 330;  // 5.5초 정체 시 카메라가 실제로 밀고 들어오기 시작
 const STALL_PUSH_SPD = 0.85; // 밀려나는 속도(px/프레임)
 
-/* 고무고무 엘리펀트 건 — 묵직한 광역 한 방 */
-const GUN_CD    = 60*15;    // 재충전 15초 (60초의 1/4)
-const GUN_R     = 150;      // 충격 반경
-const GUN_LIFE  = 34;       // 이펙트 지속 프레임
-const GUN_KNOCK = 9.5;      // 발사 반동 — 쏘는 순간 이동 방향의 반대로 밀려난다
+/* 근거리 기술(W) — 기본은 고무고무 채찍. 엘리펀트 건은 설정상 기어 3에 무장색을 두른 기술이라 맞지 않아 채찍으로 바꿨다.
+   내부 이름(gun·gunCd·fireGun)은 "W 슬롯 기술"이라는 뜻으로 그대로 쓴다 */
+const GUN_CD    = 60*15;    // 채찍 재충전 15초
+const GUN_LIFE  = 30;       // 이펙트 지속 프레임
+const WHIP_R    = 250;      // 채찍 다리가 닿는 거리(몸 중심에서)
+const WHIP_BACK = -50;      // 등 뒤로는 이만큼까지만 휩쓴다(앞쪽 반원 + 살짝)
+const BAZOOKA_R = 120, BAZOOKA_AT = 120, BAZOOKA_KNOCK = 9.5;   // 바주카 — 코앞 한 점을 두 손바닥으로 강타, 반동
+const AXE_W     = 150;      // 도끼 — 발뒤꿈치로 내리찍는 기둥의 반폭
+
+/* 원거리 기술(Q) */
+const RIFLE_SPD = 38, RIFLE_LIFE = 30;    // 라이플 — 비틀어 쏘는 주먹. 더 빠르고 멀리, 관통
+const GATLING_RANGE = 440, GATLING_ARC = 0.42;   // 개틀링 — 조준 방향 부채꼴(반각 rad) 안을 순식간에 연타
+
+/* 해왕류 처치 보상 — 위험한 대형 잡몹이라 금화 한두 개보다 훨씬 커야 공정하다 */
+const KING_REWARD = 600;
+/* 금화 — 기본 보물원이 너무 후해서 단가를 낮추고 콤보 배율도 금화엔 절반만 붙인다 */
+const COIN_VALUE = 15;   // 예전 25 × 콤보 최대 6배
+const coinChain = () => 1 + (chainMult() - 1) * 0.5;
 
 /* 잡몹 */
 const KING_H    = 300;      // 해왕류가 솟구치는 높이
@@ -310,6 +323,9 @@ const TIPS = [
   "폭풍 구간은 돌풍이 거세지만 금화가 2배다",
   "해왕류를 맞지 않고 아슬아슬하게 스쳐 지나가면 보너스",
   "본게임이 끝나면 보물이 창고에 쌓인다 — 메뉴의 보물 창고에서 업그레이드",
+  "보물 창고의 기술 뽑기 — 근거리·원거리·기어 팩에서 새 기술이나 비급이 나온다",
+  "해왕류를 물리치면 보물 " + KING_REWARD + " — 피하지만 말고 쏴라",
+  "근거리 기술은 W — 기본 채찍은 조준 없이 몸 앞쪽 반원을 휩쓴다",
   "미션 세 개를 전부 깨면 보너스 보물과 풍선을 준다",
   "노란 깃발은 내 최고 기록 지점이다 — 넘어서면 신기록",
   "폭탄 갈매기는 가까워지면 내 높이로 내려온다 — 피스톨 한 방이면 떨어진다",
@@ -377,7 +393,8 @@ const JELLY_BOUNCE = 13.5;
 const MAP_FROM    = 200;
 const MAP_CHANCE  = 0.006;   // 고리 구간마다 — 대략 800m에 하나
 const MAP_PIECES  = 5;
-const MAP_REWARD  = 5000;
+const MAP_REWARD  = 20000;   // 5조각(대략 4000m 항해)의 대가 — 그동안 금화로 버는 것보다 확실히 커야 모을 맛이 난다
+const MAP_PIECE_REWARD = 400; // 조각 하나 주울 때마다 창고에 바로
 
 /* 포격 구간 — 수평선의 적 해적선이 조준 표식을 찍고 1초 뒤 포탄을 떨어뜨린다 */
 const BARRAGE_FIRST = 850;
@@ -416,6 +433,84 @@ function selectGear(n){
   else if(bank < g.cost){ gearMsg = { text: g.name + " 해금까지 보물 " + (g.cost - bank) + " 모자라다", t: 120 }; return; }
   else { bank -= g.cost; gearUnlocked = n; gearSel = n; gearMsg = { text: g.name + " 해금! — " + g.desc, t: 150, good: true }; }
   saveShop();
+}
+
+/* 기술 뽑기 — 창고 보물로 근거리·원거리·기어 팩을 사면 무작위로 기술 하나, 아니면 그 분류의 비급(강화 재료)이 나온다.
+   기술은 비급으로 Lv.5까지 강화한다. 근거리는 W, 원거리는 Q에 하나씩 장착하고, 기어 기술은 가지고만 있으면 늘 걸린다 */
+const TECH_CATS = {
+  melee:  { name:"근거리", mat:"근거리 비급", col:"#c08af0", price:1200 },
+  ranged: { name:"원거리", mat:"원거리 비급", col:"#f0a24e", price:1200 },
+  gear:   { name:"기어",   mat:"기어 비급",   col:"#ff8fa0", price:1800 }
+};
+const TECH_ORDER = ["melee", "ranged", "gear"];
+const TECHS = [
+  { id:"whip",    cat:"melee",  name:"고무고무 채찍",   short:"채찍",  cd:GUN_CD, base:true, desc:"다리를 휘둘러 앞쪽 반원을 휩쓴다" },
+  { id:"bazooka", cat:"melee",  name:"고무고무 바주카", short:"바주카", cd:60*18, desc:"코앞을 두 손바닥으로 강타 · 보스 피해 2 · 반동" },
+  { id:"axe",     cat:"melee",  name:"고무고무 도끼",   short:"도끼",  cd:60*12, desc:"발뒤꿈치로 발밑 기둥을 바다까지 내리찍는다" },
+  { id:"pistol",  cat:"ranged", name:"고무고무 피스톨", short:"피스톨", cd:SKILL_CD, base:true, desc:"자동 조준 주먹 한 방" },
+  { id:"rifle",   cat:"ranged", name:"고무고무 라이플", short:"라이플", cd:60*6, desc:"비틀어 쏜 주먹 — 더 빠르고 멀리, 꿰뚫는다" },
+  { id:"gatling", cat:"ranged", name:"고무고무 개틀링", short:"개틀링", cd:60*9, desc:"조준 방향 부채꼴을 순식간에 연타" },
+  { id:"gcharge", cat:"gear",   name:"투지",   desc:"기어 게이지가 레벨당 10% 빨리 찬다" },
+  { id:"gtime",   cat:"gear",   name:"지구력", desc:"기어 지속 시간이 레벨당 8% 길어진다" },
+  { id:"gstart",  cat:"gear",   name:"예열",   desc:"출항할 때 기어 게이지가 레벨당 12% 차 있다" }
+];
+const TECH_MAX = 5;
+const TECH_UP = [0, 3, 5, 8, 12];  // 현재 레벨 → 다음 레벨에 드는 비급 수
+const TECH_DUP = 4;                // 이미 가진 기술이 또 나오면 그 분류 비급으로 바꿔 준다
+const TECH_CHANCE = 0.3;           // 팩 하나에서 기술이 나올 확률(나머지는 비급 2~4개, 가끔 6개)
+let techLv = { pistol:1, whip:1 }, mats = { melee:0, ranged:0, gear:0 }, eqRanged = "pistol", eqMelee = "whip", techCat = "melee";
+const techOf = (id) => TECHS.find(t => t.id === id);
+const tlv = (id) => techLv[id] || 0;
+const techCdMult = (id) => 1 - 0.06 * Math.max(0, tlv(id) - 1);   // 레벨당 재충전 6% 단축
+const rangedCd = () => techOf(eqRanged).cd * (1 - 0.12 * upLv("pistol")) * techCdMult(eqRanged);   // 창고의 피스톨 수련은 원거리 기술 전부에 듣는다
+const meleeCd = () => techOf(eqMelee).cd * techCdMult(eqMelee);
+function openPack(cat, rnd){
+  const c = TECH_CATS[cat], R = rnd || Math.random;
+  if(!c) return null;
+  if(bank < c.price){ shopMsg = { text: c.name + " 팩까지 보물이 " + (c.price - bank) + " 모자라다", t: 100 }; return null; }
+  bank -= c.price;
+  let res;
+  if(R() < TECH_CHANCE){
+    const pool = TECHS.filter(t => t.cat === cat && !t.base);
+    const t = pool[Math.floor(R() * pool.length)];
+    if(tlv(t.id) > 0){
+      mats[cat] += TECH_DUP;
+      res = { kind:"dup", id:t.id, n:TECH_DUP, text: t.name + " — 이미 가진 기술이라 " + c.mat + " +" + TECH_DUP };
+    } else {
+      techLv[t.id] = 1;
+      res = { kind:"tech", id:t.id, text: "★ 새 기술! " + t.name + " — " + t.desc, rare:true };
+    }
+  } else {
+    const n = R() < 0.1 ? 6 : 2 + Math.floor(R() * 3);
+    mats[cat] += n;
+    res = { kind:"mat", n, text: c.mat + " +" + n + "  (보유 " + mats[cat] + ")" };
+  }
+  shopMsg = { text: res.text, t: res.rare ? 220 : 140, good: true, rare: res.rare };
+  saveShop();
+  return res;
+}
+function upgradeTech(id){
+  const t = techOf(id), lv = tlv(id);
+  if(!t) return false;
+  if(!lv){ shopMsg = { text: t.name + " — 아직 뽑지 못한 기술이다", t: 100 }; return false; }
+  if(lv >= TECH_MAX){ shopMsg = { text: t.name + " — 이미 Lv." + TECH_MAX, t: 90 }; return false; }
+  const need = TECH_UP[lv];
+  if(mats[t.cat] < need){ shopMsg = { text: TECH_CATS[t.cat].mat + "이 " + (need - mats[t.cat]) + "개 모자라다", t: 100 }; return false; }
+  mats[t.cat] -= need;
+  techLv[id] = lv + 1;
+  shopMsg = { text: t.name + " Lv." + (lv + 1) + " 강화!", t: 110, good: true };
+  saveShop();
+  return true;
+}
+function equipTech(id){
+  const t = techOf(id);
+  if(!t) return false;
+  if(!tlv(id)){ shopMsg = { text: t.name + " — 아직 뽑지 못한 기술이다", t: 100 }; return false; }
+  if(t.cat === "gear"){ shopMsg = { text: "기어 기술은 가지고만 있으면 늘 걸린다", t: 100, good: true }; return true; }
+  if(t.cat === "ranged") eqRanged = id; else eqMelee = id;
+  shopMsg = { text: t.name + " 장착 (" + (t.cat === "ranged" ? "Q" : "W") + ")", t: 90, good: true };
+  saveShop();
+  return true;
 }
 
 const canvas = document.getElementById("game");
@@ -478,7 +573,7 @@ const HINTS = {
   air:     "공중에서 다시 누르고 있으면 닿는 고리에 자동으로 걸린다",
   perfect: "몸에 금빛 링이 떴다 — 지금 놓으면 PERFECT!",
   sea:     "바다에 닿으면 끝! 빨리 다음 고리를 잡아라",
-  enemy:   "Q 피스톨로 적을 쏠 수 있다 (자동 조준)",
+  enemy:   "Q 원거리 기술로 적을 쏠 수 있다 (자동 조준) · W 근거리 기술은 주변을 휩쓴다",
   gear:    "기어 게이지가 가득 찼다 — E 로 발동!",
   boss:    "보스는 빠른 속도로 약점(빨간 원)에 부딪쳐야 맞는다",
   meat:    "고기를 먹으면 바다에 빠져도 한 번 튕겨 오른다"
@@ -673,7 +768,7 @@ function menuRows(){
       { y: H/2 - 40, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
       { y: H/2 + 0, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
       { y: H/2 + 40, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
-      { y: H/2 + 80, label: "5) 항해 일지", action: () => { state = STATE.LOG; } },
+      { y: H/2 + 80, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; } },
       { y: H/2 + 120, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
       { y: H/2 + 160, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
       { y: H/2 + 200, label: "8) 설정", action: () => { state = STATE.SETTINGS; } }
@@ -693,11 +788,26 @@ function menuRows(){
       { y: H/2 + 116, label: "5) ← 뒤로가기", action: () => { state = STATE.MENU; } }
     ];
   }
+  if(state === STATE.LOG && titlePage > 0){
+    // 칭호 고르기 — 맨 앞은 '자동', 그 뒤로 칭호 목록. 숫자 키 1~7, 8) 페이지, 9) 일지로
+    const PER = 7, all = [null].concat(TITLES), pages = Math.ceil(all.length / PER), pg = titlePage - 1;
+    const top = 120, rowH = 36;
+    const rows = all.slice(pg*PER, pg*PER + PER).map((t, i) => {
+      const has = !t || unlockedTitles.has(t.id), on = t ? titleSel === t.id : !titleSel;
+      const label = (i+1) + ") " + (t ? (has ? "★ " : "☆ ") + t.name + " — " + t.desc : "자동 — 딴 칭호 중 가장 높은 것");
+      return { y: top + i*rowH, label: label + (on ? "  [장착 중]" : ""), action: () => pickTitle(t ? t.id : null), dim: !has, on };
+    });
+    rows.push({ key: 8, y: top + PER*rowH + 8, label: "8) " + (pg < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (pg+1) + "/" + pages + ")",
+                action: () => { titlePage = (pg + 1) % pages + 1; } });
+    rows.push({ key: 9, y: top + PER*rowH + 42, label: "9) ← 항해 일지", action: () => { titlePage = 0; } });
+    return rows;
+  }
   if(state === STATE.LOG){
     const rows = [{ y: H - 44, label: "1) ← 뒤로가기", action: () => { state = STATE.MENU; } }];
     if(parrotUnlocked()) rows.push({ y: H - 74, label: "2) 앵무새 동료 " + (parrotOn ? "켜짐 — 끄기" : "꺼짐 — 켜기"),
                                      action: () => { parrotOn = !parrotOn; saveShop(); } });
     else rows.push({ y: H - 74, label: "앵무새 동료 — 보스 누적 " + PARROT_UNLOCK + "마리 격파 시 합류 (" + lifeBossKills + "/" + PARROT_UNLOCK + ")", action: () => {} });
+    rows.push({ key: 3, y: 256, label: "3) 칭호 고르기 →", action: () => { titlePage = 1; shopMsg = null; } });
     return rows;
   }
   if(state === STATE.SHOP){
@@ -711,7 +821,40 @@ function menuRows(){
                  action: () => buyUpgrade(u), dim: lv >= max || bank < u.cost[lv] };
       });
       rows.push({ y: top + UPGRADES.length*rowH + 16, label: (UPGRADES.length + 1) + ") 두건 스킨 보기 →", action: () => { shopPage = 1; shopMsg = null; } });
-      rows.push({ y: top + UPGRADES.length*rowH + 52, label: (UPGRADES.length + 2) + ") ← 메뉴로", action: () => { state = STATE.MENU; } });
+      rows.push({ y: top + UPGRADES.length*rowH + 50, label: (UPGRADES.length + 2) + ") 기술 뽑기 · 강화 →", action: () => { shopPage = 2; shopMsg = null; }, hot: true });
+      rows.push({ y: top + UPGRADES.length*rowH + 84, label: (UPGRADES.length + 3) + ") ← 메뉴로", action: () => { state = STATE.MENU; } });
+      return rows;
+    }
+    if(shopPage === 2){
+      // 기술 뽑기 — 1~3 팩 구매, 4~6 분류별 기술 보기, 9 창고로
+      const rows = TECH_ORDER.map((c, i) => {
+        const C = TECH_CATS[c];
+        return { y: top - 6 + i*rowH, label: (i+1) + ") " + C.name + " 팩 — 보물 " + C.price + "  (기술 " + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + ")",
+                 action: () => openPack(c), dim: bank < C.price, col: C.col };
+      });
+      TECH_ORDER.forEach((c, i) => rows.push({ y: top + 3*rowH + 14 + i*rowH, label: (i+4) + ") " + TECH_CATS[c].name + " 기술 보기 · 강화 →",
+                                                 action: () => { techCat = c; shopPage = 3; shopMsg = null; } }));
+      rows.push({ key: 9, y: top + 6*rowH + 30, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
+      return rows;
+    }
+    if(shopPage === 3){
+      // 분류 하나의 기술 3개 — 1~3 장착, 4~6 강화, 7 다음 분류, 8 뽑기로, 9 창고로
+      const list = TECHS.filter(t => t.cat === techCat), C = TECH_CATS[techCat];
+      const rows = list.map((t, i) => {
+        const lv = tlv(t.id), on = t.id === eqRanged || t.id === eqMelee;
+        const status = !lv ? "🔒 팩에서 뽑아야 한다" : t.cat === "gear" ? "Lv." + lv + " · 늘 적용" : on ? "Lv." + lv + " · 장착 중" : "Lv." + lv + " · 장착하기";
+        return { y: top - 14 + i*rowH, label: (i+1) + ") " + t.name + " — " + t.desc + " · " + status,
+                 action: () => equipTech(t.id), dim: !lv, on: on || (lv > 0 && t.cat === "gear") };
+      });
+      list.forEach((t, i) => {
+        const lv = tlv(t.id), need = TECH_UP[lv];
+        const label = (i+4) + ") 강화 " + t.name + " — " + (!lv ? "아직 없음" : lv >= TECH_MAX ? "최고 Lv." + TECH_MAX : "Lv." + lv + "→" + (lv+1) + " · " + C.mat + " " + need + "개");
+        rows.push({ y: top + 3*rowH + 6 + i*rowH, label, action: () => upgradeTech(t.id), dim: !lv || lv >= TECH_MAX || mats[t.cat] < need });
+      });
+      const next = TECH_ORDER[(TECH_ORDER.indexOf(techCat) + 1) % TECH_ORDER.length];
+      rows.push({ key: 7, y: top + 6*rowH + 20, label: "7) " + TECH_CATS[next].name + " 기술 보기 →", action: () => { techCat = next; shopMsg = null; } });
+      rows.push({ key: 8, y: top + 7*rowH + 20, label: "8) ← 기술 뽑기", action: () => { shopPage = 2; shopMsg = null; } });
+      rows.push({ key: 9, y: top + 8*rowH + 20, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
       return rows;
     }
     const rows = SKINS.map((k, i) => {
@@ -840,7 +983,8 @@ function reset(){
   lastKingX = 0;
   skillCd = 0;                 // 출발할 땐 충전되어 있다
   fist = null;
-  gunCd = 0;                   // 엘리펀트 건도 출발할 땐 충전
+  gunCd = 0;                   // 근거리 기술(W)도 출발할 땐 충전
+  skillMax = rangedCd(); gunMax = meleeCd(); volley = null;
   gun = null;
   fire = 0;
   stallX = p.x;
@@ -1068,8 +1212,8 @@ function collectCoin(c, byPlayer){
     }
   }
   const wx = weather ? (weather.type === "storm" ? 2 : weather.type === "fog" ? 1.5 : 1) : 1;
-  const mult = chainMult() * wx * (buff() ? 2 : 1);
-  const gain = Math.round(25 * mult);
+  const mult = coinChain() * wx * (buff() ? 2 : 1);
+  const gain = Math.round(COIN_VALUE * mult);
   treasure += gain;
   if(byPlayer) p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
   if(mult > 1) pops.push({ x:c.x, y:c.y-20, t:34, text:"+" + gain, color:"#ffd76a" });
@@ -1110,14 +1254,15 @@ function collectMapPiece(m){
   mapPieces++;
   addShake(4, 12);
   for(let i=0;i<30;i++) spark(m.x, m.y, i % 2 ? "#ffd76a" : "#f4ecd9");
+  if(!practiceMode) bank += MAP_PIECE_REWARD;
   if(mapPieces >= MAP_PIECES){
     mapPieces = 0; mapsDone++;
     bank += MAP_REWARD;
-    missionFlash = { text: "보물 지도 완성! 창고에 보물 +" + MAP_REWARD, reward:0, t:200, bonus:true };
+    missionFlash = { text: "보물 지도 완성! 창고에 보물 +" + (MAP_REWARD + MAP_PIECE_REWARD), reward:0, t:200, bonus:true };
     const unlocked = checkTitles();
     if(unlocked){ newTitle = unlocked.name; saveTitles(); }
   } else {
-    missionFlash = { text: "보물 지도 조각 " + mapPieces + "/" + MAP_PIECES, reward:0, t:150, bonus:true };
+    missionFlash = { text: "보물 지도 조각 " + mapPieces + "/" + MAP_PIECES + " · 창고 +" + MAP_PIECE_REWARD, reward:0, t:150, bonus:true };
   }
   saveShop();
 }
@@ -1125,7 +1270,7 @@ function collectMapPiece(m){
 function addGear(kind){
   if(gearT > 0 || state !== STATE.PLAY) return;
   const was = gear;
-  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0));
+  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0) * (1 + 0.10 * tlv("gcharge")));   // 기어 기술 '투지'
   if(was < gearMax() && gear >= gearMax())
     pops.push({ x:p.x, y:p.y-56, t:90, text:GEARS[gearSel].name + " 준비! (E)", color:GEARS[gearSel].col });
 }
@@ -1135,7 +1280,7 @@ function fireGear(){
   const g = GEARS[gearSel];
   gear = 0;
   gearOn = gearSel;
-  gearT = g.t;
+  gearT = g.t * (1 + 0.08 * tlv("gtime"));   // 기어 기술 '지구력'
   gears++;
   if(gearSel === 3){ gigantPistol(); return; }
   stun = 0;
@@ -1145,34 +1290,23 @@ function fireGear(){
   for(let i=0;i<30;i++) spark(p.x, p.y, g.col);
 }
 
-// 기어 3 — 고무고무 기간트 피스톨: 앞쪽을 거대 주먹으로 내리쳐 범위 안을 싹 쓸고 보스에게 4 피해
+// 기어 3 — 고무고무 기간트 피스톨: 거대 주먹으로 내리쳐 범위 안을 싹 쓸고 보스에게 4 피해.
+// 예전엔 늘 정면 250px에 고정으로 떨어져 보스·해왕류를 자주 빗나갔다 — 이제 사거리 안의 가장 급한 목표를 노린다
+const GIANT_AIM = 560;       // 거대 주먹이 노릴 수 있는 거리
 function gigantPistol(){
-  const dir = p.face || 1;
-  const cx = p.x + 250*dir, cy = p.y + 10;
+  let dir = p.face || 1, cx = p.x + 250*dir, cy = p.y + 10;
+  const t = pickAimTarget(0, GIANT_AIM, GIANT_AIM);
+  if(t){
+    const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy) || 1;
+    const k = Math.max(110, Math.min(GIANT_AIM, d)) / d;     // 너무 코앞이면 조금 밀어서 주먹이 펴지게
+    cx = p.x + dx*k; cy = p.y + dy*k;
+    if(Math.abs(dx) > 8) dir = Math.sign(dx);
+  }
+  cy = Math.min(SEA - 10, cy);
   giant = { x0:p.x, y0:p.y, cx, cy, dir, t:0 };
   missionFlash = { text: "기어 3 — 고무고무 기간트 피스톨!", reward: 0, t: 110, gear: true };
   addShake(10, 22);
-  const inR = (x, y, extra) => Math.hypot(x - cx, y - cy) < GIANT_R + (extra || 0);
-  for(const m of mobs){
-    if(m.gone) continue;
-    if(m.kind === 0 && inR(m.x, m.y)){ m.gone = true; fishKills++; treasure += 15; for(let k=0;k<8;k++) spark(m.x, m.y, "#d9b877"); }
-    else if(m.kind === 1 && m.h > 20 && m.phase !== 4){
-      const top = SEA - m.h;
-      if(inR(m.x, top - 26, 74) || inR(m.x, (top + SEA)/2, KING_W)){
-        m.gone = true; kingKills++; treasure += 260;
-        pops.push({ x:m.x, y:top-70, t:120, text:"해왕류를 물리쳤다 +260", color:"#d9b877" });
-        for(let k=0;k<24;k++) spark(m.x, top, "#8fd6d8");
-      }
-    }
-  }
-  for(const q of gulls) if(!q.gone && inR(q.x, q.y)) killGull(q, 20);
-  for(const b of barrels) if(!b.gone && inR(b.x, barrelY(b), BARREL_R)) breakBarrel(b, "기간트 피스톨");
-  for(let i=shots.length-1;i>=0;i--) if(inR(shots[i].x, shots[i].y)) shots.splice(i,1);
-  if(boss){
-    const ghostSafe = boss.type === 7 && (boss.phase === 1 || (boss.sink || 0) > 12);
-    const near = inR(boss.x, boss.y, 60) || weakPoints(boss).some(w => inR(w.x, w.y, w.r));
-    if(near && !ghostSafe){ boss.invul = 0; damageBoss(true, "기간트 피스톨", 4); }
-  }
+  strikeArea((x, y, r) => Math.hypot(x - cx, y - cy) < GIANT_R + r, "기간트 피스톨", 4, { forceInvul:true });
 }
 
 function syncHUD(){
@@ -1195,7 +1329,7 @@ function syncHUD(){
   if(sb){
     const cd = Math.max(0, skillCd || 0);
     sb.classList.toggle("cool", cd > 0);
-    sb.textContent = cd > 0 ? Math.ceil(cd/60) + "초" : "피스톨";
+    sb.textContent = cd > 0 ? Math.ceil(cd/60) + "초" : techOf(eqRanged).short;
   }
   const rb = document.getElementById("gearBtn");
   if(rb){
@@ -1206,7 +1340,7 @@ function syncHUD(){
   if(gb){
     const gcd = Math.max(0, gunCd || 0);
     gb.classList.toggle("cool", gcd > 0);
-    gb.textContent = gcd > 0 ? Math.ceil(gcd/60) + "초" : "건";
+    gb.textContent = gcd > 0 ? Math.ceil(gcd/60) + "초" : techOf(eqMelee).short;
   }
 }
 
@@ -1556,7 +1690,11 @@ function grab(){
   if(inMenu()) return;   // 메뉴 선택은 클릭·숫자키로만
   if(state === STATE.REVIVE) return;   // 부활 여부는 버튼·Space·Esc로만
   if(state === STATE.PAUSE){ togglePause(); return; }
-  if(state === STATE.READY) state = STATE.PLAY;
+  if(state === STATE.READY){
+    state = STATE.PLAY;
+    // 기어 기술 '예열' — 출항 화면에서 기어를 바꿀 수 있어서 출발하는 순간에 채운다
+    if(tlv("gstart") && !practiceMode) gear = Math.max(gear, gearMax() * Math.min(0.9, 0.12 * tlv("gstart")));
+  }
   if(state === STATE.OVER){
     if(performance.now() - overAt > 450) reset();
     return;
@@ -1579,7 +1717,7 @@ function grab(){
       goldRings++;
       addGear("gold");
       happyT = 50;
-      const g = 100 * chainMult();
+      const g = 70 * chainMult();
       treasure += g;
       chainTimer = 0;
       pops.push({ x:a.x, y:a.y-30, t:80, text:"황금 고리 +" + g, color:"#ffd76a" });
@@ -1682,7 +1820,13 @@ window.addEventListener("keydown", (e)=>{
   const k = keyName(e);
   if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); goToMenu(); return; }
   if(inMenu()){
-    if(k === "Escape"){ e.preventDefault(); if(state !== STATE.MENU) state = STATE.MENU; return; }
+    if(k === "Escape"){
+      e.preventDefault();
+      if(state === STATE.LOG && titlePage) titlePage = 0;          // 칭호 고르기 → 일지
+      else if(state === STATE.SHOP && shopPage >= 2) shopPage = shopPage === 3 ? 2 : 0;   // 기술 → 뽑기 → 창고
+      else if(state !== STATE.MENU) state = STATE.MENU;
+      return;
+    }
     const m = /^Digit([1-9])$/.exec(k);
     if(m){
       e.preventDefault();
@@ -1992,10 +2136,24 @@ async function saveLog(){
   try{ if(window.localStorage) localStorage.setItem("swing:log", v); }catch(e){}
 }
 
+// 칭호 고르기 — titleSel이 비어 있으면(자동) 딴 것 중 가장 높은 칭호를 단다
+let titleSel = null, titlePage = 0;
 function currentTitleName(){
+  if(titleSel && unlockedTitles.has(titleSel)) return TITLES.find(t => t.id === titleSel).name;
   let name = null;
   for(const t of TITLES) if(unlockedTitles.has(t.id)) name = t.name;
   return name;
+}
+function pickTitle(id){
+  if(id && !unlockedTitles.has(id)){
+    const t = TITLES.find(q => q.id === id);
+    shopMsg = { text: "아직 못 딴 칭호 — " + (t ? t.desc : ""), t: 100 };
+    return false;
+  }
+  titleSel = id || null;
+  shopMsg = { text: id ? "칭호 '" + currentTitleName() + "' 장착" : "자동 — 가장 높은 칭호를 단다", t: 90, good: true };
+  saveTitles();
+  return true;
 }
 
 function checkTitles(){
@@ -2752,61 +2910,101 @@ function updateShots(dt){
   }
 }
 
-/* ---------- 고무고무 피스톨 ---------- */
-function pistolAim(){
-  // 보스(또는 해왕류)가 있으면 최우선으로 그쪽을 노린다 — 겹쳐 있어서
-  // 목표가 등 뒤로 잡혀도(뒤처짐 판정 때문에 놓치는 일이 없도록) 가까우면 방향과 무관하게 조준한다
-  let bestBoss = null, bdBoss = 1e9;
-  const considerBoss = (tx, ty) => {
-    const d = Math.hypot(tx - p.x, ty - p.y);
-    if(tx < p.x - 60 && d > 90) return;   // 멀리 뒤에 있을 때만 걸러낸다 — 겹친 상태는 통과
-    if(d < bdBoss){ bdBoss = d; bestBoss = { x:tx, y:ty }; }
-  };
-  if(boss) for(const wp of weakPoints(boss)){
-    if(Math.hypot(wp.x - p.x, wp.y - p.y) < PISTOL_BOSS_RANGE) considerBoss(wp.x, wp.y);
-  }
-  for(const m of mobs){
-    if(m.kind === 1 && m.h > 30) considerBoss(m.x, SEA - m.h - 26);
-  }
-  if(bestBoss) return Math.atan2(bestBoss.y - p.y, bestBoss.x - p.x);
+/* ---------- 조준 ---------- */
+// 보스 약점은 매 프레임 새로 계산되는 좌표라, 직전 프레임과 비교해 속도를 따로 기억해 둔다(예측 조준용)
+let wpPrev = [], wpVel = [];
+function trackWeakPoints(dt){
+  const now = boss ? weakPoints(boss) : [];
+  const same = wpPrev.length === now.length && dt > 0;
+  const cap = (v) => Math.max(-30, Math.min(30, v));    // 재배치(순간이동) 프레임은 속도로 치지 않게
+  wpVel = now.map((w, i) => same ? { vx: cap((w.x - wpPrev[i].x) / dt), vy: cap((w.y - wpPrev[i].y) / dt) } : { vx:0, vy:0 });
+  wpPrev = now;
+}
 
-  // 보스가 없을 때만 잡몹(식인 물고기)을 노린다
-  let best = null, bd = 1e9;
+// 조준 후보 — 지금 위치와 속도(물고기는 중력까지)를 같이 들고 있어서, 주먹이 닿을 때의 자리를 미리 노린다.
+// pri 0: 보스 약점·해왕류(최우선) / 1: 공중의 물고기·갈매기 / 2: 보물 통
+function aimCandidates(){
+  const out = [];
+  if(boss) weakPoints(boss).forEach((w, i) => {
+    const v = wpVel[i] || { vx:0, vy:0 };
+    out.push({ x:w.x, y:w.y, vx:v.vx, vy:v.vy, ay:0, pri:0, boss:true });
+  });
   for(const m of mobs){
-    if(m.kind !== 0 || !m.air) continue;
-    if(m.x < p.x - 60) continue;
-    const d = Math.hypot(m.x - p.x, m.y - p.y);
-    if(d < bd && d < 860){ bd = d; best = { x:m.x, y:m.y }; }
+    if(m.gone) continue;
+    if(m.kind === 1){ if(m.h > 30 && m.phase !== 4) out.push({ x:m.x, y:SEA - m.h - 26, vx:0, vy:0, ay:0, pri:0, pad:74 }); }
+    else if(m.air) out.push({ x:m.x, y:m.y, vx:-1.1, vy:m.vy, ay:0.30, pri:1 });
   }
-  for(const g of gulls){
-    if(g.gone || g.x < p.x - 60) continue;
-    const d = Math.hypot(g.x - p.x, g.y - p.y);
-    if(d < bd && d < 860){ bd = d; best = { x:g.x, y:g.y }; }
+  for(const g of gulls) if(!g.gone) out.push({ x:g.x, y:g.y, vx:g.vx, vy:Math.cos(g.t*0.08) * 1.6, ay:0, pri:1 });
+  for(const b of barrels) if(!b.gone) out.push({ x:b.x, y:barrelY(b), vx:0, vy:0, ay:0, pri:2 });
+  return out;
+}
+function leadPoint(c, spd){
+  if(!spd) return { x:c.x, y:c.y };
+  let tx = c.x, ty = c.y;
+  for(let k=0;k<3;k++){
+    const t = Math.min(30, Math.hypot(tx - p.x, ty - p.y) / spd);
+    tx = c.x + c.vx*t; ty = c.y + c.vy*t + 0.5*c.ay*t*t;
   }
-  if(best) return Math.atan2(best.y - p.y, best.x - p.x);
-  // 물고기도 없으면 앞쪽 보물 통을 노린다
-  for(const b of barrels){
-    if(b.gone || b.x < p.x + 20) continue;
-    const d = Math.hypot(b.x - p.x, barrelY(b) - p.y);
-    if(d < bd && d < 760){ bd = d; best = { x:b.x, y:barrelY(b) }; }
+  return { x:tx, y:ty };
+}
+// 사거리 안에서 가장 급한 목표를 고른다. spd가 있으면 그 속도로 날아갈 때 만나는 자리(예측점)를 돌려준다
+function pickAimTarget(spd, range, bossRange){
+  let best = null, bd = 1e9, bp = 9;
+  for(const c of aimCandidates()){
+    const d = Math.hypot(c.x - p.x, c.y - p.y);
+    if(c.boss && d > bossRange) continue;
+    if(d > range + (c.pad || 0)) continue;
+    // 보스·해왕류는 몸이 겹쳐 등 뒤로 잡혀도 가까우면 노린다. 잡몹은 앞쪽만, 통은 확실히 앞에 있을 때만
+    if(c.pri === 0 && c.x < p.x - 60 && d > 90) continue;
+    if(c.pri === 1 && c.x < p.x - 60) continue;
+    if(c.pri === 2 && (c.x < p.x + 20 || d > 760)) continue;
+    if(c.pri < bp || (c.pri === bp && d < bd)){ bp = c.pri; bd = d; best = c; }
   }
-  if(best) return Math.atan2(best.y - p.y, best.x - p.x);
+  return best ? leadPoint(best, spd) : null;
+}
+
+/* ---------- 원거리 기술 (Q) — 피스톨 / 라이플 / 개틀링 ---------- */
+function pistolAim(spd, range){
+  const t = pickAimTarget(spd || FIST_SPD, range || FIST_SPD*FIST_LIFE, PISTOL_BOSS_RANGE);
+  if(t) return Math.atan2(t.y - p.y, t.x - p.x);
   return p.face > 0 ? -0.10 : Math.PI + 0.10;      // 목표가 없으면 정면으로
 }
 
 function pistolCd(){ return SKILL_CD * (1 - 0.12 * upLv("pistol")); }
 
+let skillMax = SKILL_CD, gunMax = GUN_CD, volley = null;
 function firePistol(){
   if(state !== STATE.PLAY || skillCd > 0 || fist || stun > 0) return;
-  skillCd = pistolCd();
-  const a = pistolAim();
+  skillCd = skillMax = rangedCd();
+  if(eqRanged === "gatling"){ fireGatling(); return; }
+  const rifle = eqRanged === "rifle";
+  const spd = rifle ? RIFLE_SPD : FIST_SPD, life = rifle ? RIFLE_LIFE : FIST_LIFE;
+  const a = pistolAim(spd, spd*life);
   fist = { x:p.x, y:p.y, px:p.x, py:p.y,
-           vx:Math.cos(a)*FIST_SPD, vy:Math.sin(a)*FIST_SPD, life:FIST_LIFE, back:false };
-  pops.push({ x:p.x, y:p.y-34, t:56, text:"고무고무 피스톨", color:"#f0a24e" });
+           vx:Math.cos(a)*spd, vy:Math.sin(a)*spd, life, back:false, pierce:rifle, hitBoss:false };
+  pops.push({ x:p.x, y:p.y-54, t:56, text: techOf(eqRanged).name, color:"#f0a24e" });
   for(let i=0;i<10;i++) spark(p.x, p.y, "#f0a24e");
 }
 
+// 개틀링 — 조준 방향 부채꼴 안을 한순간에 연타한다. 사거리는 짧지만 여러 목표를 한꺼번에
+function fireGatling(){
+  const a = pistolAim(60, GATLING_RANGE);
+  volley = { a, t:0 };
+  pops.push({ x:p.x, y:p.y-54, t:56, text:"고무고무 개틀링", color:"#f0a24e" });
+  addShake(4, 10);
+  const inCone = (x, y, r) => {
+    const d = Math.hypot(x - p.x, y - p.y);
+    if(d > GATLING_RANGE + r) return false;
+    if(d < r + 20) return true;
+    let da = Math.atan2(y - p.y, x - p.x) - a;
+    da = Math.atan2(Math.sin(da), Math.cos(da));
+    return Math.abs(da) < GATLING_ARC + Math.asin(Math.min(1, r / d));
+  };
+  strikeArea(inCone, "개틀링", 1, { ranged:true });
+}
+
 function updateFist(dt){
+  if(volley){ volley.t += dt; if(volley.t > 22) volley = null; }
   if(!fist) return;
   fist.px = fist.x; fist.py = fist.y;
   if(fist.back){
@@ -2822,9 +3020,10 @@ function updateFist(dt){
 
   const near = (tx, ty) =>
     distOriginToSeg(fist.px - tx, fist.py - ty, fist.x - tx, fist.y - ty);
+  const stop = () => { if(!fist.pierce) fist.back = true; };   // 라이플은 꿰뚫고 계속 날아간다
 
   for(const b of barrels){
-    if(!b.gone && near(b.x, barrelY(b)) < FIST_R + BARREL_R){ breakBarrel(b, "피스톨"); fist.back = true; return; }
+    if(!b.gone && near(b.x, barrelY(b)) < FIST_R + BARREL_R){ breakBarrel(b, techOf(eqRanged).short); stop(); if(fist.back) return; }
   }
   for(const g of gulls){
     if(!g.gone && near(g.x, g.y) < FIST_R + GULL_R) killGull(g, 20);   // 관통 — 한 줄로 늘어선 갈매기는 한 번에
@@ -2849,22 +3048,20 @@ function updateFist(dt){
     } else if(m.h > 30 && m.phase !== 4){
       const top = SEA - m.h;
       if(near(m.x, top - 26) < FIST_R + 74 || near(m.x, (top+SEA)/2) < FIST_R + KING_W){
-        m.gone = true; kingKills++; addGear("near");
-        treasure += 220;
-        pops.push({ x:m.x, y:top - 70, t:120, text:"해왕류를 물리쳤다 +220", color:"#d9b877" });
-        for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
-        fist.back = true;
+        killKing(m);
+        stop();
       }
     }
   }
 
   // 보스 — 속도 조건은 없지만, 약점에서 너무 멀리 떨어져 있으면(원거리 스나이핑) 닿지 않는다
-  if(boss && boss.invul <= 0){
+  if(boss && boss.invul <= 0 && !fist.hitBoss){
     for(const wp of weakPoints(boss)){
       if(Math.hypot(wp.x - p.x, wp.y - p.y) > PISTOL_BOSS_RANGE) continue;
       if(near(wp.x, wp.y) < FIST_R + wp.r){
         damageBoss(true, wp.mark);
-        fist.back = true;
+        fist.hitBoss = true;     // 꿰뚫어도 보스는 한 번만
+        stop();
         break;
       }
     }
@@ -2873,58 +3070,89 @@ function updateFist(dt){
   if(fist && fist.life <= 0) fist.back = true;
 }
 
-/* ---------- 고무고무 엘리펀트 건 ---------- */
-function fireGun(){
-  if(state !== STATE.PLAY || gunCd > 0 || stun > 0) return;
-  gunCd = GUN_CD;
-  addShake(8, 18);
-  const gx = p.x + 200*p.face, gy = p.y - 6;
-  gun = { x:gx, y:gy, t:GUN_LIFE };
-
-  // 발사 반동 — 이동 방향의 반대로 튕겨나간다. 낙하하며 쏘면 반동으로 다시 솟구칠 수 있다
-  const spd = Math.hypot(p.vx, p.vy);
-  if(spd > 0.4){
-    p.vx -= (p.vx/spd) * GUN_KNOCK;
-    p.vy -= (p.vy/spd) * GUN_KNOCK;
-  } else {
-    p.vy -= GUN_KNOCK;         // 거의 멈춰 있으면 위로 튕겨 올린다
-  }
-
-  pops.push({ x:p.x, y:p.y-34, t:70, text:"고무고무 엘리펀트 건", color:"#8f4fd0" });
-  for(let i=0;i<26;i++) spark(gx, gy, "#8f4fd0");
-
+/* ---------- 범위 공격 공통 ---------- */
+function killKing(m){
+  m.gone = true; kingKills++; addGear("near");
+  treasure += KING_REWARD;
+  const top = SEA - m.h;
+  pops.push({ x:m.x, y:top - 70, t:120, text:"해왕류를 물리쳤다 +" + KING_REWARD, color:"#d9b877" });
+  for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
+}
+// inArea(x, y, r) — 반지름 r짜리 대상이 공격 범위에 걸치면 참. 걸린 잡몹·해왕류·갈매기·통·탄·보스를 전부 친다
+function strikeArea(inArea, how, power, opt){
+  opt = opt || {};
+  let hits = 0;
   for(const m of mobs){
     if(m.gone) continue;
     if(m.kind === 0){
-      if(Math.hypot(m.x-gx, m.y-gy) < GUN_R){
-        m.gone = true; treasure += 15; fishKills++; addGear("kill");
+      if(inArea(m.x, m.y, 15)){
+        m.gone = true; treasure += 15; fishKills++; addGear("kill"); hits++;
         for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
       }
     } else if(m.h > 20 && m.phase !== 4){
       const top = SEA - m.h;
-      if(Math.hypot(m.x-gx, (top-26)-gy) < GUN_R + 74){
-        m.gone = true; treasure += 260; kingKills++; addGear("near");
-        pops.push({ x:m.x, y:top-70, t:120, text:"해왕류를 물리쳤다 +260", color:"#d9b877" });
-        for(let k=0;k<30;k++) spark(m.x, top, "#8fd6d8");
-      }
+      if(inArea(m.x, top - 26, 74) || inArea(m.x, (top + SEA)/2, KING_W)){ killKing(m); hits++; }
     }
   }
-  for(const b of barrels){
-    if(!b.gone && Math.hypot(b.x - gx, barrelY(b) - gy) < GUN_R + BARREL_R) breakBarrel(b, "엘리펀트 건");
+  for(const g of gulls) if(!g.gone && inArea(g.x, g.y, GULL_R)){ killGull(g, 20); hits++; }
+  for(const b of barrels) if(!b.gone && inArea(b.x, barrelY(b), BARREL_R)){ breakBarrel(b, how); hits++; }
+  for(let i=shots.length-1;i>=0;i--) if(inArea(shots[i].x, shots[i].y, shots[i].r || 8)) shots.splice(i,1);
+  if(boss){
+    // 유령 상태(또는 가라앉은) 유령선은 무적 — 범위기로도 안 맞는다
+    const ghostSafe = boss.type === 7 && (boss.phase === 1 || (boss.sink || 0) > 12);
+    let hit;
+    if(opt.ranged) hit = boss.invul <= 0 && weakPoints(boss).some(w => Math.hypot(w.x - p.x, w.y - p.y) < PISTOL_BOSS_RANGE && inArea(w.x, w.y, w.r));
+    else hit = inArea(boss.x, boss.y, 40) || weakPoints(boss).some(w => inArea(w.x, w.y, w.r));
+    if(hit && !ghostSafe){
+      if(opt.forceInvul) boss.invul = 0;
+      damageBoss(true, how, power);
+      hits++;
+    }
   }
-  for(const g of gulls){
-    if(!g.gone && Math.hypot(g.x - gx, g.y - gy) < GUN_R + GULL_R) killGull(g, 20);
-  }
-  // 유령 상태(또는 가라앉은) 유령선은 무적 — 광역기로도 안 맞는다
-  const ghostSafe = boss && boss.type === 7 && (boss.phase === 1 || (boss.sink || 0) > 12);
-  if(boss && !ghostSafe && Math.hypot(boss.x-gx, boss.y-gy) < GUN_R + 40){
-    damageBoss(true, "엘리펀트 건");
+  return hits;
+}
+
+/* ---------- 근거리 기술 (W) — 채찍 / 바주카 / 도끼 ---------- */
+function fireGun(){
+  if(state !== STATE.PLAY || gunCd > 0 || stun > 0) return;
+  gunCd = gunMax = meleeCd();
+  const face = p.face || 1;
+  const t = techOf(eqMelee);
+  gun = { kind: eqMelee, face, x:p.x, y:p.y, t:GUN_LIFE };
+  pops.push({ x:p.x, y:p.y-34, t:70, text:t.name, color:TECH_CATS.melee.col });
+
+  if(eqMelee === "bazooka"){
+    // 바주카 — 코앞 한 점을 두 손바닥으로 강타. 반동으로 이동 방향의 반대로 튕겨 나간다
+    addShake(9, 20);
+    const gx = p.x + BAZOOKA_AT*face, gy = p.y - 4;
+    gun.x = gx; gun.y = gy;
+    const spd = Math.hypot(p.vx, p.vy);
+    if(spd > 0.4){ p.vx -= (p.vx/spd) * BAZOOKA_KNOCK; p.vy -= (p.vy/spd) * BAZOOKA_KNOCK; }
+    else p.vy -= BAZOOKA_KNOCK;
+    for(let i=0;i<22;i++) spark(gx, gy, "#e8b48c");
+    strikeArea((x, y, r) => Math.hypot(x - gx, y - gy) < BAZOOKA_R + r, "바주카", 2);
+  } else if(eqMelee === "axe"){
+    // 도끼 — 다리를 높이 들었다 발밑 기둥을 바다까지 내리찍는다. 발밑의 해왕류·물고기를 노릴 때
+    addShake(8, 18);
+    const cx = p.x + 30*face;
+    gun.x = cx;
+    for(let i=0;i<20;i++) spark(cx + (Math.random()-0.5)*AXE_W, SEA, "#8fd6d8");
+    strikeArea((x, y, r) => Math.abs(x - cx) < AXE_W + r && y > p.y - 140 - r, "도끼", 1);
+  } else {
+    // 채찍 — 다리를 크게 휘둘러 몸 주변 앞쪽 반원을 휩쓴다. 조준이 필요 없다
+    addShake(6, 14);
+    for(let i=0;i<18;i++){
+      const a = -Math.PI/2 + Math.random()*Math.PI;
+      spark(p.x + Math.cos(a)*WHIP_R*face, p.y + Math.sin(a)*WHIP_R, "#e8b48c");
+    }
+    strikeArea((x, y, r) => (x - p.x)*face > WHIP_BACK - r && Math.hypot(x - p.x, y - p.y) < WHIP_R + r, "채찍", 1);
   }
 }
 
 function updateGun(dt){
   if(gun){ gun.t -= dt; if(gun.t <= 0) gun = null; }
 }
+
 
 function update(dt){
   if(state === STATE.PAUSE) return;
@@ -3127,6 +3355,7 @@ function update(dt){
     else if(dist >= nextBossAt && dist + 220 < nextBigAt) spawnBoss(false);
   }
   if(boss) updateBoss(dt);
+  trackWeakPoints(dt);
   updateShots(dt);
   if(skillCd > 0) skillCd -= dt;
   if(gunCd > 0) gunCd -= dt;
@@ -3274,6 +3503,10 @@ function applyShopRecord(v){
     bestGrade = r.grade || "";
     gearUnlocked = Math.min(5, Math.max(2, r.gearU || 2));
     gearSel = Math.min(gearUnlocked, Math.max(2, r.gearS || 2));
+    if(r.tech) techLv = Object.assign({ pistol:1, whip:1 }, r.tech);
+    if(r.mats) mats = Object.assign({ melee:0, ranged:0, gear:0 }, r.mats);
+    if(r.eqR && tlv(r.eqR) && techOf(r.eqR) && techOf(r.eqR).cat === "ranged") eqRanged = r.eqR;
+    if(r.eqM && tlv(r.eqM) && techOf(r.eqM) && techOf(r.eqM).cat === "melee") eqMelee = r.eqM;
   }catch(e){}
 }
 async function loadShop(){
@@ -3289,7 +3522,8 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel });
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
+                           tech: techLv, mats, eqR: eqRanged, eqM: eqMelee });
   try{ if(window.storage){ await window.storage.set("swing:shop", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:shop", v); }catch(e){}
 }
@@ -3300,6 +3534,7 @@ function applyTitleRecord(v){
     lifeBossKills = r.boss || 0;
     lifeKrakenKills = r.kraken || 0;
     unlockedTitles = new Set(r.unlocked || []);
+    titleSel = r.sel || null;
   }catch(e){}
 }
 async function loadTitles(){
@@ -3315,7 +3550,7 @@ async function loadTitles(){
   }catch(e){}
 }
 async function saveTitles(){
-  const v = JSON.stringify({ boss: lifeBossKills, kraken: lifeKrakenKills, unlocked: [...unlockedTitles] });
+  const v = JSON.stringify({ boss: lifeBossKills, kraken: lifeKrakenKills, unlocked: [...unlockedTitles], sel: titleSel });
   try{ if(window.storage){ await window.storage.set("swing:titles", v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem("swing:titles", v); }catch(e){}
 }
@@ -4551,6 +4786,14 @@ function drawFist(){
   ctx.beginPath(); ctx.arc(fx, fy, FIST_R, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = "#b03a34"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(fx, fy, FIST_R - 5, 0, Math.PI*2); ctx.stroke();
+  if(fist.pierce){            // 라이플 — 비틀린 팔에 나선 무늬
+    ctx.strokeStyle = "rgba(176,58,52,.6)"; ctx.lineWidth = 2;
+    const n = 6;
+    for(let i=1;i<n;i++){
+      const x = sx + (fx - sx)*i/n, y = sy + (fy - sy)*i/n;
+      ctx.beginPath(); ctx.arc(x, y, 5, time*0.4 + i, time*0.4 + i + 2.2); ctx.stroke();
+    }
+  }
 }
 
 function drawShield(){
@@ -4568,16 +4811,80 @@ function drawShield(){
 }
 
 function drawGun(){
+  drawVolley();
   if(!gun) return;
-  const k = 1 - Math.max(0, gun.t) / GUN_LIFE;
-  const gx = gun.x - cam.x, gy = gun.y;
-  const r = GUN_R * Math.min(1, k*2.4);
+  const k = 1 - Math.max(0, gun.t) / GUN_LIFE;      // 0 → 1
+  const px = p.x - cam.x, py = p.y, f = gun.face;
   ctx.save();
-  ctx.globalAlpha = Math.max(0, gun.t / GUN_LIFE);
-  ctx.strokeStyle = "#8f4fd0"; ctx.lineWidth = 8;
-  ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI*2); ctx.stroke();
-  ctx.fillStyle = "rgba(143,79,208,0.26)";
-  ctx.beginPath(); ctx.arc(gx, gy, r*0.68, 0, Math.PI*2); ctx.fill();
+  ctx.lineCap = "round";
+  if(gun.kind === "bazooka"){
+    const gx = gun.x - cam.x, gy = gun.y, r = BAZOOKA_R * Math.min(1, k*2.6);
+    ctx.globalAlpha = Math.max(0, gun.t / GUN_LIFE);
+    if(k < 0.5){                                    // 두 팔이 뻗어 손바닥이 맞붙는다
+      ctx.strokeStyle = "#e8b48c"; ctx.lineWidth = 10;
+      for(const o of [-12, 12]){ ctx.beginPath(); ctx.moveTo(px, py + o*0.5); ctx.lineTo(gx - 18*f, gy + o); ctx.stroke(); }
+      ctx.fillStyle = "#e8b48c";
+      for(const o of [-12, 12]){ ctx.beginPath(); ctx.arc(gx - 14*f, gy + o, 13, 0, Math.PI*2); ctx.fill(); }
+    }
+    ctx.strokeStyle = "#f0a24e"; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI*2); ctx.stroke();
+  } else if(gun.kind === "axe"){
+    const cx = gun.x - cam.x;
+    const up = k < 0.35;                            // 다리를 번쩍 들었다가 → 내리찍는다
+    const footY = up ? py - 150 * (k / 0.35) : py - 150 + (SEA - py + 150) * Math.min(1, (k - 0.35) / 0.2);
+    ctx.globalAlpha = Math.max(0, gun.t / GUN_LIFE) + 0.2;
+    ctx.strokeStyle = "#e8b48c"; ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.moveTo(px, py + 8); ctx.quadraticCurveTo(px + 10*f, footY - 20, cx, footY); ctx.stroke();
+    ctx.fillStyle = "#3a2a1f";
+    ctx.beginPath(); ctx.ellipse(cx, footY, 16, 9, 0, 0, Math.PI*2); ctx.fill();
+    if(!up){
+      // 내리찍은 자리에 옅은 충격 기둥과 물기둥
+      const fade = Math.max(0, 1 - (k - 0.55) / 0.45);
+      ctx.globalAlpha = fade * 0.16;
+      ctx.fillStyle = "#8fd6d8";
+      ctx.fillRect(cx - AXE_W, Math.max(0, py - 140), AXE_W*2, SEA - Math.max(0, py - 140));
+      ctx.globalAlpha = fade * 0.8;
+      ctx.strokeStyle = "#bfe8ea"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.ellipse(cx, SEA, AXE_W * (0.4 + (1 - fade)*0.6), 10, 0, 0, Math.PI*2); ctx.stroke();
+    }
+  } else {
+    // 채찍 — 다리가 위에서 앞을 지나 아래로 크게 휘돈다
+    const sweep = Math.min(1, k / 0.55);
+    const ang = -Math.PI/2 + Math.PI * sweep;
+    const tipX = px + Math.cos(ang) * WHIP_R * f, tipY = py + Math.sin(ang) * WHIP_R;
+    ctx.globalAlpha = Math.max(0, gun.t / GUN_LIFE) * 0.45;
+    ctx.fillStyle = "rgba(232,180,140,0.5)";
+    ctx.beginPath(); ctx.moveTo(px, py);
+    for(let i=0;i<=16;i++){ const a = -Math.PI/2 + Math.PI * sweep * i/16; ctx.lineTo(px + Math.cos(a)*WHIP_R*f, py + Math.sin(a)*WHIP_R); }
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = Math.max(0, gun.t / GUN_LIFE);
+    ctx.strokeStyle = "#e8b48c"; ctx.lineWidth = 11;
+    const midA = ang - 0.45;          // 다리 가운데가 휘두르는 방향보다 반 박자 늦게 따라와 휘어 보인다
+    ctx.beginPath(); ctx.moveTo(px, py + 6);
+    ctx.quadraticCurveTo(px + Math.cos(midA)*WHIP_R*0.55*f, py + Math.sin(midA)*WHIP_R*0.55, tipX, tipY); ctx.stroke();
+    ctx.fillStyle = "#3a2a1f";
+    ctx.beginPath(); ctx.ellipse(tipX, tipY, 15, 8, ang, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// 개틀링 — 조준 방향 부채꼴로 주먹 여러 개가 번갈아 튀어나간다
+function drawVolley(){
+  if(!volley) return;
+  const px = p.x - cam.x, py = p.y;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - volley.t / 22);
+  ctx.lineCap = "round";
+  for(let i=0;i<7;i++){
+    const ph = (volley.t * 0.9 + i * 0.37) % 1;
+    const a = volley.a + Math.sin(i * 2.3 + volley.t * 0.7) * GATLING_ARC;
+    const d = GATLING_RANGE * (0.35 + 0.65 * Math.sin(ph * Math.PI));
+    const fx = px + Math.cos(a)*d, fy = py + Math.sin(a)*d;
+    ctx.strokeStyle = "#e8b48c"; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(fx, fy); ctx.stroke();
+    ctx.fillStyle = "#e8b48c";
+    ctx.beginPath(); ctx.arc(fx, fy, 12, 0, Math.PI*2); ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -4641,7 +4948,7 @@ function drawSkillGauge(){
   if(!ready){
     ctx.strokeStyle = "rgba(217,184,119,.8)";
     ctx.beginPath();
-    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - skillCd/pistolCd()));
+    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - skillCd/skillMax));
     ctx.stroke();
   }
   ctx.textAlign = "center";
@@ -4650,7 +4957,7 @@ function drawSkillGauge(){
   ctx.fillText(ready ? "Q" : Math.ceil(skillCd/60) + "초", cx, cy + 4);
   ctx.fillStyle = "rgba(244,236,217,.5)";
   ctx.font = "400 10px 'Pretendard', system-ui, sans-serif";
-  ctx.fillText("피스톨", cx, cy + r + 13);
+  ctx.fillText(techOf(eqRanged).short, cx, cy + r + 13);
   ctx.restore();
 }
 
@@ -4666,7 +4973,7 @@ function drawGunGauge(){
   if(!ready){
     ctx.strokeStyle = "rgba(217,184,119,.8)";
     ctx.beginPath();
-    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - gunCd/GUN_CD));
+    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1 - gunCd/gunMax));
     ctx.stroke();
   }
   ctx.textAlign = "center";
@@ -4675,7 +4982,7 @@ function drawGunGauge(){
   ctx.fillText(ready ? "W" : Math.ceil(gunCd/60) + "초", cx, cy + 4);
   ctx.fillStyle = "rgba(244,236,217,.5)";
   ctx.font = "400 10px 'Pretendard', system-ui, sans-serif";
-  ctx.fillText("건", cx, cy + r + 13);
+  ctx.fillText(techOf(eqMelee).short, cx, cy + r + 13);
   ctx.restore();
 }
 
@@ -4950,7 +5257,7 @@ function drawKingWarning(){
   ctx.fillText("⚠ 해왕류 접근 중 — 전방 " + meters + "m", W/2, by - 3);
   ctx.font = "400 12px 'Pretendard', system-ui, sans-serif";
   ctx.fillStyle = "rgba(244,236,217,.75)";
-  ctx.fillText("피스톨(Q) · 엘리펀트 건(W)으로 미리 물리쳐라", W/2, by + 15);
+  ctx.fillText(techOf(eqRanged).short + "(Q) · " + techOf(eqMelee).short + "(W)으로 미리 물리쳐라", W/2, by + 15);
   ctx.restore();
 }
 
@@ -5454,7 +5761,7 @@ function draw(){
     centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 28, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
     centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 " + CHAIN_CAP + "배", H/2 - 4, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
     centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 18, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
-    centerText("Q 피스톨(5초) · W 엘리펀트 건(15초) · E 기어(아래에서 선택)", H/2 + 38, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
+    centerText("Q " + techOf(eqRanged).name + " · W " + techOf(eqMelee).name + " · E 기어(아래에서 선택)", H/2 + 38, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
     centerText("화면을 누르거나 Space로 출항 · M 메뉴로", H/2 + 60, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 84, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
     if(tip) centerText("팁 · " + tip, H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.8)");
@@ -5548,6 +5855,18 @@ function draw(){
       centerText(shopMsg.text, H/2 + 160, "700 14px 'Pretendard', system-ui, sans-serif", "#9fe0a0", Math.min(1, shopMsg.t/20));
       if(shopMsg.t <= 0) shopMsg = null;
     }
+  } else if(state === STATE.LOG && titlePage){
+    ctx.fillStyle = "rgba(13,27,38,0.9)";
+    ctx.fillRect(0,0,W,H);
+    centerText("칭호 고르기", 50, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("지금 단 칭호: " + (currentTitleName() || "없음") + (titleSel ? "" : " (자동)"), 84, "600 14px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
+    for(const row of menuRows()) centerText(row.label, row.y, "500 15px 'Pretendard', system-ui, sans-serif", row.on ? "#9fe0a0" : row.dim ? "rgba(244,236,217,.35)" : "#d9b877");
+    if(shopMsg){
+      shopMsg.t -= 1;
+      centerText(shopMsg.text, H - 44, "700 14px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
+      if(shopMsg.t <= 0) shopMsg = null;
+    }
+    centerText("출항 화면과 현상수배 포스터에 고른 칭호가 붙는다 · 숫자 키 또는 클릭 · Esc 뒤로", H - 18, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.LOG){
     ctx.fillStyle = "rgba(13,27,38,0.86)";
     ctx.fillRect(0,0,W,H);
@@ -5566,7 +5885,6 @@ function draw(){
       leftText(st[0], cx, cy, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
       leftText(st[1], cx + 96, cy, "700 14px ui-monospace, Menlo, monospace", "#ffd76a");
     });
-    centerText("칭호", 256, "700 17px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     const cur = currentTitleName();
     TITLES.forEach((t, i) => {
       const cx = i % 2 ? W/2 + 30 : W/2 - 310, cy = 282 + Math.floor(i / 2) * 24;
@@ -5576,15 +5894,21 @@ function draw(){
       leftText(t.desc, cx + 150, cy, "400 12px 'Pretendard', system-ui, sans-serif", has ? "rgba(244,236,217,.6)" : "rgba(244,236,217,.35)");
     });
     drawRecentChart(W/2 - 310, 414, 620, 32);
-    menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
-                                              i === 0 ? "#d9b877" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
+    menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 || row.key === 3 ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
+                                              i === 0 ? "#d9b877" : row.key === 3 ? "#ffd76a" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
-    centerText("보물 창고", H/2 - 184, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    centerText("가진 보물 " + Math.floor(bank), H/2 - 150, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
+    const shopTitle = shopPage === 2 ? "기술 뽑기" : shopPage === 3 ? TECH_CATS[techCat].name + " 기술" : "보물 창고";
+    centerText(shopTitle, H/2 - 200, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("가진 보물 " + Math.floor(bank), H/2 - 168, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
+    if(shopPage >= 2){
+      centerText("비급 — " + TECH_ORDER.map(c => TECH_CATS[c].name + " " + mats[c]).join(" · ") + "   |   장착: Q " + techOf(eqRanged).name + " · W " + techOf(eqMelee).name,
+                 H/2 - 142, "600 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
+    }
     for(const row of menuRows()){
-      centerText(row.label, row.y, "500 15px 'Pretendard', system-ui, sans-serif", row.on ? "#9fe0a0" : row.dim ? "rgba(217,184,119,.45)" : "#d9b877");
+      const font = (shopPage === 3 && row.y < H/2 - 92 + 3*32) ? "500 13px 'Pretendard', system-ui, sans-serif" : "500 15px 'Pretendard', system-ui, sans-serif";
+      centerText(row.label, row.y, font, row.on ? "#9fe0a0" : row.dim ? "rgba(217,184,119,.45)" : row.col || (row.hot ? "#ffd76a" : "#d9b877"));
       if(row.swatch){
         ctx.font = "500 15px 'Pretendard', system-ui, sans-serif";
         const w = ctx.measureText(row.label).width;
@@ -5595,7 +5919,12 @@ function draw(){
     }
     if(shopMsg){
       shopMsg.t -= 1;
-      centerText(shopMsg.text, shopPage ? H - 62 : H/2 - 126, "700 14px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
+      if(shopMsg.rare){         // 새 기술 — 금빛 띠로 크게
+        ctx.save(); ctx.globalAlpha = Math.min(1, shopMsg.t/20) * 0.85;
+        ctx.fillStyle = "rgba(255,215,106,.18)"; ctx.fillRect(0, H - 82, W, 40);
+        ctx.restore();
+        centerText(shopMsg.text, H - 62, "800 17px 'Pretendard', system-ui, sans-serif", "#ffd76a", Math.min(1, shopMsg.t/20));
+      } else centerText(shopMsg.text, shopPage ? H - 62 : H/2 - 140, "700 14px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
       if(shopMsg.t <= 0) shopMsg = null;
     }
     centerText("본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키 또는 클릭으로 구매/장착 · Esc 뒤로", H - 20, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
@@ -5660,7 +5989,12 @@ window.__swing = {
   toLog: () => { state = STATE.LOG; },
   settings: settings,
   resultText: () => resultText(),
-  ghost: () => ({ best: ghostBest, rec: ghostRec })
+  ghost: () => ({ best: ghostBest, rec: ghostRec }),
+  tech: () => ({ lv: techLv, mats, eqR: eqRanged, eqM: eqMelee, open: openPack, up: upgradeTech, equip: equipTech,
+                 set: (id, lv) => { techLv[id] = lv; }, rangedCd: rangedCd(), meleeCd: meleeCd(), volley, aim: (spd, range) => pickAimTarget(spd, range, PISTOL_BOSS_RANGE) }),
+  title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage }),
+  rows: () => menuRows(),
+  shopPage: (n) => { state = STATE.SHOP; shopPage = n; }
 };
 
 reset();
