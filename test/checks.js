@@ -3,6 +3,7 @@
 const H = require("./harness.js");
 const A = () => H.api();
 const T = () => H.evalIn("window.__test");
+const SEA_Y = () => A().peek().SEA;
 
 let failed = 0;
 const ok = (name, cond, extra) => {
@@ -1652,6 +1653,127 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     ok("다음 항구는 1500m 뒤", Math.round(a.port().next) === 2400);
     a.hold(false);
   }
+}
+
+/* --- v38: 미니게임 · 주간 해류 · 선원 레벨 --- */
+{
+  const a = A();
+  a.toMenu();
+  const row0 = a.rows().find(r => r.key === 0);
+  ok("메뉴 0번은 미니게임", !!row0 && /미니게임/.test(row0.label));
+  row0.action();
+  ok("미니게임 목록 화면(state 12)에 세 가지", a.peek().state === 12 && a.rows().filter(r => /^[1-3]\) /.test(r.label)).length === 3);
+
+  // 1) 해파리 트램펄린
+  const M = a.mini();
+  M.start("jelly");
+  ok("트램펄린을 고르면 미니게임 화면(state 13)·준비 단계", a.peek().state === 13 && a.mini().m.phase === "ready");
+  M.down(); H.step(); M.up();
+  ok("누르면 시작", a.mini().m.phase === "play");
+  let m = a.mini().m, bounced = false;
+  for(let i=0;i<120;i++){ H.step(); if(m.p.vy < -8) bounced = true; }
+  ok("가만히 있어도 바닥 해파리에서 튕긴다", bounced && m.phase === "play");
+  // 슈퍼 점프 — 착지 직전에 누르면 더 높이
+  for(let i=0;i<200 && !(m.p.vy > 0 && m.js[0].y - 24 - m.p.y < m.p.vy * 4 && m.js[0].y - 24 - m.p.y > 0);i++) H.step();
+  M.down(); M.up();
+  let topV = 0;
+  for(let i=0;i<10;i++){ H.step(); topV = Math.min(topV, m.p.vy); }
+  ok("착지 직전에 누르면 슈퍼 점프", m.supers >= 1 && topV < -13, "supers=" + m.supers + " vy=" + topV.toFixed(1));
+  // 전기 해파리 — 감전되면 조작 불능 잠깐
+  m.js.push({ x: m.p.x, y: m.p.y + 40, r: 32, type: 2, vx: 0, t: 0, sq: 0 });
+  m.p.vy = 4;
+  for(let i=0;i<12;i++) H.step();
+  ok("전기 해파리를 밟으면 감전(조작 불능)", m.stunT > 0);
+  // 화면 아래로 떨어지면 끝 + 보물 창고 적립
+  const bank0 = a.shop().bank;
+  m.js.length = 0; m.nextY = -1e9; m.cy = -2000; m.p.y = -1900; m.p.vy = 5; m.top = -1900;
+  for(let i=0;i<200 && m.phase === "play";i++) H.step();
+  ok("떨어지면 결과 화면", m.phase === "over");
+  ok("점수에 따라 창고 보물이 쌓이고 최고 기록이 남는다", a.shop().bank > bank0 && a.mini().best.jelly === Math.floor(m.score) && m.score >= 100,
+     "점수=" + m.score + " 보상=" + m.reward);
+  ok("메달을 처음 따면 덤 보물(115m → 동메달)", m.medalBonus === 300 && a.mini().medals.jelly === 1, "덤=" + m.medalBonus);
+  ok("한 판 보상은 " + 500 + "까지", m.reward <= 500);
+
+  // 2) 고무고무 대포
+  M.start("cannon");
+  m = a.mini().m; m.ang = 40;
+  M.down();
+  for(let i=0;i<45;i++) H.step();
+  M.up();
+  ok("누르고 떼면 발사", m.flying && m.p.vx > 10, "vx=" + m.p.vx.toFixed(1));
+  m.objs.length = 0; m.nextX = 1e9;   // 장애물 없이
+  m.objs.push({ k:"jelly", x: m.p.x + 3000, y: SEA_Y() - 80, t: 0, sq: 0 });
+  let puffed = false;
+  for(let i=0;i<20;i++) H.step();
+  const vy0 = m.p.vy; M.down(); M.up(); puffed = m.puffs === 2 && m.p.vy <= -7;
+  ok("날면서 누르면 고무 풍선(3번까지)", puffed, "vy " + vy0.toFixed(1) + "→" + m.p.vy.toFixed(1));
+  for(let i=0;i<60*60 && m.phase === "play";i++) H.step();
+  ok("결국 바다에 가라앉아 끝난다", m.phase === "over" && m.score > 50, "거리=" + Math.floor(m.score));
+  // 해파리 위에 떨어지면 튕긴다
+  M.start("cannon"); m = a.mini().m; M.down(); M.up();
+  m.flying = true; m.objs.length = 0; m.nextX = 1e9;
+  m.p.x = 2000; m.p.y = 300; m.p.vx = 8; m.p.vy = 6;
+  m.objs.push({ k:"jelly", x: 2010, y: 360, t: 0, sq: 0 });
+  for(let i=0;i<15;i++) H.step();
+  ok("대포: 해파리를 밟으면 위로 튕긴다", m.bouncesN === 1 && m.p.vy < 0);
+
+  // 3) 해파리 징검다리
+  M.start("hop");
+  m = a.mini().m;
+  m.slots = [0, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const hold = (n) => { M.down(); for(let i=0;i<n;i++) H.step(); M.up(); for(let i=0;i<70 && m.hop;i++) H.step(); };
+  hold(40);
+  ok("길게 누르면 3칸", m.i === 3 && m.phase === "play", "칸=" + m.i);
+  hold(4);
+  ok("전기 해파리에 내려앉으면 끝", m.phase === "over" && /감전/.test(m.reason));
+  M.start("hop"); m = a.mini().m;
+  M.down(); M.up(); H.step();   // 시작 누름은 1칸 점프
+  for(let i=0;i<80 && m.hop;i++) H.step();
+  const i0 = m.i;
+  for(let i=0;i<400 && m.phase === "play";i++) H.step();
+  ok("가만히 있으면 밟은 해파리와 함께 가라앉는다", m.phase === "over" && /가라앉/.test(m.reason) && m.i === i0);
+
+  // 해파리 두건 — 셋 다 금메달
+  ok("금메달 셋 전엔 해파리 두건이 잠겨 있다", !a.shop().pickSkin(7));
+  M.set("cannon", 2000, 3); M.set("hop", 200, 3);
+  M.start("jelly"); m = a.mini().m; M.down(); M.up();
+  m.js.length = 0; m.nextY = -1e9; m.cy = -7000; m.p.y = -6900; m.top = -6900; m.p.vy = 5;
+  for(let i=0;i<200 && m.phase === "play";i++) H.step();
+  ok("셋 다 금메달이면 해파리 두건이 풀린다", m.skinUp && a.shop().pickSkin(7) && a.shop().skin === "jelly");
+  a.shop().pickSkin(0);
+
+  // 조작
+  M.start("jelly");
+  M.toList();
+  ok("Esc(목록)로 미니게임 목록으로", a.peek().state === 12);
+  a.toMenu();
+
+  // 주간 해류
+  const Wk = a.weekly();
+  ok("주간 해류는 4가지 중 하나", Wk.list.length === 4 && Wk.list.indexOf(Wk.now) >= 0);
+  Wk.force("gull");
+  a.startMain(); H.step();
+  ok("갈매기 철엔 '갈매기 철'이 이번 주 해류", a.weekly().now.id === "gull");
+  Wk.force("jelly");
+  {
+    let jelly3 = 0, jelly1 = 0;
+    for(let r=0;r<40;r++){ a.startMain(); T().teleport(30000); jelly3 += a.peek().jellies.length; }
+    Wk.force("gold");
+    for(let r=0;r<40;r++){ a.startMain(); T().teleport(30000); jelly1 += a.peek().jellies.length; }
+    ok("해파리 대이동 주엔 해파리가 훨씬 많다", jelly3 > jelly1 * 1.6, jelly3 + " vs " + jelly1);
+  }
+  Wk.force(null);
+  a.toMenu();
+
+  // 선원 레벨
+  const C = a.crewLv();
+  a.crew().set("sword");
+  ok("선원 레벨은 1부터", C.lv("sword") === 1 && Math.abs(C.cdMul("sword") - 1) < 1e-9);
+  C.gain(4100);
+  ok("4000m 함께 가면 Lv.3, 쿨타임 -16%", C.lv("sword") === 3 && Math.abs(C.cdMul("sword") - 0.84) < 1e-9 && a.crewLv().up && a.crewLv().up.lv === 3);
+  C.gain(1e6);
+  ok("최고 Lv.5", C.lv("sword") === 5);
+  a.crew().set(null);
 }
 
 /* --- 프로젝트 원칙 --- */

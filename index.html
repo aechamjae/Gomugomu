@@ -113,6 +113,7 @@
     .touch{display:block;position:absolute;inset:0;pointer-events:none;}
     /* 실제로 조작하는 중이 아닐 땐(출항·일시정지·결과·메뉴) 조작 버튼을 숨겨 화면을 가리지 않게 */
     .touch.idle .tb, .touch.idle .mhud, .touch.idle .tpause{display:none;}
+    .touch.mini .tskill, .touch.mini .tskill2, .touch.mini .tskill3, .touch.mini .tsling, .touch.mini .mhud{display:none;}
     .tb,.tpause{
       pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;
       background:rgba(244,236,217,.10);border:2px solid rgba(217,184,119,.45);
@@ -290,7 +291,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v37";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v38";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -510,6 +511,35 @@ const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 240, CREW_SNIPE_R
 let crewOwned = [], crewSel = null, crewMate = null, crewFx = [], crewKills = 0;
 const crewDef = (id) => CREW.find(c => c.id === id) || null;
 const crewOn = (id) => crewSel === id && crewOwned.indexOf(id) >= 0;
+// 선원 레벨 — 같이 항해한 거리(m)가 쌓이면 오른다. 레벨마다 검객·저격수 쿨타임 -8%, 요리사 고기 +15%, 항해사 해군 감속 +3%
+const CREW_LV_XP = [0, 1500, 4000, 8000, 15000];
+let crewXp = {}, crewLvUp = null;
+const crewLv = (id) => CREW_LV_XP.filter(v => (crewXp[id] || 0) >= v).length;
+const crewCdMul = (id) => 1 - 0.08 * (crewLv(id) - 1);
+const crewNext = (id) => CREW_LV_XP[crewLv(id)];   // 다음 레벨 경험치(최고 레벨이면 undefined)
+function crewGainXp(m){
+  if(!crewSel || !crewOn(crewSel) || m <= 0) return;
+  const before = crewLv(crewSel);
+  crewXp[crewSel] = (crewXp[crewSel] || 0) + Math.floor(m);
+  const after = crewLv(crewSel);
+  if(after > before) crewLvUp = { name: crewDef(crewSel).name, lv: after };
+}
+
+/* 주간 해류 — 주마다 바뀌는 본게임 규칙. 오늘의 항해도 같은 주엔 모두 같은 해류라 코스가 사람마다 같다 */
+const WEEKLY = [
+  { id:"jelly",  name:"해파리 대이동", desc:"해파리가 3배, 일찍부터 · 밟으면 보물 3배", col:"#e6a8f0" },
+  { id:"gold",   name:"황금 해류",     desc:"금화 가치 +50% · 황금 고리 2배",          col:"#ffd76a" },
+  { id:"gull",   name:"갈매기 철",     desc:"갈매기 2배 · 격추 보물 2배",              col:"#f4ecd9" },
+  { id:"barrel", name:"보물 통 풍년",  desc:"보물 통 2.5배 · 통 보물 2배",             col:"#d9b877" }
+];
+let weeklyForce = null;      // 검사용
+function weekNo(){
+  const d = new Date(); d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - (d.getDay() + 6) % 7);           // 그 주 월요일 정오
+  return Math.round(d.getTime() / (7 * 864e5));
+}
+const weeklyNow = () => WEEKLY.find(w => w.id === weeklyForce) || WEEKLY[((weekNo() % WEEKLY.length) + WEEKLY.length) % WEEKLY.length];
+const wk = (id) => !practiceMode && !rushMode && weeklyNow().id === id;
 
 /* 해군 추격 — 뒤에서 군함이 쫓아오며 포를 쏘고 화면을 밀어붙인다. 버티면 현상금 */
 const NAVY_FIRST = 1100;
@@ -655,8 +685,8 @@ function fit(){
 fit();
 window.addEventListener("resize", fit);
 
-const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8, REVIVE:9, PICK:10, PORT:11 };
-const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG || state === STATE.SETTINGS;
+const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8, REVIVE:9, PICK:10, PORT:11, MINI_SELECT:12, MINI:13 };
+const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG || state === STATE.SETTINGS || state === STATE.MINI_SELECT;
 
 /* 설정 — 멀미·광과민을 위한 연출 끄기. 기기에 저장 */
 const settings = { shake: true, flash: true, lines: true };
@@ -683,10 +713,12 @@ const SKINS = [
   // 칭호 보상 — 보물로는 못 사고, 칭호를 따면 공짜로 풀린다
   { id:"kraken",  name:"크라켄 두건",     cost:0, title:"kraken1",   band:"#7a3fb0", coat:"#3e2458" },
   { id:"bolt",    name:"번개 두건",       cost:0, title:"perfect50", band:"#f0c030", coat:"#6a5418" },
-  { id:"horizon", name:"하얀 수평선 두건", cost:0, title:"dist10k",   band:"#eef4f8", coat:"#5a7486" }
+  { id:"horizon", name:"하얀 수평선 두건", cost:0, title:"dist10k",   band:"#eef4f8", coat:"#5a7486" },
+  // 미니게임 보상 — 미니게임 셋 다 금메달이면 풀린다
+  { id:"jelly",   name:"해파리 두건",     cost:0, mini:true,         band:"#e6a8f0", coat:"#5a3a6a" }
 ];
 let shopPage = 0;
-const skinLocked = (k) => k.title && !unlockedTitles.has(k.title);
+const skinLocked = (k) => (k.title && !unlockedTitles.has(k.title)) || (k.mini && ownedSkins.indexOf(k.id) < 0);
 let parrotOn = true;
 const parrotUnlocked = () => lifeBossKills >= PARROT_UNLOCK;
 const parrotActive = () => parrotUnlocked() && parrotOn;
@@ -747,6 +779,10 @@ function drawHint(){
 let bank = 0, upgrades = {}, shopMsg = null, bestBounty = 0, ownedSkins = ["red"], skin = "red";
 const curSkin = () => SKINS.find(k => k.id === skin) || SKINS[0];
 function pickSkin(k){
+  if(k.mini && skinLocked(k)){
+    shopMsg = { text: "미니게임 셋 다 금메달을 따면 풀린다", t: 110 };
+    return false;
+  }
   if(skinLocked(k)){
     const t = TITLES.find(q => q.id === k.title);
     shopMsg = { text: "칭호 '" + (t ? t.name : k.title) + "'을(를) 따면 풀린다", t: 110 };
@@ -891,17 +927,30 @@ function startPractice(idx){
 // MENU/PRACTICE_SELECT 화면의 선택지 — 그리기와 클릭·숫자키 판정이 이 배열 하나를 같이 본다
 function menuRows(){
   if(state === STATE.MENU){
+    const top = H/2 - 108, rh = 33;
+    const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
     return [
-      { y: H/2 - 92, label: "1) 본게임", action: startMainGame },
-      { y: H/2 - 56, label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
-      { y: H/2 - 20, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
-      { y: H/2 + 16, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
-      { y: H/2 + 52, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; } },
-      { y: H/2 + 88, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
-      { y: H/2 + 124, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
-      { y: H/2 + 160, label: "8) 설정", action: () => { state = STATE.SETTINGS; } },
-      { y: H/2 + 196, label: "9) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount }
+      { y: top,        label: "1) 본게임", action: startMainGame },
+      { y: top + rh,   label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
+      { y: top + rh*2, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
+      { y: top + rh*3, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
+      { y: top + rh*4, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; } },
+      { y: top + rh*5, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
+      { y: top + rh*6, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
+      { y: top + rh*7, label: "8) 설정", action: () => { state = STATE.SETTINGS; } },
+      { y: top + rh*8, label: "9) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount },
+      { key: 0, y: top + rh*9, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
     ];
+  }
+  if(state === STATE.MINI_SELECT){
+    const top = H/2 - 70, rh = 64;
+    const rows = MINIS.map((q, i) => {
+      const md = miniMedals[q.id] || 0, b = miniBest[q.id] || 0;
+      return { y: top + i*rh, label: (i+1) + ") " + q.name + (b ? " — 최고 " + b + q.unit : "") + (md ? "  " + "🏅".repeat(md) : ""),
+               sub: q.desc, col: q.col, action: () => startMini(q.id) };
+    });
+    rows.push({ key: 9, y: top + 3*rh + 20, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } });
+    return rows;
   }
   if(state === STATE.SETTINGS){
     const onoff = (v) => v ? "켜짐" : "꺼짐";
@@ -960,7 +1009,8 @@ function menuRows(){
       const rows = CREW.map((c, i) => {
         const own = crewOwned.indexOf(c.id) >= 0, on = crewSel === c.id;
         const status = on ? "동행 중 (누르면 내린다)" : own ? "데려가기" : "고용 " + c.cost;
-        return { y: top - 6 + i*(rowH + 8), label: (i+1) + ") " + c.name + " — " + c.desc + " · " + status,
+        const lvTxt = own ? " Lv." + crewLv(c.id) + (crewNext(c.id) ? " (" + (crewXp[c.id] || 0) + "/" + crewNext(c.id) + "m)" : " 최고") : "";
+        return { y: top - 6 + i*(rowH + 8), label: (i+1) + ") " + c.name + lvTxt + " — " + c.desc + " · " + status,
                  action: () => hireCrew(c), dim: !own && bank < c.cost, on, swatch: c.col };
       });
       rows.push({ key: 9, y: top + 4*(rowH + 8) + 30, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
@@ -1000,12 +1050,13 @@ function menuRows(){
     }
     const rows = SKINS.map((k, i) => {
       const own = ownedSkins.indexOf(k.id) >= 0 || (k.title && !skinLocked(k));
-      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
-      return { y: top - 20 + i*rowH, label: (i+1) + ") " + k.name + " — " + status,
-               action: () => pickSkin(k), dim: !own && (k.title ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
+      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.mini ? "🔒 미니게임 금메달 3개" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
+      return { y: top - 24 + i*30, label: (i+1) + ") " + k.name + " — " + status,
+               action: () => pickSkin(k), dim: !own && (k.title || k.mini ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
     });
-    rows.push({ key: 8, y: top - 20 + SKINS.length*rowH + 12, label: "8) ← 업그레이드", action: () => { shopPage = 0; shopMsg = null; } });
-    rows.push({ key: 9, y: top - 20 + SKINS.length*rowH + 46, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; shopPage = 0; } });
+    // 두건이 9개라 숫자 키 1~9는 두건 차지 — 돌아가기는 0번과 클릭
+    rows.push({ key: -1, y: top - 24 + SKINS.length*30 + 8, label: "← 업그레이드", action: () => { shopPage = 0; shopMsg = null; } });
+    rows.push({ key: 0, y: top - 24 + SKINS.length*30 + 40, label: "0) ← 메뉴로", action: () => { state = STATE.MENU; shopPage = 0; } });
     return rows;
   }
   if(state === STATE.PRACTICE_SELECT){
@@ -1086,7 +1137,7 @@ function reset(){
   navyRand = dailyMode ? mulberry32(todaySeed() * 13 + 3) : Math.random;
   navy = null; navyEscapes = 0; nextNavyAt = NAVY_FIRST + navyRand()*400;
   nextPortAt = PORT_FIRST; portIdx = 0; portAt = null; portPending = null; portBought = {}; portMsg = null;
-  crewMate = { x:150 - 50, y:120, cd:90 }; crewFx = []; crewKills = 0;
+  crewMate = { x:150 - 50, y:120, cd:90 }; crewFx = []; crewKills = 0; crewLvUp = null;
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null;
@@ -1331,14 +1382,15 @@ function breakBarrel(b, how){
   b.gone = true;
   barrelsBroken++;
   const y = barrelY(b);
-  treasure += 30;
+  const bv = wk("barrel") ? 60 : 30;
+  treasure += bv;
   const n = 6;
   for(let i=0;i<n;i++){
     const a = -Math.PI/2 + (i - (n-1)/2) * 0.28;
     const r = 90 + (i % 2) * 50;
     coins.push({ x: b.x + 60 + Math.cos(a)*r, y: Math.max(70, y - 60 + Math.sin(a)*r), got:false });
   }
-  pops.push({ x:b.x, y:y-40, t:70, text:"보물 통! +30" + (how ? " (" + how + ")" : ""), color:"#d9b877" });
+  pops.push({ x:b.x, y:y-40, t:70, text:"보물 통! +" + bv + (how ? " (" + how + ")" : ""), color:"#d9b877" });
   for(let i=0;i<18;i++) spark(b.x, y, i % 3 ? "#8a5a2c" : "#ffd76a");
   addGear("kill");
   addShake(3, 8);
@@ -1362,7 +1414,7 @@ function collectCoin(c, byPlayer){
   }
   const wx = weather ? (weather.type === "storm" ? 2 : weather.type === "fog" ? 1.5 : 1) : 1;
   const mult = coinChain() * wx * (buff() ? 2 : 1);
-  const gain = Math.round(COIN_VALUE * mult * (1 + 0.5 * pk("midas")));
+  const gain = Math.round(COIN_VALUE * mult * (1 + 0.5 * pk("midas")) * (wk("gold") ? 1.5 : 1));
   treasure += gain;
   if(byPlayer) p.vx += 1.0 * (p.vx >= 0 ? 1 : -1);
   if(mult > 1) pops.push({ x:c.x, y:c.y-20, t:34, text:"+" + gain, color:"#ffd76a" });
@@ -1519,7 +1571,7 @@ function generate(){
     const y = Math.max(64, Math.min(268, baseY*0.68 + lastAY*0.32 + jitter));
     const an = { x, y, kind: genRand() < 0.62 ? 0 : 1 };   // 0 돛대, 1 바위 기둥
     const bz = inBonus(x / 22);
-    if(!practiceMode && x/22 > 60 && genRand() < (bz ? 0.3 : blitzMode ? 0.09 : GOLD_CHANCE)) an.gold = true;
+    if(!practiceMode && x/22 > 60 && genRand() < (bz ? 0.3 : blitzMode ? 0.09 : GOLD_CHANCE * (wk("gold") ? 2 : 1))) an.gold = true;
     else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && genRand() < ROT_CHANCE) an.rot = true;
     // 항구 — 거리로 정해지고 난수를 쓰지 않아서 오늘의 항해 코스도 그대로다
     if(!practiceMode && !blitzMode && !rushMode && x/22 >= nextPortAt){
@@ -1548,7 +1600,7 @@ function generate(){
     // 고기는 일부러 바다 가까이 낮게 띄운다 — 먹으려면 위험을 감수해야 한다
     if(x/22 > MEAT_FROM && genRand() < MEAT_CHANCE){
       meats.push({ x: lastAX + gap*(0.4 + genRand()*0.2), y: SEA - 88 - genRand()*56, got:false });
-    } else if(crewOn("cook") && x/22 > MEAT_FROM && Math.random() < MEAT_CHANCE){
+    } else if(crewOn("cook") && x/22 > MEAT_FROM && Math.random() < MEAT_CHANCE * (1 + 0.15 * (crewLv("cook") - 1))){
       // 요리사 몫은 따로 굴린다 — genRand를 건드리면 오늘의 항해 코스가 사람마다 달라진다
       meats.push({ x: lastAX + gap*(0.4 + Math.random()*0.2), y: SEA - 88 - Math.random()*56, got:false });
     }
@@ -1556,10 +1608,10 @@ function generate(){
     if(!practiceMode && !dailyMode && x/22 > MAP_FROM && genRand() < MAP_CHANCE){
       mapItems.push({ x: lastAX + gap*0.5, y: 70 + genRand()*40, got:false });
     }
-    if(!practiceMode && x/22 > JELLY_FROM && genRand() < JELLY_CHANCE){
+    if(!practiceMode && x/22 > (wk("jelly") ? 80 : JELLY_FROM) && genRand() < JELLY_CHANCE * (wk("jelly") ? 3 : 1)){
       jellies.push({ x: lastAX + gap*(0.35 + genRand()*0.3), base: SEA - 130 - genRand()*80, t: genRand()*100, cd:0 });
     }
-    if(!practiceMode && x/22 > BARREL_FROM && genRand() < BARREL_CHANCE){
+    if(!practiceMode && x/22 > BARREL_FROM && genRand() < BARREL_CHANCE * (wk("barrel") ? 2.5 : 1)){
       barrels.push({ x: lastAX + gap*(0.3 + genRand()*0.4), gone:false });
     }
     if(!bz) spawnMobs(lastAX, x);        // 보물섬 해역엔 잡몹이 없다
@@ -1610,7 +1662,7 @@ function spawnMobs(x0, x1){
   }
 
   // 폭탄 갈매기 — 공중에서 날아온다. 보통은 한 마리, 가끔 두 마리
-  if(dm > GULL_FROM && genRand() < (dm < 800 ? 0.10 : 0.16)){
+  if(dm > GULL_FROM && genRand() < (dm < 800 ? 0.10 : 0.16) * (wk("gull") ? 2 : 1)){
     const n = genRand() < 0.25 ? 2 : 1;
     const gy = 120 + genRand()*170;
     for(let i=0;i<n;i++){
@@ -1636,6 +1688,7 @@ function segToCapsule(cx, top, bot){
 }
 
 function killGull(g, gain){
+  if(wk("gull")) gain *= 2;
   g.gone = true; gullKills++;
   treasure += gain;
   addGear("kill");
@@ -1663,7 +1716,7 @@ function updateJellies(dt){
       p.y = jy - JELLY_R - 12;
       bounces++;
       j.squash = 1;
-      const gain = 10 * chainMult();
+      const gain = 10 * chainMult() * (wk("jelly") ? 3 : 1);
       treasure += gain;
       addGear("good");
       pops.push({ x:j.x, y:jy-36, t:50, text:"뿅! +" + gain, color:"#e6a8f0" });
@@ -1986,20 +2039,22 @@ window.addEventListener("keydown", (e)=>{
   if(acctOpen) return;          // 계정 창에 글자를 치는 동안엔 게임 조작을 받지 않는다
   const k = keyName(e);
   if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); goToMenu(); return; }
+  if(state === STATE.MINI){ miniKey(k, true, e); return; }
   if(inMenu()){
     if(k === "Escape"){
       e.preventDefault();
       if(state === STATE.LOG && titlePage) titlePage = 0;          // 칭호 고르기 → 일지
       else if(state === STATE.SHOP && shopPage >= 2) shopPage = shopPage === 3 ? 2 : 0;   // 기술 → 뽑기 → 창고
+      else if(state === STATE.SHOP && shopPage === 1) shopPage = 0;   // 두건 → 창고
       else if(state !== STATE.MENU) state = STATE.MENU;
       return;
     }
-    const m = /^Digit([1-9])$/.exec(k);
+    const m = /^Digit([0-9])$/.exec(k);
     if(m){
       e.preventDefault();
-      // 줄에 key가 있으면 그 번호, 없으면 순서대로 1부터 — 페이지를 나눈 연습 목록은 8·9가 고정 번호다
+      // 줄에 key가 있으면 그 번호, 없으면 순서대로 1부터 — 페이지를 나눈 연습 목록은 8·9가 고정 번호다(0도 쓴다, -1은 클릭 전용)
       const n = parseInt(m[1], 10), rows = menuRows();
-      const row = rows.find((r, i) => (r.key || i + 1) === n);
+      const row = rows.find((r, i) => (r.key !== undefined ? r.key : i + 1) === n);
       if(row) row.action();
     }
     return;
@@ -2051,6 +2106,7 @@ window.addEventListener("keydown", (e)=>{
 window.addEventListener("keyup", (e)=>{
   if(acctOpen) return;
   const k = keyName(e);
+  if(state === STATE.MINI){ miniKey(k, false, e); return; }
   if(k === "Space") release(false);
   else if(k === "ArrowLeft" || k === "KeyA") keys.left = false;
   else if(k === "ArrowRight") keys.right = false;
@@ -2075,6 +2131,13 @@ canvas.addEventListener("pointerdown", (e)=>{
     for(const B of overlayButtons()) if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ B.act(); break; }
     return;
   }
+  if(state === STATE.MINI){
+    const pos = canvasPos(e);
+    for(const B of miniButtons()) if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ B.act(); return; }
+    canvasHold = true;
+    miniDown();
+    return;
+  }
   {
     const pos = canvasPos(e);
     for(const B of screenButtons()){
@@ -2084,15 +2147,15 @@ canvas.addEventListener("pointerdown", (e)=>{
   if(inMenu()){
     const pos = canvasPos(e);
     for(const row of menuRows()){
-      if(pos.y > row.y - 16 && pos.y < row.y + 20){ row.action(); break; }
+      if(pos.y > row.y - 16 && pos.y < row.y + (row.sub ? 34 : 20)){ row.action(); break; }
     }
     return;
   }
   canvasHold = true;
   grab();
 });
-window.addEventListener("pointerup", ()=>{ if(canvasHold){ canvasHold = false; release(false); } });
-window.addEventListener("pointercancel", ()=>{ if(canvasHold){ canvasHold = false; release(false); } });
+window.addEventListener("pointerup", ()=>{ if(canvasHold){ canvasHold = false; if(state === STATE.MINI) miniUp(); else release(false); } });
+window.addEventListener("pointercancel", ()=>{ if(canvasHold){ canvasHold = false; if(state === STATE.MINI) miniUp(); else release(false); } });
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
 // ---- 화면 조작 버튼 (폰·태블릿) ----
@@ -2100,6 +2163,10 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
   const k = btn.dataset.k;
   const press = (e)=>{
     e.preventDefault(); e.stopPropagation();
+    if(state === STATE.MINI){
+      if(k === "grab") miniDown(); else if(k === "pause") miniPause(); else if(k in keys) keys[k] = true;
+      return;
+    }
     if(k === "left"){ keys.left = true; }
     else if(k === "right"){ keys.right = true; }
     else if(k === "down"){ keys.down = true; }
@@ -2113,6 +2180,10 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
   };
   const lift = (e)=>{
     e.preventDefault(); e.stopPropagation();
+    if(state === STATE.MINI){
+      if(k === "grab") miniUp(); else if(k in keys) keys[k] = false;
+      return;
+    }
     if(k === "left"){ keys.left = false; }
     else if(k === "right"){ keys.right = false; }
     else if(k === "down"){ keys.down = false; }
@@ -2129,7 +2200,7 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
 
 pauseBtn.addEventListener("click", (e)=>{
   e.preventDefault();
-  togglePause();
+  if(state === STATE.MINI) miniPause(); else togglePause();
   try{ canvas.focus({preventScroll:true}); }catch(err){}
 });
 
@@ -2196,6 +2267,7 @@ function die(reason){
     if(dist > best){ best = dist; saveBest(); }
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
     bank += Math.floor(treasure);
+    if(!rushMode) crewGainXp(dist);
     saveShop();
     logRun();
     if(blitzMode && treasure > blitzBest){ blitzBest = Math.floor(treasure); newBlitzRecord = true; saveShop(); }
@@ -3497,7 +3569,7 @@ function updateCrew(dt){
     for(const m of mobs) if(!m.gone && m.kind === 0 && m.air){ const d = Math.hypot(m.x - p.x, m.y - p.y); if(d < bd){ bd = d; tgt = m; } }
     for(const g of gulls) if(!g.gone){ const d = Math.hypot(g.x - p.x, g.y - p.y); if(d < bd){ bd = d; tgt = g; } }
     if(tgt){
-      c.cd = CREW_SWORD_CD * (1 - 0.3 * pk("drill"));
+      c.cd = CREW_SWORD_CD * (1 - 0.3 * pk("drill")) * crewCdMul("sword");
       crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:tgt.y, t:16, col:"#9fe0a0", slash:true });
       if(tgt.kind === 0) crewKillFish(tgt); else { killGull(tgt, 20); crewKills++; }
       pops.push({ x:tgt.x, y:tgt.y-26, t:40, text:"검객의 일섬!", color:"#9fe0a0" });
@@ -3509,7 +3581,7 @@ function updateCrew(dt){
     for(const m of mobs) if(!m.gone && m.kind === 0 && m.air) consider(m.x, m.y, 0, m);
     for(const b of barrels) if(!b.gone) consider(b.x, barrelY(b), 2, b);
     if(tgt){
-      c.cd = CREW_SNIPE_CD * (1 - 0.3 * pk("drill"));
+      c.cd = CREW_SNIPE_CD * (1 - 0.3 * pk("drill")) * crewCdMul("sniper");
       const ty2 = kind === 2 ? barrelY(tgt) : tgt.y;
       crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:ty2, t:12, col:"#ffd76a" });
       if(kind === 1){ killGull(tgt, 20); crewKills++; }
@@ -3548,7 +3620,7 @@ function updateNavy(dt){
   if(navy){
     navy.t += dt;
     const k = Math.min(1, navy.t / NAVY_T);
-    const v = (NAVY_SPD[0] + (NAVY_SPD[1] - NAVY_SPD[0]) * k) * (crewOn("nav") ? 0.85 : 1);
+    const v = (NAVY_SPD[0] + (NAVY_SPD[1] - NAVY_SPD[0]) * k) * (crewOn("nav") ? 0.85 - 0.03 * (crewLv("nav") - 1) : 1);
     navy.x = Math.max(navy.x + v*dt, cam.x - 340);   // 화면 밖으로 너무 처지지 않게
     navy.fire -= dt;
     if(navy.fire <= 0 && navy.x > cam.x - 60){
@@ -3631,6 +3703,7 @@ function overlayButtons(){
 }
 
 function update(dt){
+  if(state === STATE.MINI){ updateMini(dt); return; }
   if(state === STATE.PAUSE || state === STATE.PICK || state === STATE.PORT) return;
 
   time += dt;
@@ -4047,7 +4120,8 @@ function resetProfile(){
   lifeBossKills = 0; lifeKrakenKills = 0; unlockedTitles = new Set(); titleSel = null;
   bank = 0; upgrades = {}; bestBounty = 0; ownedSkins = ["red"]; skin = "red"; parrotOn = true;
   mapPieces = 0; mapsDone = 0; blitzBest = 0; rushBest = 0; bestGrade = "";
-  gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null;
+  gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null; crewXp = {};
+  miniBest = { jelly:0, cannon:0, hop:0 }; miniMedals = { jelly:0, cannon:0, hop:0 }; miniPlays = 0; mini = null;
   techLv = { pistol:1, whip:1 }; mats = { melee:0, ranged:0, gear:0 }; eqRanged = "pistol"; eqMelee = "whip";
   lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[] };
   dailyDate = ""; dailyBest = 0; ghostBest = null; streakDate = ""; streak = 0;
@@ -4240,6 +4314,12 @@ function applyShopRecord(v){
     if(r.eqM && tlv(r.eqM) && techOf(r.eqM) && techOf(r.eqM).cat === "melee") eqMelee = r.eqM;
     if(Array.isArray(r.crew)) crewOwned = r.crew.filter(id => crewDef(id));
     crewSel = r.crewS && crewOwned.indexOf(r.crewS) >= 0 ? r.crewS : null;
+    if(r.crewXp) crewXp = Object.assign({}, r.crewXp);
+    if(r.mini){
+      miniBest = Object.assign({ jelly:0, cannon:0, hop:0 }, r.mini.b);
+      miniMedals = Object.assign({ jelly:0, cannon:0, hop:0 }, r.mini.m);
+      miniPlays = r.mini.n || 0;
+    }
   }catch(e){}
 }
 async function loadShop(){
@@ -4256,7 +4336,8 @@ async function loadShop(){
 }
 async function saveShop(){
   const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
-                           tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel });
+                           tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel, crewXp,
+                           mini: { b: miniBest, m: miniMedals, n: miniPlays } });
   try{ if(window.storage){ await window.storage.set(K("swing:shop"), v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem(K("swing:shop"), v); }catch(e){}
 }
@@ -6254,7 +6335,7 @@ function screenButtons(){
                col: sel ? g.col : open ? "rgba(244,236,217,.75)" : n === gearUnlocked + 1 && bank >= g.cost ? "#ffd76a" : "rgba(244,236,217,.35)", sel };
     });
     const cd = crewDef(crewSel);
-    const crewLabel = cd ? "선원: " + cd.name + " (C)" : crewOwned.length ? "선원: 없음 (C)" : "선원 고용하기 →";
+    const crewLabel = cd ? "선원 " + cd.name + " Lv." + crewLv(cd.id) + " (C)" : crewOwned.length ? "선원: 없음 (C)" : "선원 고용하기 →";
     return gearRow.concat(row([[crewLabel, cycleCrew, cd ? cd.col : "rgba(244,236,217,.6)"], ["← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]]));
   }
   if(state === STATE.PAUSE) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 시작 (R)", reset, "#d9b877"], ["계속 (P)", togglePause, "#9fe0a0"]]);
@@ -6547,8 +6628,12 @@ function draw(){
   if(state !== uiState){
     uiState = state;
     const tc = document.querySelector(".touch");
-    if(tc) tc.classList.toggle("idle", state !== STATE.PLAY);
+    if(tc){
+      tc.classList.toggle("idle", state !== STATE.PLAY && state !== STATE.MINI);
+      tc.classList.toggle("mini", state === STATE.MINI);   // 미니게임은 이동·팔 버튼만
+    }
   }
+  if(state === STATE.MINI){ drawMini(); return; }
   sky();
 
   ctx.save();
@@ -6717,6 +6802,7 @@ function draw(){
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 바다에 빠지면 -5초" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
+    if(!practiceMode && !rushMode){ const wn = weeklyNow(); centerText("🌊 이번 주 해류: " + wn.name + " — " + wn.desc, H/2 - 113, "600 13px 'Pretendard', system-ui, sans-serif", wn.col); }
     centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 60, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 28, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
     centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 " + CHAIN_CAP + "배", H/2 - 4, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
@@ -6798,15 +6884,18 @@ function draw(){
            newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
     if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a", 26);
+    if(crewLvUp) line("⚓ 선원 " + crewLvUp.name + " Lv." + crewLvUp.lv + " 승급!", "700 15px 'Pretendard', system-ui, sans-serif", "#9fe0a0", 24);
     if(runXp > 0) drawXpBar(lx, H - 112);
     drawScreenButtons();
     drawShareButton();
   } else if(state === STATE.MENU){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
     ctx.fillRect(0,0,W,H);
-    centerText("고무팔 · 대항해", H/2 - 160, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    for(const row of menuRows()) centerText(row.label, row.y, "600 20px 'Pretendard', system-ui, sans-serif", /^9\)/.test(row.label) ? "#8fd6d8" : "#f0a24e");
-    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 126, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    centerText("고무팔 · 대항해", H/2 - 214, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    for(const row of menuRows()) centerText(row.label, row.y, "600 19px 'Pretendard', system-ui, sans-serif", row.mini ? "#e6a8f0" : /^9\)/.test(row.label) ? "#8fd6d8" : "#f0a24e");
+    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 182, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    const wkNow = weeklyNow();
+    centerText("🌊 이번 주 해류: " + wkNow.name + " — " + wkNow.desc, H/2 - 150, "600 13px 'Pretendard', system-ui, sans-serif", wkNow.col);
     centerText("숫자 키 또는 클릭으로 선택", H/2 + 236, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     drawVersion();
   } else if(state === STATE.SETTINGS){
@@ -6871,6 +6960,8 @@ function draw(){
       centerText("비급 — " + TECH_ORDER.map(c => TECH_CATS[c].name + " " + mats[c]).join(" · ") + "   |   장착: Q " + techOf(eqRanged).name + " · W " + techOf(eqMelee).name,
                  H/2 - 142, "600 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
     }
+    if(shopPage === 4) centerText("선원 레벨 — 함께 항해한 거리만큼 오른다(최고 Lv.5) · 레벨마다 검객·저격수 쿨타임 -8% · 요리사 고기 +15% · 항해사 해군 감속 +3%",
+                                  H/2 - 136, "500 12px 'Pretendard', system-ui, sans-serif", "rgba(159,224,160,.85)");
     for(const row of menuRows()){
       const font = (shopPage === 3 && row.y < H/2 - 92 + 3*32) ? "500 13px 'Pretendard', system-ui, sans-serif" : "500 15px 'Pretendard', system-ui, sans-serif";
       centerText(row.label, row.y, font, row.on ? "#9fe0a0" : row.dim ? "rgba(217,184,119,.45)" : row.col || (row.hot ? "#ffd76a" : "#d9b877"));
@@ -6893,6 +6984,17 @@ function draw(){
       if(shopMsg.t <= 0) shopMsg = null;
     }
     centerText("본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키 또는 클릭으로 구매/장착 · Esc 뒤로", H - 20, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+  } else if(state === STATE.MINI_SELECT){
+    ctx.fillStyle = "rgba(13,27,38,0.84)";
+    ctx.fillRect(0,0,W,H);
+    centerText("🪼 미니게임", H/2 - 180, "800 28px 'Pretendard', system-ui, sans-serif", "#e6a8f0");
+    centerText("짧게 한 판 — 점수만큼 보물 창고에 보물(한 판 최대 " + MINI_REWARD_CAP + ") · 처음 딴 메달은 덤 · 셋 다 금메달이면 '해파리 두건'",
+               H/2 - 146, "500 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.7)");
+    for(const row of menuRows()){
+      centerText(row.label, row.y, "700 19px 'Pretendard', system-ui, sans-serif", row.col || "#d9b877");
+      if(row.sub) centerText(row.sub, row.y + 22, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
+    }
+    centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.PRACTICE_SELECT){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
@@ -6917,7 +7019,769 @@ function loop(now){
 document.addEventListener("visibilitychange", ()=>{
   last = performance.now();
   if(document.hidden && state === STATE.PLAY) togglePause();   // 창을 벗어나면 자동 정지
+  if(document.hidden && state === STATE.MINI && mini && mini.phase === "play") mini.paused = true;
 });
+
+
+/* ---------- 미니게임 — 해파리 트램펄린 · 고무고무 대포 · 해파리 징검다리 ----------
+   본게임과 따로 도는 짧은 놀이. 상태는 STATE.MINI 하나에 mini 객체로 묶고, phase로 시작·진행·결과를 나눈다.
+   점수에 따라 보물 창고에 보물을 넣어 주고(한 판 MINI_REWARD_CAP까지), 메달 단계를 처음 넘으면 덤을 준다.
+   셋 다 금메달이면 '해파리 두건'이 풀린다. */
+const MINIS = [
+  { id:"jelly",  name:"해파리 트램펄린", unit:"m",  medals:[50, 150, 300],  col:"#e6a8f0",
+    desc:"해파리를 밟고 하늘 높이 — 내려앉는 순간 누르면 슈퍼 점프",
+    how:"← → 이동 · 착지 직전에 Space/팔(클릭) = 슈퍼 점프 · 빨간 전기 해파리 조심" },
+  { id:"cannon", name:"고무고무 대포",   unit:"m",  medals:[400, 800, 1500], col:"#f0a24e",
+    desc:"고무 새총으로 날아가 해파리·고래를 튕기며 최대한 멀리",
+    how:"↑ ↓ 각도 · 누르고 있다 떼면 발사 · 날면서 누르면 고무 풍선(3번) · ↓ 급강하" },
+  { id:"hop",    name:"해파리 징검다리", unit:"칸", medals:[30, 80, 150],   col:"#8fd6d8",
+    desc:"짧게·길게·더 길게 눌러 1~3칸 — 빈칸과 전기 해파리를 건너뛰어라",
+    how:"누르는 시간으로 거리 조절(1·2·3칸) · 밟은 해파리는 곧 가라앉는다" }
+];
+const MINI_REWARD_CAP = 500;
+const MINI_MEDAL_BONUS = [300, 800, 2000];
+const MEDAL_NAMES = ["동메달", "은메달", "금메달"], MEDAL_COLS = ["#d08a4a", "#cfd8e0", "#ffd76a"];
+let miniBest = { jelly:0, cannon:0, hop:0 }, miniMedals = { jelly:0, cannon:0, hop:0 }, miniPlays = 0;
+let mini = null;
+const miniDef = (id) => MINIS.find(m => m.id === id);
+const miniAllGold = () => MINIS.every(m => (miniMedals[m.id] || 0) >= 3);
+const medalOf = (id, score) => miniDef(id).medals.filter(v => score >= v).length;
+
+function startMini(id){
+  const def = miniDef(id);
+  if(!def) return;
+  mini = { id, phase:"ready", t:0, score:0, coins:0, reward:0, medal:0, newBest:false, paused:false,
+           parts:[], pops:[], pressT:-99, down:false, overAt:0, reason:"" };
+  if(id === "jelly") jellyInit(mini);
+  else if(id === "cannon") cannonInit(mini);
+  else hopInit(mini);
+  keys.left = keys.right = keys.up = keys.down = false;
+  state = STATE.MINI;
+}
+function miniBegin(){
+  if(!mini || mini.phase !== "ready") return;
+  mini.phase = "play";
+  mini.t = 0;
+}
+function miniOver(reason){
+  const m = mini;
+  if(!m || m.phase !== "play") return;
+  m.phase = "over";
+  m.reason = reason;
+  m.overAt = performance.now();
+  const sc = Math.floor(m.score);
+  m.newBest = sc > (miniBest[m.id] || 0);
+  if(m.newBest) miniBest[m.id] = sc;
+  const per = m.id === "jelly" ? sc * 1.2 : m.id === "cannon" ? sc * 0.35 : sc * 3;
+  m.reward = Math.min(MINI_REWARD_CAP, Math.floor(per + m.coins * 5));
+  const had = miniMedals[m.id] || 0, got = medalOf(m.id, sc);
+  m.medal = got;
+  m.medalBonus = 0;
+  if(got > had){
+    for(let i = had; i < got; i++) m.medalBonus += MINI_MEDAL_BONUS[i];
+    miniMedals[m.id] = got;
+    m.medalUp = got;
+    if(miniAllGold() && ownedSkins.indexOf("jelly") < 0){ ownedSkins.push("jelly"); m.skinUp = true; }
+  }
+  bank += m.reward + m.medalBonus;
+  miniPlays++;
+  saveShop();
+  const sx = m.p ? m.p.x : m.px, sy = m.p ? m.p.y : m.py;   // 트램펄린·대포는 월드 좌표, 징검다리는 화면 좌표로 그린다
+  for(let i=0;i<24;i++) miniSpark(m, sx, sy, i % 2 ? "#f4ecd9" : miniDef(m.id).col);
+}
+function miniDown(){
+  if(!mini) return;
+  if(mini.paused){ mini.paused = false; return; }
+  if(mini.down) return;
+  mini.down = true;
+  if(mini.phase === "ready"){
+    miniBegin();
+    if(mini.id === "jelly") return;   // 트램펄린은 시작 누름을 슈퍼 점프로 치지 않는다
+  }
+  if(mini.phase === "over"){
+    if(performance.now() - mini.overAt > 450) startMini(mini.id);
+    return;
+  }
+  mini.pressT = mini.t;
+  if(mini.id === "jelly") jellyPress(mini);
+  else if(mini.id === "cannon") cannonPress(mini);
+  else hopPress(mini);
+}
+function miniUp(){
+  if(!mini || !mini.down) return;
+  mini.down = false;
+  if(mini.phase !== "play") return;
+  if(mini.id === "cannon") cannonRelease(mini);
+  else if(mini.id === "hop") hopRelease(mini);
+}
+function miniPause(){
+  if(!mini || mini.phase !== "play") return;
+  mini.paused = !mini.paused;
+  if(!mini.paused) last = performance.now();
+}
+function miniToList(){
+  mini = null;
+  keys.left = keys.right = keys.up = keys.down = false;
+  state = STATE.MINI_SELECT;
+}
+function miniSpark(m, x, y, col){
+  const a = Math.random()*Math.PI*2, s = 1.5 + Math.random()*3.5;
+  m.parts.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s - 1.5, life: 1, col });
+}
+function miniPop(m, x, y, text, col){ m.pops.push({ x, y, t:60, text, col }); }
+
+function updateMini(dt){
+  const m = mini;
+  if(!m || m.paused) return;
+  m.t += dt;
+  for(let i=m.parts.length-1;i>=0;i--){
+    const q = m.parts[i];
+    q.x += q.vx*dt; q.y += q.vy*dt; q.vy += 0.14*dt; q.life -= 0.022*dt;
+    if(q.life <= 0) m.parts.splice(i, 1);
+  }
+  for(let i=m.pops.length-1;i>=0;i--){ m.pops[i].t -= dt; m.pops[i].y -= 0.5*dt; if(m.pops[i].t <= 0) m.pops.splice(i, 1); }
+  if(m.phase === "over") return;
+  if(m.id === "jelly") jellyUpdate(m, dt);
+  else if(m.id === "cannon") cannonUpdate(m, dt);
+  else hopUpdate(m, dt);
+}
+
+/* ===== 1) 해파리 트램펄린 — 위로 오르는 무한 점프 ===== */
+const JT_G = 0.34, JT_BOUNCE = 10.6, JT_SUPER = 14.4, JT_GOLD = 19, JT_GROUND = 420, JT_PX_M = 20;
+const JT_WINDOW = 9;        // 착지 전 이 프레임 안에 누르면 슈퍼 점프
+const JT_LATE = 6;          // 착지 뒤 이 프레임 안에 눌러도 슈퍼 점프로 바꿔 준다
+function jellyInit(m){
+  m.p = { x: W/2, y: 300, vx: 0, vy: 0, face: 1 };
+  m.cy = 0;                 // 화면 맨 위의 월드 y
+  m.top = m.p.y;            // 가장 높이 오른 y(작을수록 높다)
+  m.js = [{ x: W/2, y: JT_GROUND, r: 70, type: 0, vx: 0, t: 0, sq: 0, base: true }];
+  m.coinsL = []; m.gulls = [];
+  m.nextY = JT_GROUND; m.lastX = W/2;
+  m.combo = 0; m.stunT = 0; m.lastBounce = -99; m.lastType = -1; m.supers = 0;
+  jellyGen(m);
+}
+const jtH = (y) => Math.max(0, (JT_GROUND - y) / JT_PX_M);
+function jellyGen(m){
+  while(m.nextY > m.cy - 260){
+    const h = jtH(m.nextY);
+    m.nextY -= 58 + Math.min(52, h*0.17) + Math.random()*30;
+    const y = m.nextY;
+    const r = Math.random();
+    const type = h > 40 && r < 0.05 ? 3 : h > 30 && r < 0.27 ? 1 : 0;   // 3 황금, 1 한 번 밟으면 터지는 거품
+    const mv = h > 50 && Math.random() < Math.min(0.55, 0.2 + h/800);
+    // 다음 해파리는 앞 해파리에서 옆으로 280px 안 — 한 번 뛰어서 닿을 거리만 만든다
+    let x = m.lastX + (Math.random()*2 - 1) * 280;
+    if(x < 60) x = 120 - x; else if(x > W - 60) x = 2*(W - 60) - x;
+    m.lastX = x;
+    m.js.push({ x, y, r: 34, type, vx: mv ? (Math.random() < 0.5 ? -1 : 1) * (0.8 + Math.random()*Math.min(2.2, h/120)) : 0, t: Math.random()*100, sq: 0 });
+    // 전기 해파리는 언제나 '덤'으로만 — 그 줄에 밟을 수 있는 해파리가 따로 있다
+    if(h > 70 && Math.random() < Math.min(0.4, 0.12 + h/1500)){
+      m.js.push({ x: 60 + Math.random()*(W - 120), y: y - 20 - Math.random()*20, r: 32, type: 2, vx: 0, t: Math.random()*100, sq: 0 });
+    } else if(h < 120 && Math.random() < 0.18){
+      m.js.push({ x: 60 + Math.random()*(W - 120), y: y - 10, r: 34, type: 0, vx: 0, t: Math.random()*100, sq: 0 });
+    }
+    if(Math.random() < 0.34) m.coinsL.push({ x: 60 + Math.random()*(W - 120), y: y - 40 - Math.random()*40, got: false });
+    if(h > 120 && Math.random() < Math.min(0.12, h/3000)){
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      m.gulls.push({ x: dir > 0 ? -60 : W + 60, y: y - 30, vx: dir * (1.6 + Math.random()*1.4), t: 0, hit: false });
+    }
+  }
+  const bottom = m.cy + H + 120;
+  m.js = m.js.filter(j => j.y < bottom && !j.gone);
+  m.coinsL = m.coinsL.filter(c => c.y < bottom && !c.got);
+  m.gulls = m.gulls.filter(g => g.y < bottom && g.x > -120 && g.x < W + 120);
+}
+function jellyPress(m){
+  // 막 튀어 올랐으면(늦은 입력) 그 점프를 슈퍼로 바꿔 준다
+  if(m.t - m.lastBounce <= JT_LATE && (m.lastType === 0 || m.lastType === 1) && m.p.vy < 0 && !m.lateUsed){
+    m.lateUsed = true;
+    m.p.vy = -JT_SUPER;
+    jellySuper(m);
+  }
+}
+function jellySuper(m){
+  m.combo++; m.supers++;
+  miniPop(m, m.p.x, m.p.y - 40, m.combo > 1 ? "슈퍼 뿅 ×" + m.combo : "슈퍼 뿅!", "#ffd76a");
+  for(let i=0;i<14;i++) miniSpark(m, m.p.x, m.p.y + 14, "#ffd76a");
+  if(m.combo % 5 === 0){ m.coins += 3; miniPop(m, m.p.x, m.p.y - 64, "콤보 보너스 금화 +3", "#ffd76a"); }
+}
+function jellyUpdate(m, dt){
+  const p = m.p;
+  if(m.phase === "ready"){ for(const j of m.js) j.t += dt; return; }
+  const ctl = m.stunT > 0 ? 0 : 1;
+  if(m.stunT > 0) m.stunT -= dt;
+  const ax = ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * ctl;
+  if(ax){ p.vx += ax * 0.6 * dt; p.face = ax; }
+  else p.vx *= Math.pow(0.9, dt);
+  p.vx = Math.max(-7.5, Math.min(7.5, p.vx));
+  const py0 = p.y;
+  p.vy = Math.min(14, p.vy + JT_G*dt);
+  p.x += p.vx*dt; p.y += p.vy*dt;
+  if(p.x < -14) p.x += W + 28; else if(p.x > W + 14) p.x -= W + 28;   // 화면 양옆은 이어져 있다
+  for(const j of m.js){
+    j.t += dt; j.sq = Math.max(0, j.sq - 0.08*dt);
+    if(j.vx){ j.x += j.vx*dt; if(j.x < 50 || j.x > W - 50) j.vx *= -1; }
+    if(j.gone || p.vy <= 0) continue;
+    const top = j.y - 10;
+    if(py0 + 14 <= top + 2 && p.y + 14 >= top && Math.abs(p.x - j.x) < j.r + 10){
+      p.y = top - 14;
+      j.sq = 1;
+      m.lastBounce = m.t; m.lastType = j.type; m.lateUsed = false;
+      if(j.type === 2){
+        p.vy = -5; m.stunT = 50; m.combo = 0;
+        miniPop(m, j.x, j.y - 30, "찌릿! 감전", "#ff8a80");
+        for(let i=0;i<16;i++) miniSpark(m, p.x, p.y, i % 2 ? "#fff3a0" : "#ff8a80");
+        continue;
+      }
+      if(j.type === 3){
+        p.vy = -JT_GOLD; m.coins += 2;
+        miniPop(m, j.x, j.y - 30, "황금 해파리! 금화 +2", "#ffd76a");
+        for(let i=0;i<18;i++) miniSpark(m, j.x, j.y, "#ffd76a");
+      } else if(m.t - m.pressT <= JT_WINDOW){
+        p.vy = -JT_SUPER;
+        m.lateUsed = true;
+        jellySuper(m);
+      } else {
+        p.vy = -JT_BOUNCE;
+        m.combo = 0;
+        for(let i=0;i<8;i++) miniSpark(m, j.x, j.y - 8, "#e6a8f0");
+      }
+      if(j.type === 1){ j.gone = true; for(let i=0;i<14;i++) miniSpark(m, j.x, j.y, "#9fd8ff"); }
+    }
+  }
+  for(const c of m.coinsL){
+    if(!c.got && Math.hypot(c.x - p.x, c.y - p.y) < 26){ c.got = true; m.coins++; for(let i=0;i<6;i++) miniSpark(m, c.x, c.y, "#ffd76a"); }
+  }
+  for(const g of m.gulls){
+    g.t += dt; g.x += g.vx*dt;
+    if(!g.hit && Math.hypot(g.x - p.x, g.y + Math.sin(g.t*0.1)*8 - p.y) < 28){
+      g.hit = true; p.vy = Math.max(p.vy, 4); m.combo = 0;
+      miniPop(m, g.x, g.y - 20, "꽥! 밀렸다", "#f4ecd9");
+    }
+  }
+  m.top = Math.min(m.top, p.y);
+  m.score = Math.floor(jtH(m.top + 14));
+  // 카메라는 위로만 따라간다
+  const want = p.y - H*0.42;
+  if(want < m.cy) m.cy += (want - m.cy) * Math.min(1, 0.14*dt);
+  m.px = p.x; m.py = p.y - m.cy;
+  jellyGen(m);
+  if(p.y > Math.min(SEA, m.cy + H + 30)) miniOver(p.y >= SEA ? "바다에 풍덩" : "아래로 떨어졌다");
+}
+
+/* ===== 2) 고무고무 대포 — 새총으로 쏘아 올려 튕기며 멀리 ===== */
+const CN_G = 0.24, CN_X0 = 170, CN_Y0 = 392, CN_PX_M = 20, CN_PUFFS = 3;
+function cannonInit(m){
+  m.p = { x: CN_X0, y: CN_Y0, vx: 0, vy: 0, face: 1 };
+  m.ang = 38; m.pow = 0; m.powDir = 1; m.charging = false; m.flying = false;
+  m.camX = 0; m.camY = 0;
+  m.objs = []; m.nextX = 520; m.puffs = CN_PUFFS; m.skips = 0; m.bouncesN = 0; m.spin = 0;
+  cannonGen(m);
+}
+function cannonGen(m){
+  while(m.nextX < m.camX + W + 600){
+    const x = m.nextX, r = Math.random(), far = x / CN_PX_M;
+    if(r < 0.52) m.objs.push({ k:"jelly", x, y: SEA - 60 - Math.random()*90, t: Math.random()*100, sq:0 });
+    else if(r < 0.64 && far > 60) m.objs.push({ k:"whale", x, y: SEA + 4, t: 0, used:false });
+    else if(r < 0.82 && far > 30) m.objs.push({ k:"gull", x: x + 200, y: 140 + Math.random()*220, t: Math.random()*60, hit:false });
+    else for(let i=0;i<6;i++) m.objs.push({ k:"coin", x: x + i*34, y: SEA - 150 - Math.sin(i/5*Math.PI)*70, got:false });
+    m.nextX += 240 + Math.random()*260 + Math.min(260, far*0.12);
+  }
+  m.objs = m.objs.filter(o => o.x > m.camX - 200);
+}
+function cannonPress(m){
+  if(!m.flying){ m.charging = true; m.pow = 0; m.powDir = 1; return; }
+  if(m.puffs > 0){
+    m.puffs--;
+    m.p.vy = Math.min(m.p.vy, -7); m.p.vx += 0.8;
+    miniPop(m, m.p.x, m.p.y - 36, "고무 풍선! (" + m.puffs + ")", "#f7a8a0");
+    for(let i=0;i<10;i++) miniSpark(m, m.p.x, m.p.y, "#f7a8a0");
+  }
+}
+function cannonRelease(m){
+  if(m.flying || !m.charging) return;
+  m.charging = false;
+  const sp = 9 + 17 * m.pow, a = m.ang * Math.PI / 180;
+  m.p.vx = Math.cos(a) * sp; m.p.vy = -Math.sin(a) * sp;
+  m.flying = true;
+  m.launchPow = m.pow;
+  miniPop(m, m.p.x, m.p.y - 40, m.pow > 0.93 ? "최대 출력!" : "발사!", "#f0a24e");
+  for(let i=0;i<16;i++) miniSpark(m, m.p.x, m.p.y, "#f0a24e");
+}
+function cannonUpdate(m, dt){
+  const p = m.p;
+  if(m.phase === "ready") return;
+  if(!m.flying){
+    if(keys.up) m.ang = Math.min(70, m.ang + 0.9*dt);
+    if(keys.down) m.ang = Math.max(12, m.ang - 0.9*dt);
+    if(m.charging){
+      m.pow += m.powDir * 0.022 * dt;
+      if(m.pow >= 1){ m.pow = 1; m.powDir = -1; } else if(m.pow <= 0){ m.pow = 0; m.powDir = 1; }
+    }
+    const a = m.ang * Math.PI / 180, back = m.charging ? m.pow * 46 : 0;
+    p.x = CN_X0 - Math.cos(a) * back; p.y = CN_Y0 + Math.sin(a) * back;
+    m.px = p.x - m.camX; m.py = p.y - m.camY;
+    return;
+  }
+  const px0 = p.x, py0 = p.y;
+  if(keys.down) p.vy += 0.32*dt;
+  if(keys.right) p.vx += 0.03*dt;
+  if(keys.left) p.vx = Math.max(1, p.vx - 0.05*dt);
+  p.vy += CN_G*dt;
+  p.vx *= Math.pow(0.9992, dt);
+  p.x += p.vx*dt; p.y += p.vy*dt;
+  m.spin += p.vx * 0.02 * dt;
+  for(const o of m.objs){
+    if(o.k === "jelly"){
+      o.t += dt; o.sq = Math.max(0, o.sq - 0.08*dt);
+      const jy = o.y + Math.sin(o.t*0.04)*10;
+      if(p.vy > 0 && py0 + 12 <= jy - 6 && p.y + 12 >= jy - 14 && Math.abs(p.x - o.x) < 46){
+        p.y = jy - 26; p.vy = -Math.max(9, Math.abs(p.vy) * 0.88); p.vx = p.vx * 1.03 + 0.6;
+        o.sq = 1; m.bouncesN++;
+        miniPop(m, o.x, jy - 30, "뿅!", "#e6a8f0");
+        for(let i=0;i<10;i++) miniSpark(m, o.x, jy - 8, "#e6a8f0");
+      }
+    } else if(o.k === "whale"){
+      o.t += dt;
+      if(!o.used && p.y > SEA - 70 && Math.abs(p.x - o.x) < 70){
+        o.used = true; p.vy = -15; p.vx += 3; p.y = Math.min(p.y, SEA - 70);
+        miniPop(m, o.x, SEA - 110, "고래 분수!", "#8fd6d8");
+        for(let i=0;i<22;i++) miniSpark(m, o.x, SEA - 40, i % 2 ? "#bfe8ea" : "#f4ecd9");
+      }
+    } else if(o.k === "gull"){
+      o.t += dt; o.x -= 1.8*dt;
+      if(!o.hit && Math.hypot(o.x - p.x, o.y + Math.sin(o.t*0.1)*10 - p.y) < 30){
+        o.hit = true; p.vx *= 0.72; p.vy = Math.max(p.vy, 2);
+        miniPop(m, o.x, o.y - 24, "꽥! 감속", "#f4ecd9");
+      }
+    } else if(o.k === "coin"){
+      if(!o.got && Math.hypot(o.x - p.x, o.y - p.y) < 28){ o.got = true; m.coins++; for(let i=0;i<5;i++) miniSpark(m, o.x, o.y, "#ffd76a"); }
+    }
+  }
+  if(p.y >= SEA - 10 && p.vy > 0){
+    p.y = SEA - 10;
+    if(p.vx > 5 && p.vy < p.vx * 1.3){
+      p.vy = -Math.abs(p.vy) * 0.55 - 1.2; p.vx *= 0.8; m.skips++;
+      miniPop(m, p.x, SEA - 40, "물수제비 " + m.skips, "#bfe8ea");
+      for(let i=0;i<10;i++) miniSpark(m, p.x, SEA - 4, "#bfe8ea");
+    } else {
+      p.vx *= 0.45; p.vy = -Math.abs(p.vy) * 0.2;
+      for(let i=0;i<14;i++) miniSpark(m, p.x, SEA - 4, "#8fd6d8");
+      if(p.vx < 2.2){ m.score = Math.max(0, (p.x - CN_X0) / CN_PX_M); miniOver("가라앉았다"); return; }
+    }
+  }
+  m.score = Math.max(m.score, (p.x - CN_X0) / CN_PX_M);
+  m.camX += (p.x - W*0.35 - m.camX) * Math.min(1, 0.2*dt);
+  m.camX = Math.max(0, m.camX);
+  m.camY = Math.min(0, p.y - 110);
+  m.px = p.x - m.camX; m.py = p.y - m.camY;
+  cannonGen(m);
+  if(m.t > 60*120) miniOver("시간이 다 됐다");
+}
+
+/* ===== 3) 해파리 징검다리 — 누르는 시간으로 1~3칸 ===== */
+const HP_S = 112, HP_Y = SEA - 46, HP_LV = [14, 32];   // 14프레임 미만 1칸, 32 미만 2칸, 그 이상 3칸
+function hopInit(m){
+  m.slots = [];
+  m.i = 0; m.hop = null; m.charge = 0; m.sinkT = 0; m.camX = 0; m.streak = 0;
+  for(let k=0;k<6;k++) m.slots.push(0);
+  hopGen(m);
+  m.px = W*0.3; m.py = HP_Y - 20;
+}
+function hopGen(m){
+  while(m.slots.length < m.i + 16){
+    const n = m.slots.length, prog = Math.min(1, n / 200);
+    let run = 0;
+    for(let k = n - 1; k >= 0 && (m.slots[k] === 1 || m.slots[k] === 2); k--) run++;
+    let t = 0;
+    const r = Math.random();
+    if(run < 2){
+      if(r < 0.16 + prog*0.18) t = 1;
+      else if(r < 0.22 + prog*0.3) t = 2;
+      else if(r < 0.28 + prog*0.3) t = 3;
+    }
+    m.slots.push(t);
+  }
+}
+const hopLevel = (c) => c < HP_LV[0] ? 1 : c < HP_LV[1] ? 2 : 3;
+const hopSinkMax = (m) => Math.max(66, 170 - m.i * 0.9);
+function hopPress(m){ if(!m.hop) m.charge = 0.001; }
+function hopRelease(m){
+  if(m.hop || !m.charge) return;
+  const n = hopLevel(m.charge);
+  m.charge = 0;
+  m.hop = { from: m.i, to: m.i + n, t: 0, dur: Math.max(24, 34 - m.i*0.05) + n*4 };
+}
+function hopUpdate(m, dt){
+  if(m.phase === "ready") return;
+  if(m.down && m.charge && !m.hop) m.charge += dt;
+  if(m.hop){
+    m.hop.t += dt;
+    if(m.hop.t >= m.hop.dur){
+      m.i = m.hop.to; m.hop = null; m.sinkT = 0;
+      const t = m.slots[m.i];
+      m.score = m.i;
+      if(t === 1){ m.py = HP_Y + 20; miniOver("바다에 풍덩"); return; }
+      if(t === 2){ miniOver("전기 해파리에 감전"); for(let i=0;i<20;i++) miniSpark(m, m.px, m.py, i % 2 ? "#fff3a0" : "#ff8a80"); return; }
+      if(t === 3){ m.coins += 3; m.slots[m.i] = 0; miniPop(m, m.px, HP_Y - 60, "황금 해파리 금화 +3", "#ffd76a"); }
+      m.streak++;
+      if(m.streak % 10 === 0){ m.coins += 2; miniPop(m, m.px, HP_Y - 84, m.streak + "칸 연속! 금화 +2", "#9fe0a0"); }
+      for(let i=0;i<8;i++) miniSpark(m, m.px, HP_Y - 4, "#8fd6d8");
+    }
+  } else {
+    m.sinkT += dt;
+    if(m.sinkT > hopSinkMax(m)){ miniOver("해파리와 함께 가라앉았다"); return; }
+  }
+  const pos = m.hop ? m.hop.from + (m.hop.to - m.hop.from) * Math.min(1, m.hop.t / m.hop.dur) : m.i;
+  const wx = pos * HP_S;
+  m.camX += (wx - W*0.3 - m.camX) * Math.min(1, 0.15*dt);
+  const arc = m.hop ? Math.sin(Math.PI * Math.min(1, m.hop.t / m.hop.dur)) * (60 + (m.hop.to - m.hop.from) * 34) : Math.abs(Math.sin(m.t * 0.12)) * 10;
+  const sink = m.hop ? 0 : (m.sinkT / hopSinkMax(m)) * 30;
+  m.px = wx - m.camX; m.py = HP_Y - 20 - arc + sink;
+  hopGen(m);
+}
+
+/* ===== 그리기 ===== */
+function drawMiniPirate(x, y, rot, sq){
+  const sk = curSkin();
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot || 0);
+  ctx.scale(1 + (sq || 0)*0.25, 1 - (sq || 0)*0.25);
+  ctx.fillStyle = sk.coat;
+  ctx.beginPath(); ctx.ellipse(0, 6, 12, 14, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#e8ddc6";
+  ctx.beginPath(); ctx.ellipse(0, 7, 8, 10, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#f2c9a0";
+  ctx.beginPath(); ctx.arc(0, -12, 10, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = sk.band;
+  ctx.beginPath(); ctx.ellipse(0, -18, 11, 6, 0, Math.PI, 0); ctx.fill();
+  ctx.fillRect(-11, -19, 22, 4);
+  ctx.fillStyle = "#1b1218";
+  ctx.beginPath(); ctx.arc(-3.5, -11, 1.6, 0, Math.PI*2); ctx.arc(3.5, -11, 1.6, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "#1b1218"; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(0, -8, 3.5, 0.2, Math.PI - 0.2); ctx.stroke();
+  ctx.restore();
+}
+function drawMiniJelly(x, y, r, type, t, sq){
+  const cols = [["rgba(255,230,255,.95)", "rgba(200,110,220,.78)", "rgba(230,168,240,.6)"],
+                ["rgba(225,245,255,.85)", "rgba(110,180,230,.55)", "rgba(159,216,255,.5)"],
+                ["rgba(255,240,180,.95)", "rgba(230,80,70,.85)", "rgba(255,138,128,.7)"],
+                ["rgba(255,250,210,.98)", "rgba(230,170,40,.9)", "rgba(255,215,106,.7)"]][type];
+  const pulse = Math.sin(t*0.12);
+  const rw = r + pulse*2 + sq*9, rh = r*0.72 - pulse*1.5 - sq*7;
+  ctx.save();
+  ctx.strokeStyle = cols[2]; ctx.lineWidth = 2; ctx.lineCap = "round";
+  for(let i=0;i<5;i++){
+    const ox = (-0.4 + i*0.2) * r, wob = Math.sin(t*0.1 + i)*5;
+    ctx.beginPath(); ctx.moveTo(x + ox, y + 2);
+    ctx.quadraticCurveTo(x + ox + wob, y + r*0.5, x + ox - wob*0.5, y + r*0.95 - sq*10); ctx.stroke();
+  }
+  const g = ctx.createRadialGradient(x, y - rh*0.4, 2, x, y, rw);
+  g.addColorStop(0, cols[0]); g.addColorStop(1, cols[1]);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(x, y, rw, rh, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+  if(type === 2){
+    ctx.strokeStyle = "rgba(255,243,160," + (0.5 + 0.5*Math.sin(t*0.5)).toFixed(2) + ")"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - 10, y - rh - 6); ctx.lineTo(x - 2, y - rh + 2); ctx.lineTo(x - 6, y - rh + 4); ctx.lineTo(x + 4, y - rh + 12); ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(90,40,110,.8)";
+  ctx.beginPath(); ctx.arc(x - r*0.18, y - rh*0.35, 1.8, 0, Math.PI*2); ctx.arc(x + r*0.18, y - rh*0.35, 1.8, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawMiniCoin(x, y, t){
+  const w = Math.abs(Math.cos(t*0.08)) * 8 + 2;
+  ctx.fillStyle = "#ffd76a";
+  ctx.beginPath(); ctx.ellipse(x, y, w, 9, 0, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "#a8781c"; ctx.lineWidth = 1.5; ctx.stroke();
+}
+function drawMiniGull(x, y, t){
+  const f = Math.sin(t*0.3) * 7;
+  ctx.strokeStyle = "#f4ecd9"; ctx.lineWidth = 3; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(x - 16, y - f); ctx.quadraticCurveTo(x - 7, y - 7, x, y); ctx.quadraticCurveTo(x + 7, y - 7, x + 16, y - f); ctx.stroke();
+  ctx.fillStyle = "#f0a24e"; ctx.fillRect(x - 1, y - 1, 5, 3);
+}
+function drawMiniSea(y, scroll){
+  if(y > H + 10) return;
+  const g = ctx.createLinearGradient(0, y, 0, y + 140);
+  g.addColorStop(0, "#17505d"); g.addColorStop(1, "#08202c");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, y, W, Math.max(0, H - y) + 10);
+  ctx.strokeStyle = "rgba(180,230,230,.25)"; ctx.lineWidth = 2;
+  for(let row=0; row<3; row++){
+    ctx.beginPath();
+    for(let x=0; x<=W; x+=20){
+      const yy = y + 6 + row*18 + Math.sin((x + scroll*(1 + row*0.4) + (mini ? mini.t : 0)*1.5) * 0.03 + row) * 3;
+      if(x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+  }
+}
+function drawMiniParts(m, ox, oy){
+  for(const q of m.parts){
+    ctx.globalAlpha = Math.max(0, q.life);
+    ctx.fillStyle = q.col;
+    ctx.fillRect(q.x - ox - 2, q.y - oy - 2, 4, 4);
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for(const q of m.pops){
+    ctx.globalAlpha = Math.min(1, q.t / 20);
+    ctx.font = "800 16px 'Pretendard', system-ui, sans-serif";
+    ctx.lineWidth = 4; ctx.strokeStyle = "rgba(13,27,38,.8)";
+    ctx.strokeText(q.text, q.x - ox, q.y - oy);
+    ctx.fillStyle = q.col; ctx.fillText(q.text, q.x - ox, q.y - oy);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawMiniSky(k){
+  // k: 0 낮 → 1 노을 → 2 밤
+  const day = ["#7ec4e0", "#b6e0ea"], dusk = ["#4a3a6a", "#f0a07a"], night = ["#0b1430", "#2a2a5a"];
+  const mix = (a, b, t) => { const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const c = [16, 8, 0].map(s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t));
+    return "rgb(" + c.join(",") + ")"; };
+  const A = k < 1 ? day : dusk, B = k < 1 ? dusk : night, t = k < 1 ? k : Math.min(1, k - 1);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, mix(A[0], B[0], t)); g.addColorStop(1, mix(A[1], B[1], t));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if(k > 1.2){
+    ctx.fillStyle = "rgba(255,255,255," + Math.min(0.8, (k - 1.2)).toFixed(2) + ")";
+    for(let i=0;i<50;i++){ const sx = (i*137.5) % W, sy = (i*71.3) % H; ctx.fillRect(sx, sy, 2, 2); }
+  }
+}
+function drawMini(){
+  const m = mini;
+  if(!m){ state = STATE.MINI_SELECT; return; }
+  if(m.id === "jelly") drawJellyGame(m);
+  else if(m.id === "cannon") drawCannonGame(m);
+  else drawHopGame(m);
+  const def = miniDef(m.id);
+  // 위쪽 점수 줄
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,.55)"; ctx.fillRect(0, 0, W, 40);
+  leftText(def.name, 14, 20, "800 16px 'Pretendard', system-ui, sans-serif", def.col);
+  centerText(Math.floor(m.score) + def.unit, 20, "800 22px ui-monospace, Menlo, monospace", "#f4ecd9");
+  ctx.textAlign = "right";
+  ctx.font = "700 14px ui-monospace, Menlo, monospace"; ctx.fillStyle = "#ffd76a";
+  ctx.fillText("금화 " + m.coins + "  ·  최고 " + (miniBest[m.id] || 0) + def.unit, W - (IS_TOUCH ? 112 : 14), 20);
+  ctx.restore();
+  if(m.phase === "ready") drawMiniCard(m, true);
+  else if(m.phase === "over") drawMiniCard(m, false);
+  else if(m.paused){
+    ctx.fillStyle = "rgba(13,27,38,.6)"; ctx.fillRect(0, 0, W, H);
+    centerText("일시정지", H/2 - 20, "800 28px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("누르거나 P로 계속 · Esc 미니게임 목록", H/2 + 16, "500 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.7)");
+  }
+  if(m.phase !== "play" || m.paused) drawMiniButtons();
+}
+function drawMiniCard(m, ready){
+  const def = miniDef(m.id);
+  ctx.fillStyle = "rgba(13,27,38,.72)"; ctx.fillRect(0, 40, W, H - 40);
+  const medals = def.medals.map((v, i) => MEDAL_NAMES[i] + " " + v + def.unit).join(" · ");
+  if(ready){
+    centerText(def.name, H/2 - 120, "800 30px 'Pretendard', system-ui, sans-serif", def.col);
+    centerText(def.desc, H/2 - 82, "600 15px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText(def.how, H/2 - 52, "500 14px 'Pretendard', system-ui, sans-serif", "#f0a24e");
+    centerText("메달 — " + medals, H/2 - 18, "600 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.8)");
+    const got = miniMedals[m.id] || 0;
+    centerText("내 기록 " + (miniBest[m.id] || 0) + def.unit + (got ? " · " + MEDAL_NAMES[got - 1] + " 보유" : ""), H/2 + 10, "700 15px ui-monospace, Menlo, monospace", got ? MEDAL_COLS[got - 1] : "#d9b877");
+    centerText("점수만큼 보물 창고에 보물이 쌓인다(한 판 최대 " + MINI_REWARD_CAP + ") · 메달을 처음 따면 덤", H/2 + 40, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.8)");
+    centerText("화면을 누르거나 Space로 시작", H/2 + 74, "700 16px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
+  } else {
+    centerText(m.reason, H/2 - 128, "700 16px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.7)");
+    centerText(Math.floor(m.score) + def.unit, H/2 - 88, "800 40px ui-monospace, Menlo, monospace", m.newBest ? "#ffd76a" : "#f4ecd9");
+    if(m.newBest) centerText("★ 최고 기록!", H/2 - 50, "800 17px 'Pretendard', system-ui, sans-serif", "#ffd76a");
+    const extra = [];
+    if(m.id === "jelly" && m.supers) extra.push("슈퍼 점프 " + m.supers);
+    if(m.id === "cannon"){ extra.push("튕김 " + m.bouncesN); if(m.skips) extra.push("물수제비 " + m.skips); }
+    if(m.id === "hop") extra.push("연속 " + m.streak + "칸");
+    extra.push("금화 " + m.coins);
+    centerText(extra.join(" · "), H/2 - 22, "600 14px 'Pretendard', system-ui, sans-serif", "#d9b877");
+    centerText("보물 창고 +" + m.reward + (m.medalBonus ? "  ·  메달 보너스 +" + m.medalBonus : ""), H/2 + 6, "700 16px ui-monospace, Menlo, monospace", "#ffd76a");
+    if(m.medalUp) centerText("🏅 " + MEDAL_NAMES[m.medalUp - 1] + " 획득!", H/2 + 36, "800 18px 'Pretendard', system-ui, sans-serif", MEDAL_COLS[m.medalUp - 1]);
+    else if(m.medal) centerText(MEDAL_NAMES[m.medal - 1] + " 기록", H/2 + 36, "600 14px 'Pretendard', system-ui, sans-serif", MEDAL_COLS[m.medal - 1]);
+    if(m.skinUp) centerText("미니게임 금메달 3개! '해파리 두건'이 창고에 풀렸다", H/2 + 62, "700 14px 'Pretendard', system-ui, sans-serif", "#e6a8f0");
+    centerText("누르면 다시 · Esc 목록 · M 메뉴", H/2 + 88, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
+  }
+}
+function miniButtons(){
+  if(!mini || (mini.phase === "play" && !mini.paused)) return [];
+  const bw = 150, h = 40, y = H - 60, gap = 12;
+  const items = mini.phase === "over" ? [["미니게임 목록 (Esc)", miniToList, "rgba(244,236,217,.8)"], ["다시 (R)", () => startMini(mini.id), "#9fe0a0"]]
+              : [["미니게임 목록 (Esc)", miniToList, "rgba(244,236,217,.8)"], ["메뉴로 (M)", goToMenu, "rgba(244,236,217,.6)"]];
+  return items.map((it, i) => ({ x: W/2 - (items.length*bw + (items.length-1)*gap)/2 + i*(bw + gap), y, w: bw, h, label: it[0], act: it[1], col: it[2] }));
+}
+function drawMiniButtons(){
+  for(const B of miniButtons()){
+    ctx.fillStyle = "rgba(13,27,38,.78)"; ctx.fillRect(B.x, B.y, B.w, B.h);
+    ctx.strokeStyle = B.col; ctx.lineWidth = 1.5; ctx.strokeRect(B.x, B.y, B.w, B.h);
+    ctx.fillStyle = B.col; ctx.font = "700 14px 'Pretendard', system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(B.label, B.x + B.w/2, B.y + B.h/2 + 1);
+  }
+}
+function drawJellyGame(m){
+  const h = jtH(m.cy + H*0.5);
+  drawMiniSky(Math.min(2, h / 160));
+  // 구름 — 천천히 지나간다
+  ctx.fillStyle = "rgba(255,255,255,.35)";
+  for(let i=0;i<6;i++){
+    const cy = ((i*190 - m.cy*0.4) % (H + 200) + H + 200) % (H + 200) - 100, cx = ((i*263 + m.t*0.2*(i%2 ? 1 : -1)) % (W + 200) + W + 200) % (W + 200) - 100;
+    ctx.beginPath(); ctx.ellipse(cx, cy, 70, 18, 0, 0, Math.PI*2); ctx.ellipse(cx + 40, cy - 8, 40, 16, 0, 0, Math.PI*2); ctx.fill();
+  }
+  // 10m마다 높이 눈금
+  ctx.textAlign = "left"; ctx.font = "600 11px ui-monospace, Menlo, monospace"; ctx.fillStyle = "rgba(244,236,217,.45)";
+  const m0 = Math.ceil(jtH(m.cy + H) / 25) * 25;
+  for(let hm = m0; ; hm += 25){
+    const y = JT_GROUND - hm*JT_PX_M - m.cy;
+    if(y < 40) break;
+    if(hm > 0){ ctx.fillText(hm + "m", 6, y); ctx.fillRect(0, y + 8, 18, 1); }
+  }
+  if(miniBest.jelly > 0){
+    const by = JT_GROUND - miniBest.jelly*JT_PX_M - m.cy;
+    if(by > 40 && by < H){
+      ctx.strokeStyle = "rgba(255,215,106,.6)"; ctx.setLineDash([8, 6]); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke(); ctx.setLineDash([]);
+      leftText("최고 " + miniBest.jelly + "m", W - 90, by - 10, "700 12px 'Pretendard', system-ui, sans-serif", "#ffd76a");
+    }
+  }
+  drawMiniSea(SEA - m.cy, 0);
+  for(const c of m.coinsL) if(!c.got) drawMiniCoin(c.x, c.y - m.cy, m.t + c.x);
+  for(const j of m.js) if(!j.gone) drawMiniJelly(j.x, j.y - m.cy, j.r, j.type, j.t, j.sq);
+  for(const g of m.gulls) drawMiniGull(g.x, g.y - m.cy + Math.sin(g.t*0.1)*8, g.t);
+  const p = m.p;
+  const sq = m.t - m.lastBounce < 8 ? 1 - (m.t - m.lastBounce)/8 : 0;
+  // 착지 타이밍 안내 — 바로 아래 해파리에 거의 닿을 때 몸 주위가 반짝인다
+  if(m.phase === "play" && p.vy > 0){
+    const near = m.js.some(j => !j.gone && j.type !== 2 && Math.abs(p.x - j.x) < j.r + 10 && j.y - 24 - p.y > 0 && j.y - 24 - p.y < p.vy * JT_WINDOW);
+    if(near){ ctx.strokeStyle = "rgba(255,215,106,.85)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y - m.cy, 26, 0, Math.PI*2); ctx.stroke(); }
+  }
+  drawMiniPirate(p.x, p.y - m.cy, Math.max(-0.5, Math.min(0.5, p.vx*0.05)) + (m.stunT > 0 ? Math.sin(m.t*0.8)*0.3 : 0), sq);
+  if(p.x < 30) drawMiniPirate(p.x + W + 28, p.y - m.cy, 0, sq);
+  if(p.x > W - 30) drawMiniPirate(p.x - W - 28, p.y - m.cy, 0, sq);
+  drawMiniParts(m, 0, m.cy);
+}
+function drawCannonGame(m){
+  drawMiniSky(0.15);
+  const ox = m.camX, oy = m.camY;
+  // 먼 섬 실루엣
+  ctx.fillStyle = "rgba(40,80,90,.35)";
+  for(let i=0;i<5;i++){
+    const x = ((i*420 - ox*0.25) % (W + 400) + W + 400) % (W + 400) - 200;
+    ctx.beginPath(); ctx.ellipse(x, SEA - oy, 140, 46, 0, Math.PI, 0); ctx.fill();
+  }
+  drawMiniSea(SEA - oy, ox);
+  // 100m 부표
+  ctx.font = "700 12px ui-monospace, Menlo, monospace"; ctx.textAlign = "center";
+  for(let d = Math.ceil(ox / CN_PX_M / 100) * 100; (d*CN_PX_M + CN_X0) - ox < W + 40; d += 100){
+    const x = d*CN_PX_M + CN_X0 - ox;
+    ctx.fillStyle = "#c0473f"; ctx.fillRect(x - 3, SEA - oy - 18, 6, 18);
+    ctx.fillStyle = "#f4ecd9"; ctx.fillText(d + "m", x, SEA - oy - 26);
+  }
+  if(miniBest.cannon > 0){
+    const bx = miniBest.cannon*CN_PX_M + CN_X0 - ox;
+    if(bx > -10 && bx < W + 10){
+      ctx.fillStyle = "#ffd76a"; ctx.fillRect(bx - 2, SEA - oy - 70, 4, 70);
+      ctx.beginPath(); ctx.moveTo(bx + 2, SEA - oy - 70); ctx.lineTo(bx + 30, SEA - oy - 60); ctx.lineTo(bx + 2, SEA - oy - 50); ctx.fill();
+    }
+  }
+  // 배와 새총 돛대
+  const dx = -ox;
+  ctx.fillStyle = "#5a3a22";
+  ctx.beginPath(); ctx.moveTo(dx + 30, SEA - oy - 40); ctx.lineTo(dx + 300, SEA - oy - 40); ctx.lineTo(dx + 270, SEA - oy + 6); ctx.lineTo(dx + 60, SEA - oy + 6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#3a2414";
+  ctx.fillRect(dx + 118, SEA - oy - 190, 8, 150); ctx.fillRect(dx + 214, SEA - oy - 190, 8, 150);
+  const p = m.p;
+  if(!m.flying){
+    // 고무팔이 두 돛대에 걸려 당겨진다
+    ctx.strokeStyle = "#f2c9a0"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(dx + 122, SEA - oy - 186); ctx.lineTo(p.x - ox, p.y - oy - 6); ctx.lineTo(dx + 218, SEA - oy - 186); ctx.stroke();
+    // 조준선
+    const a = m.ang * Math.PI / 180, sp = 9 + 17 * (m.charging ? m.pow : 0.5);
+    ctx.fillStyle = "rgba(255,255,255,.7)";
+    let sx = CN_X0, sy = CN_Y0, vx = Math.cos(a)*sp, vy = -Math.sin(a)*sp;
+    for(let i=0;i<26;i++){
+      for(let k=0;k<3;k++){ sx += vx; sy += vy; vy += CN_G; }
+      if(sy > SEA) break;
+      ctx.beginPath(); ctx.arc(sx - ox, sy - oy, 2.5, 0, Math.PI*2); ctx.fill();
+    }
+    // 힘 게이지
+    ctx.fillStyle = "rgba(13,27,38,.7)"; ctx.fillRect(dx + 60, SEA - oy - 260, 200, 18);
+    const pc = m.charging ? m.pow : 0;
+    ctx.fillStyle = pc > 0.93 ? "#ffd76a" : "#f0a24e"; ctx.fillRect(dx + 62, SEA - oy - 258, 196*pc, 14);
+    centerText("각도 " + Math.round(m.ang) + "°  ·  " + (m.charging ? "떼면 발사!" : "누르고 있으면 힘이 오르내린다"), SEA - oy - 280, "700 14px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+  }
+  for(const o of m.objs){
+    const x = o.x - ox;
+    if(x < -120 || x > W + 120) continue;
+    if(o.k === "jelly") drawMiniJelly(x, o.y + Math.sin(o.t*0.04)*10 - oy, 36, 0, o.t, o.sq);
+    else if(o.k === "coin" && !o.got) drawMiniCoin(x, o.y - oy, m.t + o.x);
+    else if(o.k === "gull" && !o.hit) drawMiniGull(x, o.y - oy + Math.sin(o.t*0.1)*10, o.t);
+    else if(o.k === "whale"){
+      ctx.fillStyle = "#2d4f6a";
+      ctx.beginPath(); ctx.ellipse(x, SEA - oy + 4, 74, 30, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = "#f4ecd9"; ctx.beginPath(); ctx.arc(x + 40, SEA - oy - 8, 3, 0, Math.PI*2); ctx.fill();
+      if(!o.used){
+        const s = 30 + Math.abs(Math.sin(o.t*0.08))*30;
+        ctx.strokeStyle = "rgba(191,232,234,.8)"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(x - 10, SEA - oy - 26); ctx.quadraticCurveTo(x - 20, SEA - oy - 26 - s, x - 34, SEA - oy - 20 - s*0.6);
+        ctx.moveTo(x - 10, SEA - oy - 26); ctx.quadraticCurveTo(x, SEA - oy - 26 - s, x + 14, SEA - oy - 20 - s*0.6); ctx.stroke();
+      }
+    }
+  }
+  drawMiniPirate(p.x - ox, p.y - oy, m.flying ? m.spin : 0, 0);
+  if(m.flying && m.phase === "play"){
+    leftText("고무 풍선 " + "●".repeat(m.puffs) + "○".repeat(CN_PUFFS - m.puffs), 14, 58, "700 14px 'Pretendard', system-ui, sans-serif", "#f7a8a0");
+    if(p.y - oy < 46){ ctx.fillStyle = "#f4ecd9"; ctx.beginPath(); ctx.moveTo(p.x - ox, 46); ctx.lineTo(p.x - ox - 8, 58); ctx.lineTo(p.x - ox + 8, 58); ctx.fill(); }
+  }
+  drawMiniParts(m, ox, oy);
+}
+function drawHopGame(m){
+  drawMiniSky(0.6 + Math.min(1.2, m.i / 120));
+  drawMiniSea(HP_Y + 14, m.camX);
+  const i0 = Math.max(0, Math.floor(m.camX / HP_S) - 1);
+  for(let k = i0; k < i0 + 11 && k < m.slots.length; k++){
+    const x = k*HP_S - m.camX, t = m.slots[k];
+    const sink = (k === m.i && !m.hop && m.phase === "play") ? (m.sinkT / hopSinkMax(m)) * 30 : 0;
+    if(t === 1){
+      ctx.strokeStyle = "rgba(191,232,234,.35)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(x, HP_Y + 16, 22, 5, 0, 0, Math.PI*2); ctx.stroke();
+    } else drawMiniJelly(x, HP_Y + sink, 32, t === 2 ? 2 : t === 3 ? 3 : 0, m.t + k*13, 0);
+    if(k % 10 === 0 && k > 0){ centerText(k + "", HP_Y + 64, "700 12px ui-monospace, Menlo, monospace", "rgba(244,236,217,.6)"); }
+  }
+  // 누르는 동안 내려앉을 칸을 보여 준다
+  if(m.charge && !m.hop && m.phase === "play"){
+    const n = hopLevel(m.charge), x = (m.i + n)*HP_S - m.camX;
+    ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 3; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.arc(x, HP_Y - 6, 40, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    for(let k=1;k<=3;k++){
+      ctx.fillStyle = k <= n ? "#ffd76a" : "rgba(244,236,217,.3)";
+      ctx.beginPath(); ctx.arc(m.px - 24 + (k-1)*24, m.py - 52, 7, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  if(m.phase === "play" && !m.hop){
+    const left = 1 - m.sinkT / hopSinkMax(m);
+    ctx.fillStyle = "rgba(13,27,38,.6)"; ctx.fillRect(m.px - 30, HP_Y + 40, 60, 6);
+    ctx.fillStyle = left > 0.35 ? "#8fd6d8" : "#f7a8a0"; ctx.fillRect(m.px - 30, HP_Y + 40, 60*Math.max(0, left), 6);
+  }
+  const sq = m.charge && !m.hop ? Math.min(1, m.charge / 40) : 0;
+  drawMiniPirate(m.px, m.py, m.hop ? Math.min(1, m.hop.t / m.hop.dur) * Math.PI * 2 * (m.hop.to - m.hop.from > 2 ? 1 : 0) : 0, sq);
+  drawMiniParts(m, 0, 0);
+}
+
+function miniKey(k, down, e){
+  const arrows = { ArrowLeft:"left", KeyA:"left", ArrowRight:"right", KeyD:"right", ArrowDown:"down", KeyS:"down", ArrowUp:"up", KeyW:"up" };
+  if(arrows[k]){ e.preventDefault(); keys[arrows[k]] = down; return; }
+  if(k === "Space" || k === "Enter"){
+    e.preventDefault();
+    if(down){ if(!e.repeat) miniDown(); } else miniUp();
+    return;
+  }
+  if(!down) return;
+  if(k === "Escape"){ e.preventDefault(); miniToList(); }
+  else if(k === "KeyP"){ e.preventDefault(); miniPause(); }
+  else if(k === "KeyR" && mini){ e.preventDefault(); startMini(mini.id); }
+}
 
 window.__swing = {
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
@@ -6967,6 +7831,11 @@ window.__swing = {
   slingStart: startSling, slingFire: fireSling, sling: () => ({ s: sling, cd: slingCd, n: slings, target: slingTarget() }),
   crew: () => ({ owned: crewOwned, sel: crewSel, mate: crewMate, kills: crewKills, hire: (i) => hireCrew(CREW[i]), cycle: cycleCrew, set: (id) => { if(id && crewOwned.indexOf(id) < 0) crewOwned.push(id); crewSel = id; } }),
   navy: () => ({ n: navy, next: nextNavyAt, esc: navyEscapes, setNext: (v) => { nextNavyAt = v; } }),
+  mini: () => ({ m: mini, best: miniBest, medals: miniMedals, start: startMini, down: miniDown, up: miniUp, toList: miniToList, pause: miniPause,
+                 allGold: miniAllGold, set: (id, b, md) => { miniBest[id] = b; miniMedals[id] = md; } }),
+  toMiniList: () => { state = STATE.MINI_SELECT; },
+  weekly: () => ({ now: weeklyNow(), force: (id) => { weeklyForce = id; }, list: WEEKLY, week: weekNo() }),
+  crewLv: () => ({ xp: crewXp, lv: crewLv, up: crewLvUp, gain: crewGainXp, cdMul: crewCdMul }),
   port: () => ({ idx: portIdx, next: nextPortAt, bought: portBought, act: portAct, leave: leavePort, price: (i) => portPrice(PORT_ITEMS[i]) })
 };
 
