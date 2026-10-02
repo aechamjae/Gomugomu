@@ -3,7 +3,8 @@
 const H = require("./harness.js");
 H.evalIn(`(() => {
   const m = new Map();
-  const ls = { getItem:(k) => m.has(k) ? m.get(k) : null, setItem:(k, v) => m.set(k, String(v)), removeItem:(k) => m.delete(k), _m:m };
+  const ls = { getItem:(k) => m.has(k) ? m.get(k) : null, setItem:(k, v) => m.set(k, String(v)), removeItem:(k) => m.delete(k), _m:m,
+              key:(i) => [...m.keys()][i] ?? null, get length(){ return m.size; } };
   window.localStorage = ls; globalThis.localStorage = ls;
 })()`);
 const A = () => H.api();
@@ -62,6 +63,38 @@ const ok = (name, cond, extra) => {
   if(a.peek().state === 9) a.decline();
   ok("본게임 보물이 로그인한 계정 창고에 쌓인다", sh().bank >= before + 300 && /"bank":/.test(LS().get("acct:루피:swing:shop")),
      "창고 " + before + "→" + sh().bank);
+
+  // 중복 확인 · 대소문자 무시
+  ok("중복 확인: 이미 있는 아이디는 막고 새 아이디는 통과", !ac().checkId("루피").ok && ac().checkId("LUFFY_x").ok);
+  r = await ac().signup("Nosetoad", "toad1234", false);
+  ok("영문 아이디 계정 만들기", r.ok, r.msg);
+  ok("소문자로 쳐도 중복으로 막힌다", !ac().checkId("nosetoad").ok && !(await ac().signup("nosetoad", "다른비번1", false)).ok);
+  await ac().logout();
+  r = await ac().login("nosetoad", "toad1234");
+  ok("대소문자가 달라도 로그인되고 원래 아이디로 들어간다", r.ok && ac().cur === "Nosetoad", r.msg + " / " + ac().cur);
+
+  // 화면 버튼: 중복 확인을 안 거치면 만들 수 없다
+  const el = (id) => H.evalIn("document").getElementById(id);
+  el("acctId").value = "상디"; el("acctPw").value = "cook1234";
+  ac().uiSignup(); await new Promise(r => setTimeout(r, 0));
+  ok("중복 확인 전엔 [새 계정 만들기]가 막힌다", !ac().list()["상디"] && /중복 확인/.test(el("acctMsg").textContent));
+  ac().uiCheck(); ac().uiSignup(); await new Promise(r => setTimeout(r, 5));
+  ok("중복 확인 후엔 만들어진다", !!ac().list()["상디"], el("acctMsg").textContent);
+
+  // 이미 생긴 중복 정리 — 먼저 만든 것만 남긴다
+  const list = ac().list();
+  const old = Date.UTC(2026, 8, 1).toString(36), young = Date.UTC(2026, 9, 1).toString(36);
+  list["nosetoad"] = { salt:"zzzz" + young, hash:"x", made:"2026-10-01" };   // 나중에 만든 쪽
+  list["Nosetoad"].salt = "aaaa" + old;                                      // 먼저 만든 쪽
+  list["NOSETOAD"] = { salt:"bbbb" + young, hash:"y", made:"2026-10-01" };
+  H.evalIn("localStorage").setItem("swing:accounts", JSON.stringify(list));
+  H.evalIn("localStorage").setItem("acct:nosetoad:swing:shop", "{}");
+  H.evalIn("localStorage").setItem("swing:account", "NOSETOAD");
+  ac().dedupe();
+  const after = Object.keys(ac().list()).filter(n => n.toLowerCase() === "nosetoad");
+  ok("중복 계정은 먼저 만든 하나만 남는다", after.length === 1 && after[0] === "Nosetoad", after.join(","));
+  ok("지운 계정의 저장분도 지운다", LS().get("acct:nosetoad:swing:shop") === undefined);
+  ok("지운 계정으로 자동 로그인하던 건 남은 계정으로", LS().get("swing:account") === "Nosetoad");
 
   console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");
   process.exit(failed ? 1 : 0);

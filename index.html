@@ -201,11 +201,12 @@
       <form class="box" id="acctForm" autocomplete="on" onsubmit="return false">
         <h2>계정</h2>
         <div class="who" id="acctWho">게스트로 플레이 중</div>
-        <label>아이디 <input type="text" id="acctId" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+        <label>아이디 <input type="text" id="acctId" maxlength="16" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
         <label>비밀번호 <input type="password" id="acctPw" maxlength="40" autocomplete="current-password"></label>
         <label class="chk"><input type="checkbox" id="acctCarry" checked> 새 계정을 만들 때 지금 진행 상황을 그대로 가져가기</label>
         <div class="btns">
           <button type="button" class="main" id="acctLogin">로그인</button>
+          <button type="button" id="acctCheck">중복 확인</button>
           <button type="button" id="acctSignup">새 계정 만들기</button>
         </div>
         <div class="btns">
@@ -213,7 +214,7 @@
           <button type="button" id="acctClose">닫기</button>
         </div>
         <div class="msg" id="acctMsg"></div>
-        <div class="note">계정은 이 기기(브라우저)에 저장된다 · 기록·보물·기술·칭호·일지가 계정마다 따로 쌓인다</div>
+        <div class="note">새 계정은 [중복 확인] 후 만들 수 있다 · 계정은 이 기기(브라우저)에 저장된다 — 홈 화면 앱과 브라우저, 카톡 안 브라우저는 저장소가 서로 달라 계정이 따로 보인다</div>
       </form>
     </div>
 
@@ -3557,6 +3558,46 @@ function saveAcctCur(){
   try{ if(window.localStorage){ if(account) localStorage.setItem(ACCT_CUR, account); else localStorage.removeItem(ACCT_CUR); } }catch(e){}
 }
 const ACCT_ID_RE = /^[A-Za-z0-9가-힣_]{2,16}$/;
+// 아이디 비교는 대소문자·한글 조합 방식을 무시한다 — 휴대폰 자판이 첫 글자를 대문자로 바꿔
+// "Nosetoad"와 "nosetoad"가 따로 생기고, 만든 쪽과 다르게 치면 로그인이 안 되던 문제
+function idKey(id){ return String(id || "").normalize("NFKC").trim().toLowerCase(); }
+function findAcct(list, id){
+  if(list[id]) return id;
+  const k = idKey(id);
+  for(const name in list) if(idKey(name) === k) return name;
+  return null;
+}
+// 만든 시각 — salt 끝 8글자가 Date.now()의 36진수다(예전 계정도 같은 방식). 못 읽으면 null
+function acctMadeAt(rec){
+  const t = rec && typeof rec.salt === "string" ? parseInt(rec.salt.slice(-8), 36) : NaN;
+  return t > 1.5e12 && t < 4.1e12 ? t : null;
+}
+// 이미 생긴 중복 계정 정리 — 같은 아이디(대소문자 무시)끼리 가장 먼저 만든 것만 남기고 나머지는 저장분까지 지운다
+function dedupeAccounts(){
+  const list = acctList(), names = Object.keys(list), groups = {};
+  names.forEach((n, i) => { (groups[idKey(n)] = groups[idKey(n)] || []).push({ n, i, t: acctMadeAt(list[n]) }); });
+  let changed = false, cur = null;
+  try{ cur = window.localStorage && localStorage.getItem(ACCT_CUR); }catch(e){}
+  for(const k in groups){
+    const g = groups[k];
+    if(g.length < 2) continue;
+    // 시각을 읽을 수 있으면 시각 순, 아니면 목록에 들어간 순서(먼저 만든 쪽이 앞)
+    g.sort((a, b) => (a.t !== null && b.t !== null && a.t !== b.t) ? a.t - b.t : a.i - b.i);
+    const keep = g[0].n;
+    for(const d of g.slice(1)){
+      delete list[d.n];
+      try{
+        const ls = window.localStorage, pre = "acct:" + d.n + ":", dead = [];
+        if(ls) for(let j = 0; j < ls.length; j++){ const key = ls.key(j); if(key && key.indexOf(pre) === 0) dead.push(key); }
+        dead.forEach((key) => ls.removeItem(key));
+      }catch(e){}
+      if(cur === d.n){ cur = keep; try{ localStorage.setItem(ACCT_CUR, keep); }catch(e){} }
+      changed = true;
+    }
+  }
+  if(changed) saveAcctList(list);
+  return changed;
+}
 
 // 계정을 바꿀 때 — 메모리에 있는 진행 상황을 처음 상태로 돌린 다음 새 계정의 저장분을 읽는다
 // (저장분이 없는 항목은 읽기가 아무것도 안 하므로 먼저 비워 두지 않으면 앞 계정 값이 남는다)
@@ -3590,7 +3631,7 @@ function signup(id, pw, carry){
   if(!ACCT_ID_RE.test(id)) return Promise.resolve({ ok:false, msg:"아이디는 2~16자, 한글·영문·숫자·_ 만" });
   if((pw || "").length < 4) return Promise.resolve({ ok:false, msg:"비밀번호는 4자 이상" });
   const list = acctList();
-  if(list[id]) return Promise.resolve({ ok:false, msg:"이미 있는 아이디다" });
+  if(findAcct(list, id)) return Promise.resolve({ ok:false, msg:"이미 있는 아이디다 (대소문자만 달라도 같은 아이디)" });
   const salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
   list[id] = { salt, hash: pwHash(pw, salt), made: todayKey() };
   saveAcctList(list);
@@ -3600,9 +3641,18 @@ function signup(id, pw, carry){
   // 가져가기를 고르면 지금 메모리의 진행 상황을, 아니면 빈 상태를 새 계정 이름으로 저장
   return saveProfile().then(() => { syncHUD(); return { ok:true, msg:"'" + id + "' 계정을 만들고 로그인했다" + (carry ? " — 지금까지의 진행 상황을 가져왔다" : "") }; });
 }
-function login(id, pw){
+// 중복 확인 — 만들기 전에 꼭 거쳐야 한다(계정 창의 [중복 확인] 버튼)
+function checkId(id){
   id = (id || "").trim();
-  const rec = acctList()[id];
+  if(!ACCT_ID_RE.test(id)) return { ok:false, msg:"아이디는 2~16자, 한글·영문·숫자·_ 만" };
+  const have = findAcct(acctList(), id);
+  if(have) return { ok:false, msg:"'" + have + "'은(는) 이미 있는 아이디다" };
+  return { ok:true, msg:"'" + id + "'은(는) 쓸 수 있는 아이디다" };
+}
+function login(id, pw){
+  const list = acctList();
+  id = findAcct(list, (id || "").trim()) || (id || "").trim();
+  const rec = list[id];
   if(!rec || pwHash(pw || "", rec.salt) !== rec.hash) return Promise.resolve({ ok:false, msg:"아이디나 비밀번호가 맞지 않는다" });
   if(account === id) return Promise.resolve({ ok:true, msg:"이미 '" + id + "'(으)로 로그인해 있다" });
   return switchAccount(id).then(() => ({ ok:true, msg:"'" + id + "'(으)로 로그인 — 진행 상황을 불러왔다" }));
@@ -3639,6 +3689,7 @@ function closeAccount(){
   if(pw) pw.value = "";
   try{ canvas.focus({preventScroll:true}); }catch(e){}
 }
+let acctChecked = null;   // [중복 확인]을 통과한 아이디 — 아이디 칸을 고치면 다시 확인해야 한다
 function acctAct(fn){
   const id = document.getElementById("acctId").value, pw = document.getElementById("acctPw").value;
   fn(id, pw).then((r) => {
@@ -3646,10 +3697,25 @@ function acctAct(fn){
     if(r.ok) document.getElementById("acctPw").value = "";
   });
 }
+function acctCheck(){
+  const r = checkId(document.getElementById("acctId").value);
+  acctChecked = r.ok ? idKey(document.getElementById("acctId").value) : null;
+  acctRefresh(r.msg, r.ok);
+  return r;
+}
+function acctSignup(){
+  const id = document.getElementById("acctId").value;
+  if(acctChecked === null || acctChecked !== idKey(id)){ acctRefresh("먼저 [중복 확인]을 눌러 주세요", false); return; }
+  acctChecked = null;
+  acctAct((i, pw) => signup(i, pw, document.getElementById("acctCarry").checked));
+}
 (() => {
   const on = (id, f) => { const el = document.getElementById(id); if(el) el.addEventListener("click", (e) => { e.preventDefault(); f(); }); };
   on("acctLogin",  () => acctAct(login));
-  on("acctSignup", () => acctAct((id, pw) => signup(id, pw, document.getElementById("acctCarry").checked)));
+  on("acctCheck",  acctCheck);
+  on("acctSignup", acctSignup);
+  const idIn = document.getElementById("acctId");
+  if(idIn) idIn.addEventListener("input", () => { acctChecked = null; });
   on("acctLogout", () => logout().then((r) => acctRefresh(r.msg, r.ok)));
   on("acctClose",  closeAccount);
   if(acctEl) acctEl.addEventListener("keydown", (e) => {
@@ -3661,6 +3727,7 @@ function acctAct(fn){
   if(acctEl) acctEl.addEventListener("pointerdown", (e) => e.stopPropagation());
 })();
 // 마지막으로 쓰던 계정으로 자동 로그인 — 목록에 없는 아이디면 게스트
+dedupeAccounts();
 try{ const cur = window.localStorage && localStorage.getItem(ACCT_CUR); if(cur && acctList()[cur]) account = cur; }catch(e){}
 
 async function loadBest(){
@@ -6218,7 +6285,8 @@ window.__swing = {
   title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage }),
   rows: () => menuRows(),
   shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
-  acct: () => ({ cur: account, signup, login, logout, open: openAccount, close: closeAccount, isOpen: acctOpen, list: acctList, hash: sha256 })
+  acct: () => ({ cur: account, signup, login, logout, open: openAccount, close: closeAccount, isOpen: acctOpen, list: acctList, hash: sha256,
+                 checkId, dedupe: dedupeAccounts, uiCheck: acctCheck, uiSignup: acctSignup })
 };
 
 reset();
