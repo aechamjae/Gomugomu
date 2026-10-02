@@ -19,6 +19,9 @@ function playOne(){
   while(f < MAX_FRAMES){
     const s = a.peek();
     if(s.state === 2){ deaths = s.deathReason || "?"; break; }
+    if(s.state === 9){ a.decline(); continue; }
+    if(s.state === 10){ a.pickCard(0); continue; }
+    if(s.state === 11){ a.port().leave(); continue; }
     maxDist = Math.max(maxDist, s.dist);
     for(const m of (s.mobs || [])){
       if(m.kind === 1) sawKing = true; else sawFish = true;

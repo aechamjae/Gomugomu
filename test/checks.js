@@ -19,9 +19,12 @@ function start(){
   return a;
 }
 // 부활 제안(state 9)은 기본적으로 거절한다 — 부활 자체는 따로 검사한다
+// 보상 카드(state 10)는 첫 장을 고르고, 항구(state 11)는 바로 출항한다 — 각각은 따로 검사한다
 function run(a, n, fn){
   for(let i=0;i<n;i++){
     if(a.peek().state === 9) a.decline();
+    if(a.peek().state === 10) a.pickCard(0);
+    if(a.peek().state === 11) a.port().leave();
     if(fn) fn(a.peek(), i);
     if(a.peek().state === 2) return a.peek();
     H.step();
@@ -242,9 +245,13 @@ function swing(a, st){
                   invul:0, flash:0, x:P.x+50, y:P.y, vy:0, air:false, phase:0, sub:0,
                   perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 });
     T().dmg(true, "test");
-    if(a.peek().shield >= 1) sawShieldReward = true;
+    const offer = a.pick2().offer || [];
+    for(let i=0;i<120 && a.peek().state !== 10;i++) H.step();     // 격침 슬로모션이 끝나면 카드가 뜬다
+    const si = offer.findIndex(c => c.reward && c.reward.id === "shield");
+    if(a.peek().state === 10 && si >= 0){ a.pickCard(si); if(a.peek().shield >= 1 && a.peek().state === 1) sawShieldReward = true; }
+    else if(a.peek().state === 10) a.pickCard(0);
   }
-  ok("보스를 격파하면 랜덤 보상(보호막 포함) 중 하나가 나온다", sawShieldReward,
+  ok("보스를 격파하면 보상 카드가 뜨고, 보호막 카드를 고르면 보호막이 생긴다", sawShieldReward,
      "40번 시도 중 보호막 목격=" + sawShieldReward);
 }
 
@@ -1474,6 +1481,156 @@ function swing(a, st){
   run(a, 40, () => { P.vx = 0; P.vy = 0; });
   ok("라이플은 꿰뚫고 날아가 해왕류 둘을 한 번에", !a.peek().mobs.some(m => m.kind === 1 && !m.gone), "남은 해왕류=" + a.peek().mobs.filter(m => m.kind === 1 && !m.gone).length);
   tc().equip("pistol"); delete tc().lv.rifle;
+}
+
+/* --- v36: 보상 카드 · 새총 · 선원 · 해군 추격 · 항구 --- */
+const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon:70, fishSkill:200,
+                         invul:0, flash:0, x:P.x+50, y:P.y, vy:0, air:false, phase:0, sub:0,
+                         perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 });
+{
+  const a = start();
+  T().setBoss(mkBoss(T().P()));
+  T().dmg(true, "test");
+  ok("격침 직후(슬로모션 중)엔 아직 카드가 안 뜬다", a.peek().state === 1 && a.pick2().pending);
+  for(let i=0;i<120 && a.peek().state !== 10;i++) H.step();
+  const offer = a.pick2().offer || [];
+  ok("슬로모션이 끝나면 보상 카드 3장이 뜨고 강화가 적어도 한 장", a.peek().state === 10 && offer.length === 3 && offer.some(c => c.perk),
+     "state=" + a.peek().state + " 카드=" + offer.map(c => c.perk ? c.perk.id : c.reward.id).join(","));
+  const pi = offer.findIndex(c => c.perk), id = offer[pi].perk.id;
+  a.hold(true); a.hold(false);                       // 카드 화면에서 팔 버튼은 아무 일도 안 한다
+  ok("카드 화면에선 팔 조작이 먹지 않는다", a.peek().state === 10);
+  a.pickCard(pi);
+  ok("강화 카드를 고르면 이번 판 강화가 쌓이고 게임이 이어진다", a.peek().state === 1 && a.pick2().perks[id] === 1, id);
+  a.reset();
+  ok("새 판을 시작하면 강화가 사라진다", Object.keys(a.pick2().perks).length === 0);
+}
+{
+  const a = start();
+  const r0 = a.shop().reach;
+  a.pick2().perks.long = 2;
+  ok("늘어나는 팔 ×2 — 팔 길이 +16%", Math.abs(a.shop().reach / r0 - 1.16) < 0.001, r0 + "→" + a.shop().reach);
+  const s0 = T().hit(false);
+  a.pick2().perks.tough = 2;
+  ok("질긴 고무 ×2 — 휘청 시간 40% 줄어든다", Math.abs(T().hit(false) - s0 * 0.6) < 0.01, s0 + "→" + T().hit(false));
+  a.reset();
+}
+{
+  const a = A();
+  a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(false);
+  T().setBoss(mkBoss(T().P()));
+  T().dmg(true, "test");
+  run(a, 100);
+  ok("연습 모드는 카드 없이 예전처럼 바로 보상", a.peek().state !== 10 && !a.pick2().pending);
+  a.startMain();
+}
+{
+  // 새총 — 매달린 고리 앞쪽에 고리가 하나 더 닿으면
+  const a = start();
+  T().teleport(3000);
+  const P = T().P(), an = T().anchors();
+  an.length = 0;
+  const a1 = { x: P.x + 40, y: 120, kind:0 }, a2 = { x: P.x + 220, y: 130, kind:0 };
+  an.push(a1, a2);
+  P.y = 230; P.vx = 0; P.vy = 0;
+  a.hold(true);
+  for(let i=0;i<14 && !a.peek().rope;i++){ P.vx = 0; H.step(); }
+  ok("새총 준비: 첫 고리에 매달려 있다", a.peek().rope && a.peek().rope.a === a1);
+  ok("앞쪽 고리가 새총 대상으로 잡힌다", a.sling().target === a2);
+  a.slingStart();
+  for(let i=0;i<6;i++) H.step();
+  a.slingFire();
+  ok("덜 당기고 놓으면 그냥 그네로 돌아간다", a.peek().rope && a.sling().n === 0);
+  a.slingStart();
+  const y0 = P.y;
+  for(let i=0;i<60;i++) H.step();
+  ok("당기는 동안 몸이 뒤쪽 아래로 끌려간다", P.y > y0 + 20 && P.x < (a1.x + a2.x)/2, "y " + y0.toFixed(0) + "→" + P.y.toFixed(0));
+  a.slingFire();
+  const s = a.peek();
+  ok("놓으면 두 고리 사이로 앞·위로 튀어 나간다", !s.rope && s.vx > 12 && s.vy < -6 && a.sling().n === 1, "vx=" + s.vx.toFixed(1) + " vy=" + s.vy.toFixed(1));
+  ok("최고 속도를 넘지 않아 불꽃이 공짜로 붙지 않는다", Math.hypot(s.vx, s.vy) < 27);
+  ok("쏜 뒤엔 재충전 시간이 있다", a.sling().cd > 0 && !a.slingStart());
+  a.hold(false);
+}
+{
+  // 선원
+  const a = A(), sh = a.shop(), cr = a.crew;
+  sh.setBank(5000);
+  cr().hire(0);
+  ok("요리사 고용 — 보물이 빠지고 바로 동행", cr().owned.indexOf("cook") >= 0 && cr().sel === "cook" && a.shop().bank === 3800);
+  ok("가진 선원을 다시 누르면 혼자 출항", cr().hire(0) && cr().sel === null);
+  cr().set("cook");
+  start();
+  ok("요리사와 출항하면 풍선 하나를 들고 간다", a.peek().fusen >= 1);
+  cr().set("sword");
+  let b = start();
+  T().teleport(3000);
+  const P = T().P(), s = b.peek();
+  s.mobs.length = 0; s.gulls.length = 0;
+  s.mobs.push({ kind:0, x:P.x + 90, y:P.y + 20, vy:-3, t:0, gone:false, air:true, cool:0 });
+  cr().mate.cd = 0;
+  run(b, 6);
+  ok("검객이 곁의 물고기를 벤다", s.mobs[0].gone && cr().kills >= 1, "kills=" + cr().kills);
+  cr().set("sniper");
+  b = start();
+  T().teleport(3000);
+  const s2 = b.peek(), P2 = T().P();
+  s2.gulls.length = 0; s2.mobs.length = 0; s2.barrels.length = 0;
+  s2.gulls.push({ x:P2.x + 400, y:P2.y - 30, vx:0, vy:0, t:0, gone:false, base:P2.y - 30 });
+  cr().mate.cd = 0;
+  run(b, 6);
+  ok("저격수가 앞쪽 갈매기를 쏜다", s2.gulls.length === 0 || s2.gulls[0].gone);
+  cr().set(null);
+}
+{
+  // 해군 추격
+  const a = start();
+  T().teleport(400 * 22);                 // 첫 보스(500m)·포격(850m~) 전
+  a.navy().setNext(0);
+  H.step();
+  const n = a.navy().n;
+  ok("추격 거리가 되면 해군 군함이 나타난다", !!n);
+  T().setTreasure(1000);
+  n.x = T().P().x - 50;
+  H.step();
+  const s = a.peek();
+  ok("따라잡히면 휘청이고 보물 15%를 빼앗긴다", !a.navy().n && s.stun > 0 && Math.floor(s.treasure) === 850, "보물=" + s.treasure);
+  a.navy().setNext(0); H.step();
+  const n2 = a.navy().n;
+  n2.t = 720; n2.x = T().P().x - 900;
+  const tr = a.peek().treasure, esc = a.navy().esc;
+  H.step();
+  ok("12초를 버티면 따돌리고 현상금 +300", !a.navy().n && a.navy().esc === esc + 1 && a.peek().treasure >= tr + 300, "navy=" + !!a.navy().n + " esc=" + esc + "→" + a.navy().esc + " 보물 " + tr + "→" + a.peek().treasure + " state=" + a.peek().state + " boss=" + !!a.peek().boss);
+}
+{
+  // 항구
+  const a = start();
+  const portX = 900 * 22;
+  T().teleport(portX - 300);
+  T().setBoss(null);
+  let port = T().anchors().find(q => q.port);
+  for(let i=0;i<5 && !port;i++){ T().teleport(portX - 300 + i*200); port = T().anchors().find(q => q.port); }
+  ok("900m 근처에 항구 돛대가 생긴다", !!port, port ? Math.round(port.x/22) + "m" : "");
+  if(port){
+    const an = T().anchors(); an.length = 0; an.push(port);
+    port.cut = 0;                          // 지우기 전 '밧줄 끊는 자'가 끊어 둔 표시가 남아 있을 수 있다
+    const P = T().P(); P.x = port.x - 60; P.y = port.y + 140; P.vx = 0; P.vy = 0;
+    a.hold(true);
+    // 팔 재사용 대기·휘청이 끝날 때까지 돛대 아래에 붙잡아 둔다
+    for(let i=0;i<90 && a.peek().state === 1;i++){ T().setBoss(null); port.cut = 0; P.x = port.x - 60; P.y = port.y + 140; P.vx = 0; P.vy = 0; H.step(); }
+    ok("항구 돛대를 잡으면 정박한다", a.peek().state === 11 && a.port().idx === 1, "state=" + a.peek().state);
+    T().setTreasure(1000);
+    a.port().act(2);
+    ok("보호막을 사면 이번 판 보물이 줄고 보호막이 생긴다", a.peek().shield === 1 && a.peek().treasure === 780, "보물=" + a.peek().treasure);
+    ok("같은 항구에서 같은 걸 두 번 못 산다", !a.port().act(2));
+    a.port().act(4);
+    ok("강화 카드를 사면 강화만 3장이 뜨고, 고르면 항구로 돌아온다", a.peek().state === 10 && a.pick2().offer.every(c => c.perk) && a.pick2().back === 11);
+    a.pickCard(0);
+    ok("…항구 화면으로 복귀", a.peek().state === 11);
+    a.port().leave();
+    ok("출항하면 게임이 이어진다", a.peek().state === 1);
+    ok("다음 항구는 1500m 뒤", Math.round(a.port().next) === 2400);
+    a.hold(false);
+  }
 }
 
 /* --- 프로젝트 원칙 --- */

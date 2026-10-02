@@ -59,7 +59,7 @@ const ok = (name, cond, extra) => {
   a.reset(); H.step(); a.hold(true); H.step(); a.hold(false);
   H.evalIn("window.__test").setTreasure(300);
   const before = sh().bank;
-  for(let i = 0; i < 4000 && a.peek().state !== 2; i++){ if(a.peek().state === 9) a.decline(); a.hold(false); H.step(); }
+  for(let i = 0; i < 4000 && a.peek().state !== 2; i++){ if(a.peek().state === 9) a.decline(); if(a.peek().state === 10) a.pickCard(0); if(a.peek().state === 11) a.port().leave(); a.hold(false); H.step(); }
   if(a.peek().state === 9) a.decline();
   ok("본게임 보물이 로그인한 계정 창고에 쌓인다", sh().bank >= before + 300 && /"bank":/.test(LS().get("acct:루피:swing:shop")),
      "창고 " + before + "→" + sh().bank);
