@@ -151,8 +151,8 @@
     }
     .tsling.cool{opacity:.35;}
     .tskill3{
-      /* 오른쪽 ▲ 버튼 위 — 왼쪽 열은 피스톨·건으로 이미 꽉 차서 위쪽 HUD를 가렸다 */
-      position:absolute;right:calc(3.5vw + 25px);bottom:calc(3vh + 272px);
+      /* 왼쪽 열 근거리 기술(채찍) 버튼 바로 위 */
+      position:absolute;left:calc(3.5vw + (min(15vw, 72px) - 58px) / 2);bottom:calc(41vh + min(15vw, 72px) + 10px);
       width:58px;height:58px;font-size:13px;
       background:rgba(255,143,160,.26);border-color:rgba(255,143,160,.9);
     }
@@ -290,7 +290,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v36";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v37";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -469,7 +469,7 @@ const SHELL_CD      = [55, 80];       // 표식 간격
 
 /* 고무고무 로켓 — 줄을 끝까지 감은 채 ↓를 계속 누르면 충전, 놓으면 고리 쪽으로 몸을 쏘아 올린다 */
 /* 고무고무 새총 — 매달린 채 앞쪽 고리에 다른 팔을 하나 더 걸고(F·터치 '새총'), 뒤로 당겼다 놓으면 두 고리 사이로 튀어 나간다 */
-const SLING_CD  = 150;        // 쏜 뒤 다시 쓰기까지
+const SLING_CD  = 60*30;      // 쏜 뒤 다시 쓰기까지 30초
 const SLING_MIN = 14;         // 이만큼 당겨야 발사 — 덜 당기고 놓으면 그냥 그네로 돌아간다
 const SLING_MAX = 60;         // 최대 장력까지 걸리는 프레임
 const SLING_POW = [14, 24];   // 발사 속도(최소~최대 장력)
@@ -484,8 +484,16 @@ const PERKS = [
   { id:"pouch",  name:"풍선 주머니",   desc:"풍선 최대 +1 · 지금 하나 받는다", max:1, col:"#f7a8a0" },
   { id:"midas",  name:"황금 손",       desc:"금화·황금 고리 보물 +50%",      max:3, col:"#ffd76a" },
   { id:"aim",    name:"명사수 릴리즈", desc:"PERFECT 판정 각도 ±4° 넓게",    max:2, col:"#9fe0a0" },
-  { id:"sling",  name:"새총 장인",     desc:"새총 위력 +15% · 재충전 절반",   max:2, col:"#7fd0ff" }
+  { id:"sling",  name:"새총 장인",     desc:"새총 위력 +15% · 재충전 절반",   max:2, col:"#7fd0ff" },
+  { id:"air",    name:"질풍",          desc:"공중 방향 조절 +25%",           max:2, col:"#c7ecec" },
+  { id:"magnet", name:"자석 손",       desc:"금화를 끌어당기는 범위 +80",     max:2, col:"#e0c070" },
+  { id:"combo",  name:"콤보 장인",     desc:"콤보가 끊기기까지 시간 +50%",     max:2, col:"#ffd76a" },
+  { id:"flame",  name:"불꽃 몸",       desc:"과속 불꽃 지속 +60%",            max:2, col:"#ff8a3a" },
+  { id:"gearup", name:"투혼",          desc:"기어 게이지가 30% 빨리 찬다",     max:3, col:"#ff8fa0" },
+  { id:"drill",  name:"선원 훈련",     desc:"선원 공격 간격 -30%",            max:2, col:"#9fe0a0", crew:true },
+  { id:"undying",name:"불사의 고무",   desc:"바다에 빠지거나 해군에 잡혀도 한 번 버틴다", max:1, col:"#ffd76a", rare:true }
 ];
+let undyingUsed = false;
 const PICK_N = 3;
 let perks = {}, pickOffer = null, pickPending = false, pickReturn = null;
 const pk = (id) => perks[id] || 0;
@@ -493,10 +501,10 @@ const fusenMax = () => FUSEN_MAX + pk("pouch");
 
 /* 선원 — 창고에서 고용하고 출항 화면에서 한 명을 데려간다(C 키·버튼). 플레이어 곁을 따라다닌다 */
 const CREW = [
-  { id:"cook",   name:"요리사", cost:1200, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1" },
-  { id:"nav",    name:"항해사", cost:1500, col:"#8fd6d8", desc:"폭풍 바람 절반 · 순풍 강화 · 해군이 느려진다" },
-  { id:"sword",  name:"검객",   cost:2500, col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다" },
-  { id:"sniper", name:"저격수", cost:3500, col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다" }
+  { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1" },
+  { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 바람 절반 · 순풍 강화 · 해군이 느려진다" },
+  { id:"sword",  name:"검객",   cost:250000, col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다" },
+  { id:"sniper", name:"저격수", cost:350000, col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다" }
 ];
 const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 240, CREW_SNIPE_R = 520;
 let crewOwned = [], crewSel = null, crewMate = null, crewFx = [], crewKills = 0;
@@ -514,11 +522,12 @@ const NAVY_REWARD = 300;
 /* 항구 — 일정 거리마다 부두가 딸린 돛대가 나온다. 그 돛대를 잡으면 정박해서 이번 판 보물로 보급을 산다 */
 const PORT_FIRST = 900, PORT_EVERY = 1500;
 const PORT_ITEMS = [
-  { id:"meat",   name:"고기",      desc:"풍선 +1",                    price:120 },
-  { id:"shield", name:"보호막",    desc:"다음 피격 한 번을 막는다",   price:220 },
-  { id:"supply", name:"보급",      desc:"Q·W 재충전 · 기어 게이지 가득", price:180 },
-  { id:"perk",   name:"강화 카드", desc:"강화 3장 중 하나를 고른다",   price:400 }
+  { id:"meat",   name:"고기",      desc:"풍선 +1",                    price:1200 },
+  { id:"shield", name:"보호막",    desc:"다음 피격 한 번을 막는다",   price:2200 },
+  { id:"supply", name:"보급",      desc:"Q·W 재충전 · 기어 게이지 가득", price:1800 },
+  { id:"perk",   name:"강화 카드", desc:"강화 3장 중 하나를 고른다",   price:4000 }
 ];
+const PORT_MAX_BUY = 2;       // 항구 한 곳에서 살 수 있는 개수 — 값은 이번 판에 모은 보물로만
 
 const ROCKET_LEN   = 52;     // 이 길이 이하로 감겨 있어야 충전된다
 const ROCKET_MIN   = 30;     // 이만큼 충전돼야 발동
@@ -1073,7 +1082,7 @@ function reset(){
   floes = []; geysers = []; floeSaves = 0; geyserHits = 0;
   rocketCharge = 0; rockets = 0;
   sling = null; slingCd = 0; slings = 0;
-  perks = {}; pickOffer = null; pickPending = false; pickReturn = null;
+  perks = {}; pickOffer = null; pickPending = false; pickReturn = null; undyingUsed = false;
   navyRand = dailyMode ? mulberry32(todaySeed() * 13 + 3) : Math.random;
   navy = null; navyEscapes = 0; nextNavyAt = NAVY_FIRST + navyRand()*400;
   nextPortAt = PORT_FIRST; portIdx = 0; portAt = null; portPending = null; portBought = {}; portMsg = null;
@@ -1410,7 +1419,7 @@ function collectMapPiece(m){
 function addGear(kind){
   if(gearT > 0 || state !== STATE.PLAY) return;
   const was = gear;
-  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0) * (1 + 0.10 * tlv("gcharge")));   // 특성 '투지'
+  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0) * (1 + 0.10 * tlv("gcharge")) * (1 + 0.3 * pk("gearup")));   // 특성 '투지'·강화 '투혼'
   if(was < gearMax() && gear >= gearMax())
     pops.push({ x:p.x, y:p.y-56, t:90, text:GEARS[gearSel].name + " 준비! (E)", color:GEARS[gearSel].col });
 }
@@ -1477,7 +1486,10 @@ function syncHUD(){
     rb.textContent = buff() ? Math.ceil(gearT/60) + "초" : "G" + gearSel + " " + Math.floor((gear||0) / gearMax() * 100) + "%";
   }
   const slb = document.getElementById("slingBtn");
-  if(slb) slb.classList.toggle("cool", !rope || (slingCd || 0) > 0);
+  if(slb){
+    slb.classList.toggle("cool", !rope || (slingCd || 0) > 0);
+    slb.textContent = (slingCd || 0) > 0 ? Math.ceil(slingCd/60) + "초" : "새총";
+  }
   const gb = document.getElementById("gunBtn");
   if(gb){
     const gcd = Math.max(0, gunCd || 0);
@@ -2157,6 +2169,17 @@ function declineRevive(){
 }
 
 function die(reason){
+  if((reason === "바다" || reason === "해군") && pk("undying") && !undyingUsed && state === STATE.PLAY){
+    undyingUsed = true;
+    rope = null; sling = null; stun = 0; iframes = Math.max(iframes, 120);
+    if(reason === "바다"){ p.y = SEA - 16; p.vy = -16.5; p.vx = Math.max(Math.abs(p.vx), 8); }
+    else { p.vy = -11; p.vx = Math.max(p.vx, 12); }
+    fusenAnim = 46;
+    pops.push({ x:p.x, y:p.y-50, t:110, text:"불사의 고무 — 한 번 버텼다!", color:"#ffd76a" });
+    for(let i=0;i<30;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#f4ecd9");
+    addShake(5, 12);
+    return;
+  }
   if(canRevive(reason)){
     state = STATE.REVIVE; reviveReason = reason; reviveT = REVIVE_T;
     return;
@@ -2216,7 +2239,11 @@ const BOSS_REWARDS = [
   { id:"recharge", name:"스킬 급속 재충전", w:20, desc:"Q·W 바로 다시 쓸 수 있다" },
   { id:"chainup",  name:"연속 콤보 부스트", w:18, desc:"연속 콤보 +3" },
   { id:"gear",     name:"기어 충전",        w:10, desc:"기어 게이지 가득" },
-  { id:"meat",     name:"고기 한 덩이",     w:10, desc:"풍선 +1 (가득이면 보물)" }
+  { id:"meat",     name:"고기 한 덩이",     w:10, desc:"풍선 +1 (가득이면 보물)" },
+  { id:"slingnow", name:"새총 재장전",      w:10, desc:"새총 재충전을 바로 끝낸다" },
+  { id:"invuln",   name:"고무 무적",        w:8,  desc:"5초 동안 무엇에도 휘청이지 않는다" },
+  { id:"chainmax", name:"최고 콤보",        w:8,  desc:"연속 콤보를 바로 최대(×" + CHAIN_CAP + ")로" },
+  { id:"coinrain", name:"금화 비",          w:12, desc:"앞쪽 하늘에 금화 16개가 쏟아진다" }
 ];
 function pickReward(){
   const total = BOSS_REWARDS.reduce((a, r) => a + r.w, 0);
@@ -2245,6 +2272,18 @@ function applyBossReward(b, r){
   } else if(r.id === "gear"){
     gear = gearMax();
     pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: " + GEARS[gearSel].name + " 게이지 가득! (E)", color:GEARS[gearSel].col });
+  } else if(r.id === "slingnow"){
+    slingCd = 0;
+    pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 새총 재장전!", color:"#7fd0ff" });
+  } else if(r.id === "invuln"){
+    iframes = Math.max(iframes, 300);
+    pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 5초 고무 무적!", color:"#ffd76a" });
+  } else if(r.id === "chainmax"){
+    chain = CHAIN_CAP; maxChain = Math.max(maxChain, chain); chainTimer = 0;
+    pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 콤보 ×" + CHAIN_CAP + "!", color:"#ffd76a" });
+  } else if(r.id === "coinrain"){
+    for(let i = 0; i < 16; i++) coins.push({ x: p.x + 220 + i*42, y: Math.max(70, 150 + Math.sin(i*0.7)*60), got:false });
+    pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 금화 비!", color:"#ffd76a" });
   } else if(r.id === "meat"){
     if(fusen < fusenMax()){ fusen++; pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 고기 — 풍선 +1", color:"#f7a8a0" }); }
     else { treasure += 120; pops.push({ x:b.x, y:b.y-100, t:150, text:"보상: 고기(배불러서 보물 +120)", color:"#d9b877" }); }
@@ -2256,7 +2295,10 @@ function applyBossReward(b, r){
 // 카드 3장 — 즉시 보상(BOSS_REWARDS)과 이번 판 강화(PERKS)를 섞되, 강화가 적어도 한 장은 들어가게
 function rollCards(perksOnly){
   const pool = [];
-  for(const q of PERKS) if(pk(q.id) < q.max) pool.push({ perk:q, w:14 });
+  for(const q of PERKS){
+    if(pk(q.id) >= q.max || (q.crew && !crewSel) || (q.id === "undying" && undyingUsed)) continue;
+    pool.push({ perk:q, w: q.rare ? 4 : 14 });
+  }
   if(!perksOnly) for(const r of BOSS_REWARDS) pool.push({ reward:r, w:r.w });
   const out = [];
   while(out.length < PICK_N && pool.length){
@@ -3455,7 +3497,7 @@ function updateCrew(dt){
     for(const m of mobs) if(!m.gone && m.kind === 0 && m.air){ const d = Math.hypot(m.x - p.x, m.y - p.y); if(d < bd){ bd = d; tgt = m; } }
     for(const g of gulls) if(!g.gone){ const d = Math.hypot(g.x - p.x, g.y - p.y); if(d < bd){ bd = d; tgt = g; } }
     if(tgt){
-      c.cd = CREW_SWORD_CD;
+      c.cd = CREW_SWORD_CD * (1 - 0.3 * pk("drill"));
       crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:tgt.y, t:16, col:"#9fe0a0", slash:true });
       if(tgt.kind === 0) crewKillFish(tgt); else { killGull(tgt, 20); crewKills++; }
       pops.push({ x:tgt.x, y:tgt.y-26, t:40, text:"검객의 일섬!", color:"#9fe0a0" });
@@ -3467,7 +3509,7 @@ function updateCrew(dt){
     for(const m of mobs) if(!m.gone && m.kind === 0 && m.air) consider(m.x, m.y, 0, m);
     for(const b of barrels) if(!b.gone) consider(b.x, barrelY(b), 2, b);
     if(tgt){
-      c.cd = CREW_SNIPE_CD;
+      c.cd = CREW_SNIPE_CD * (1 - 0.3 * pk("drill"));
       const ty2 = kind === 2 ? barrelY(tgt) : tgt.y;
       crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:ty2, t:12, col:"#ffd76a" });
       if(kind === 1){ killGull(tgt, 20); crewKills++; }
@@ -3515,17 +3557,11 @@ function updateNavy(dt){
       for(let i=0;i<8;i++) spark(navy.x + 60, SEA - 80, i % 2 ? "#f4ecd9" : "#5a5a5a");
     }
     if(state === STATE.PLAY && p.x < navy.x + 70){
-      // 따라잡혔다 — 갑판의 해병이 붙잡아 보물을 빼앗는다
-      const before = stun;
-      knock(false);
-      if(stun > before || stun > 0){
-        const loss = Math.round(treasure * 0.15);
-        treasure -= loss;
-        pops.push({ x:p.x, y:p.y-50, t:90, text:"해군에게 붙잡혔다!" + (loss > 0 ? " 보물 -" + loss : ""), color:"#7fa8e0" });
-      }
-      p.vx = Math.max(p.vx, 9); p.vy = Math.min(p.vy, -9);
+      // 따라잡혔다 — 그대로 붙잡혀 항해 끝(보호막·기어도 소용없다)
       navy = null;
       nextNavyAt = dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
+      for(let i=0;i<20;i++) spark(p.x, p.y, i % 2 ? "#7fa8e0" : "#f4ecd9");
+      die("해군");
       return;
     }
     if(navy.t >= NAVY_T || boss){
@@ -3541,7 +3577,7 @@ function updateNavy(dt){
     }
   } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && !barrage && dist >= nextNavyAt){
     navy = { x: cam.x - 260, t: 0, fire: 150 };
-    missionFlash = { text: "해군 군함이 쫓아온다! 12초 동안 붙잡히지 마라", reward:0, t:150, weather:"storm" };
+    missionFlash = { text: "해군 군함이 쫓아온다! 12초 동안 붙잡히면 끝", reward:0, t:150, weather:"storm" };
   }
 }
 
@@ -3560,6 +3596,7 @@ function portAct(n){
   if(!it) return false;
   const price = portPrice(it);
   if(portBought[it.id]){ portMsg = { text: it.name + " — 이 항구에선 이미 샀다", t:90 }; return false; }
+  if(Object.keys(portBought).length >= PORT_MAX_BUY){ portMsg = { text:"항구 한 곳에선 " + PORT_MAX_BUY + "개까지만 살 수 있다", t:90 }; return false; }
   if(it.id === "meat" && fusen >= fusenMax()){ portMsg = { text:"풍선이 이미 가득이다", t:90 }; return false; }
   if(it.id === "perk" && !PERKS.some(q => pk(q.id) < q.max)){ portMsg = { text:"더 받을 강화가 없다", t:90 }; return false; }
   if(treasure < price){ portMsg = { text:"이번 판 보물이 " + Math.ceil(price - treasure) + " 모자라다", t:90 }; return false; }
@@ -3681,8 +3718,9 @@ function update(dt){
     airTime = 0;
   } else {
     const ak = buff() ? 1 + (buff().spd - 1) * 2.5 : 1;
-    if(keys.left)  p.vx -= AIR*ak*dt;
-    if(keys.right) p.vx += AIR*ak*dt;
+    const airK = ak * (1 + 0.25 * pk("air"));
+    if(keys.left)  p.vx -= AIR*airK*dt;
+    if(keys.right) p.vx += AIR*airK*dt;
     if(keys.down)  p.vy += DIVE*dt;
     if(buff() && gearOn === 4 && keys.up){
       // 기어 4 공중 부스터 — ↑를 누르는 동안 위·앞으로 치솟는다
@@ -3704,7 +3742,7 @@ function update(dt){
 
   const sp = Math.hypot(p.vx, p.vy);
   const vmax = buff() ? MAXV * buff().spd : MAXV;
-  if(sp > MAXV && !buff() && dist < FIRE_MAX_DIST) fire = FIRE_DUR;   // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다 — 2000m까지만
+  if(sp > MAXV && !buff() && dist < FIRE_MAX_DIST) fire = FIRE_DUR * (1 + 0.6 * pk("flame"));   // 속도 108(최고 속도)을 순간적으로 넘으면 불이 붙는다 — 2000m까지만
   else if(fire > 0) fire -= dt;
   if(sp > vmax){ p.vx = p.vx/sp*vmax; p.vy = p.vy/sp*vmax; }
 
@@ -3734,7 +3772,9 @@ function update(dt){
   if(boss) distOffset = p.x / 22 - dist;
   else dist = Math.max(dist, p.x / 22 - distOffset);
 
-  const magR = upLv("magnet") ? 60 + 45 * upLv("magnet") : 0;
+  // 창고 '금화 자석' 60+45×단계, 강화 '자석 손'은 단계마다 +80(창고 자석이 없으면 기본 40부터)
+  const magBase = upLv("magnet") ? 60 + 45 * upLv("magnet") : pk("magnet") ? 40 : 0;
+  const magR = magBase + 80 * pk("magnet");
   for(const c of coins){
     if(c.got) continue;
     if(magR){
@@ -3800,7 +3840,7 @@ function update(dt){
   if(grabCd > 0) grabCd -= dt;
   if(chain > 0){
     chainTimer += dt;
-    if(chainTimer > CHAIN_DECAY_T){ chain = 0; chainTimer = 0; }
+    if(chainTimer > CHAIN_DECAY_T * (1 + 0.5 * pk("combo"))){ chain = 0; chainTimer = 0; }
   }
   if(rushMode){
     rushT += dt;
@@ -5276,9 +5316,32 @@ function drawCrew(){
   ctx.fillStyle = "rgba(244,236,217,.85)";                 // 작은 구름에 올라탄다
   ctx.beginPath(); ctx.ellipse(0, 14, 15, 5, 0, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = "#3a2a3a"; ctx.fillRect(-5, 0, 10, 12);   // 몸
+  if(cd.id === "nav"){                                     // 항해사 — 어깨까지 오는 주황 머리
+    ctx.fillStyle = "#f07a28";
+    ctx.beginPath(); ctx.ellipse(-2.5, -3, 7.5, 8.5, 0.15, 0, Math.PI*2); ctx.fill();
+  }
   ctx.fillStyle = "#e8b48c";
   ctx.beginPath(); ctx.arc(0, -5, 6.5, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = cd.col; ctx.fillRect(-7, -11, 14, 4);     // 두건
+  if(cd.id === "nav"){
+    ctx.fillStyle = "#f07a28";
+    ctx.beginPath(); ctx.arc(0, -8, 6.8, Math.PI*1.05, Math.PI*1.95); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-5.8, 1, 2.2, 5, 0.1, 0, Math.PI*2); ctx.fill();
+  } else if(cd.id === "cook"){                              // 요리사 — 한쪽 눈을 덮는 노랑 머리
+    ctx.fillStyle = "#f2d04a";
+    ctx.beginPath(); ctx.arc(0, -7, 7, Math.PI*0.95, Math.PI*2.05); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-1, -12); ctx.quadraticCurveTo(8, -9, 6, 0); ctx.lineTo(2, -4); ctx.closePath(); ctx.fill();
+  } else if(cd.id === "sniper"){                            // 저격수 — 부스스한 검정 곱슬머리
+    ctx.fillStyle = "#1b1218";
+    for(let k = 0; k < 7; k++){
+      const a = Math.PI*0.9 + k * Math.PI*1.2/6;
+      ctx.beginPath(); ctx.arc(Math.cos(a)*7, -6 + Math.sin(a)*7, 3.6, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(-6.5, -2, 3.2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#e8b48c";                              // 긴 코
+    ctx.fillRect(5, -5, 7, 2.2);
+  } else {
+    ctx.fillStyle = cd.col; ctx.fillRect(-7, -11, 14, 4);   // 검객 — 두건
+  }
   ctx.strokeStyle = "#1b1218"; ctx.lineWidth = 2;
   ctx.beginPath();
   if(cd.id === "sword"){ ctx.moveTo(4, 6); ctx.lineTo(16, -8); }
@@ -5380,7 +5443,8 @@ function drawPick(){
     ctx.fillStyle = col; ctx.globalAlpha = 0.16; ctx.fillRect(R.x, R.y, R.w, 34); ctx.globalAlpha = 1;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.font = "700 12px 'Pretendard', system-ui, sans-serif"; ctx.fillStyle = col;
-    ctx.fillText((i+1) + " · " + (c.perk ? "강화 (이번 판)" : "즉시 보상"), R.x + R.w/2, R.y + 17);
+    ctx.fillText((i+1) + " · " + (c.perk ? (c.perk.rare ? "★ 희귀 강화" : "강화 (이번 판)") : "즉시 보상"), R.x + R.w/2, R.y + 17);
+    if(c.perk && c.perk.rare){ ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 1; ctx.strokeRect(R.x + 5, R.y + 5, R.w - 10, R.h - 10); }
     ctx.font = "800 21px 'Pretendard', system-ui, sans-serif"; ctx.fillStyle = "#f4ecd9";
     ctx.fillText(c.perk ? c.perk.name : c.reward.name, R.x + R.w/2, R.y + 72);
     const desc = c.perk ? c.perk.desc : c.reward.id === "treasure" ? c.reward.desc + (100 + bossKills*30) : c.reward.desc;
@@ -5399,11 +5463,12 @@ function drawPort(){
   ctx.fillStyle = "rgba(13,27,38,0.74)";
   ctx.fillRect(0, 0, W, H);
   centerText("⚓ " + portIdx + "번째 항구에 정박했다", 96, "800 25px 'Pretendard', system-ui, sans-serif", "#ffd76a");
-  centerText("이번 판 보물 " + Math.floor(treasure) + " — 보급을 사면 창고에 쌓일 보물이 줄어든다", 128, "500 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
+  const left = PORT_MAX_BUY - Object.keys(portBought).length;
+  centerText("이번 판 보물 " + Math.floor(treasure) + " (창고 보물은 못 쓴다) · 남은 구매 " + left + "/" + PORT_MAX_BUY, 128, "500 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
   const B = overlayButtons();
   PORT_ITEMS.forEach((it, i) => {
     const R = B[i], price = portPrice(it), got = portBought[it.id];
-    const can = !got && treasure >= price;
+    const can = !got && treasure >= price && left > 0;
     ctx.save();
     ctx.fillStyle = "rgba(19,37,50,.9)"; ctx.fillRect(R.x, R.y, R.w, R.h);
     ctx.strokeStyle = got ? "rgba(159,224,160,.7)" : can ? "#d9b877" : "rgba(217,184,119,.3)"; ctx.lineWidth = 1.5; ctx.strokeRect(R.x, R.y, R.w, R.h);
@@ -6694,6 +6759,7 @@ function draw(){
       : deathReason === "시간" ? "시간 종료!"
       : deathReason === "바다" ? "바다에 빠졌다"
       : deathReason === "정체" ? "너무 오래 멈춰 선단에 뒤처졌다"
+      : deathReason === "해군" ? "해군에게 붙잡혔다"
       : "선단에 뒤처졌다";
     const lx = W/2 - 50;
     let overY = 92;

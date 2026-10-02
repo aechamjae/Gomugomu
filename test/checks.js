@@ -861,8 +861,8 @@ function swing(a, st){
 {
   const cnt = {};
   for(let i = 0; i < 6000; i++){ const r = T().pickReward(); cnt[r.id] = (cnt[r.id] || 0) + 1; }
-  ok("보상 6종이 모두 나오고, 보호막은 보물 폭풍보다 드물다",
-     Object.keys(cnt).length === 6 && cnt.shield < cnt.treasure * 0.6, JSON.stringify(cnt));
+  ok("즉시 보상 10종이 모두 나오고, 보호막은 보물 폭풍보다 드물다",
+     Object.keys(cnt).length === 10 && cnt.shield < cnt.treasure * 0.6, JSON.stringify(cnt));
 }
 
 /* --- 보물섬 해역 --- */
@@ -1548,15 +1548,17 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   const s = a.peek();
   ok("놓으면 두 고리 사이로 앞·위로 튀어 나간다", !s.rope && s.vx > 12 && s.vy < -6 && a.sling().n === 1, "vx=" + s.vx.toFixed(1) + " vy=" + s.vy.toFixed(1));
   ok("최고 속도를 넘지 않아 불꽃이 공짜로 붙지 않는다", Math.hypot(s.vx, s.vy) < 27);
-  ok("쏜 뒤엔 재충전 시간이 있다", a.sling().cd > 0 && !a.slingStart());
+  ok("쏜 뒤엔 재충전 30초", Math.round(a.sling().cd) === 1800 && !a.slingStart(), "cd=" + a.sling().cd);
   a.hold(false);
 }
 {
   // 선원
   const a = A(), sh = a.shop(), cr = a.crew;
   sh.setBank(5000);
+  ok("선원은 비싸다 — 보물 5000으로는 요리사(120000)도 못 쓴다", !cr().hire(0) && cr().owned.indexOf("cook") < 0);
+  sh.setBank(500000);
   cr().hire(0);
-  ok("요리사 고용 — 보물이 빠지고 바로 동행", cr().owned.indexOf("cook") >= 0 && cr().sel === "cook" && a.shop().bank === 3800);
+  ok("요리사 고용 — 보물이 빠지고 바로 동행", cr().owned.indexOf("cook") >= 0 && cr().sel === "cook" && a.shop().bank === 380000);
   ok("가진 선원을 다시 누르면 혼자 출항", cr().hire(0) && cr().sel === null);
   cr().set("cook");
   start();
@@ -1589,11 +1591,26 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   H.step();
   const n = a.navy().n;
   ok("추격 거리가 되면 해군 군함이 나타난다", !!n);
-  T().setTreasure(1000);
+  T().setShield(3);
   n.x = T().P().x - 50;
   H.step();
   const s = a.peek();
-  ok("따라잡히면 휘청이고 보물 15%를 빼앗긴다", !a.navy().n && s.stun > 0 && Math.floor(s.treasure) === 850, "보물=" + s.treasure);
+  ok("해군에게 따라잡히면 보호막이 있어도 그대로 게임오버", s.state === 2 && s.deathReason === "해군", "state=" + s.state + " 사인=" + s.deathReason);
+}
+{
+  const a = start();
+  T().teleport(400 * 22);
+  a.pick2().perks.undying = 1;
+  a.navy().setNext(0); H.step();
+  a.navy().n.x = T().P().x - 50; H.step();
+  ok("희귀 강화 '불사의 고무'는 해군에게 잡혀도 한 번 버틴다", a.peek().state === 1 && !a.navy().n);
+  const P = T().P(); P.y = a.peek().SEA + 5; P.vy = 3; T().setFusen(0);
+  run(a, 3);
+  ok("…두 번째는 버티지 못한다", a.peek().state === 2);
+}
+{
+  const a = start();
+  T().teleport(400 * 22);
   a.navy().setNext(0); H.step();
   const n2 = a.navy().n;
   n2.t = 720; n2.x = T().P().x - 900;
@@ -1619,13 +1636,17 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     for(let i=0;i<90 && a.peek().state === 1;i++){ T().setBoss(null); port.cut = 0; P.x = port.x - 60; P.y = port.y + 140; P.vx = 0; P.vy = 0; H.step(); }
     ok("항구 돛대를 잡으면 정박한다", a.peek().state === 11 && a.port().idx === 1, "state=" + a.peek().state);
     T().setTreasure(1000);
+    a.shop().setBank(999999);
+    ok("항구 값은 10배 — 이번 판 보물 1000으론 보호막(2200)을 못 산다(창고 보물은 안 쓴다)", !a.port().act(2) && a.peek().shield === 0);
+    T().setTreasure(10000);
     a.port().act(2);
-    ok("보호막을 사면 이번 판 보물이 줄고 보호막이 생긴다", a.peek().shield === 1 && a.peek().treasure === 780, "보물=" + a.peek().treasure);
+    ok("보호막을 사면 이번 판 보물이 줄고 보호막이 생긴다", a.peek().shield === 1 && a.peek().treasure === 7800, "보물=" + a.peek().treasure);
     ok("같은 항구에서 같은 걸 두 번 못 산다", !a.port().act(2));
     a.port().act(4);
     ok("강화 카드를 사면 강화만 3장이 뜨고, 고르면 항구로 돌아온다", a.peek().state === 10 && a.pick2().offer.every(c => c.perk) && a.pick2().back === 11);
     a.pickCard(0);
     ok("…항구 화면으로 복귀", a.peek().state === 11);
+    ok("항구 한 곳에선 2개까지만 산다", !a.port().act(3) && a.peek().treasure === 3800, "보물=" + a.peek().treasure);
     a.port().leave();
     ok("출항하면 게임이 이어진다", a.peek().state === 1);
     ok("다음 항구는 1500m 뒤", Math.round(a.port().next) === 2400);
