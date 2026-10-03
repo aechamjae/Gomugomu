@@ -1024,7 +1024,7 @@ function swing(a, st){
     });
     if(s.deathReason === "완주") break;
   }
-  ok("보스 러시 — 8연전을 순서대로 치르고 완주한다", s.deathReason === "완주" && order.join(",") === "0,1,3,4,2,6,5,7" && !fishSeen,
+  ok("보스 러시 — 해군 대장 군함까지 9연전을 순서대로 치르고 완주한다", s.deathReason === "완주" && order.join(",") === "0,1,3,4,2,6,5,7,8" && !fishSeen,
      "사인=" + s.deathReason + " 순서=" + order.join(","));
   a.startMain();
 }

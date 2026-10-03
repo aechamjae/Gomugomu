@@ -928,8 +928,9 @@ function startBlitz(){
   reset();
 }
 
-// 보스 러시 — 중간보스 6종 + 크라켄 + 유령선 8연전. 잡몹·날씨 없이 보스만, 완주 시간 기록
-const RUSH_ORDER = [0, 1, 3, 4, 2, 6, 5, 7];
+// 보스 러시 — 중간보스 6종 + 크라켄 + 유령선 + 해군 대장 군함 9연전. 잡몹·날씨 없이 보스만, 완주 시간 기록
+// v39에서 해군 대장이 들어와 9연전이 됐다 — 8연전 시절 최단 기록(swing:shop의 rush)은 비교가 안 되니 rush9에 따로 둔다
+const RUSH_ORDER = [0, 1, 3, 4, 2, 6, 5, 7, 8];
 let rushMode = false, rushBest = 0;
 function startRush(){
   practiceMode = null;
@@ -3089,7 +3090,7 @@ function damageBoss(ranged, mark, power){
     if(rushMode){
       rushIdx++;
       nextBossAt = dist + 40; nextBigAt = Infinity;
-      if(rushIdx >= RUSH_ORDER.length) rushDone = true;   // 마지막 크라켄까지 — update()에서 완주 처리
+      if(rushIdx >= RUSH_ORDER.length) rushDone = true;   // 마지막 해군 대장 군함까지 — update()에서 완주 처리
     } else if(practiceMode && practiceMode.type === "boss"){
       // 연습 대상만 짧은 간격으로 계속 반복 등장
       if(b.big){ nextBigAt = dist + 60; nextBossAt = Infinity; }
@@ -4412,7 +4413,7 @@ function update(dt){
   }
   if(rushMode){
     rushT += dt;
-    if(!boss && dist >= nextBossAt && rushIdx < RUSH_ORDER.length) spawnBoss(BIG_BOSSES.indexOf(RUSH_ORDER[rushIdx]) >= 0);
+    if(!boss && dist >= nextBossAt && rushIdx < RUSH_ORDER.length) spawnBoss(isBigType(RUSH_ORDER[rushIdx]));
   } else if(!boss && !navy && !(rival && !rival.over)){   // 해군 추격·라이벌 경주 중엔 보스가 끼어들지 않는다 — 끝난 뒤에 나온다
     if(dist >= nextBigAt) spawnBoss(true);
     else if(dist >= nextBossAt && dist + 220 < nextBigAt) spawnBoss(false);
@@ -4800,7 +4801,7 @@ function applyShopRecord(v){
     if(r.parrot === false) parrotOn = false;
     mapPieces = r.mapPieces || 0; mapsDone = r.mapsDone || 0;
     blitzBest = r.blitz || 0;
-    rushBest = r.rush || 0;
+    rushBest = r.rush9 || 0;
     bestGrade = r.grade || "";
     gearUnlocked = Math.min(5, Math.max(2, r.gearU || 2));
     gearSel = Math.min(gearUnlocked, Math.max(2, r.gearS || 2));
@@ -4833,7 +4834,7 @@ async function loadShop(){
   }catch(e){}
 }
 async function saveShop(){
-  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
+  const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush9: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
                            tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel, crewXp,
                            mini: { b: miniBest, m: miniMedals, n: miniPlays }, diff: diffSel, bestDiff });
   try{ if(window.storage){ await window.storage.set(K("swing:shop"), v); return; } }catch(e){}
@@ -7410,7 +7411,7 @@ function draw(){
   } else if(state === STATE.READY){
     ctx.fillStyle = "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
-    if(rushMode) centerText("보스 러시 — 중간보스 6종과 크라켄·유령선까지 8연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
+    if(rushMode) centerText("보스 러시 — 중간보스 6종과 크라켄·유령선·해군 대장 군함까지 9연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 바다에 빠지면 -5초" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
