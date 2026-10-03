@@ -766,9 +766,10 @@ function swing(a, st){
   const P = T().P();
   a.hold(false);
   // 기어 동안엔 높은 곳에서 최고 속도 이상으로 날게 한다
-  for(let i = 0; i < 400 && a.peek().gearT > 0; i++){ P.vx = 30; P.vy = -1; P.y = 150; H.step(); }
+  // 금화를 먹을 때마다 속도 +1이라, 기어가 끝난 직후 금화 줄을 지나면 정당하게 불꽃이 붙는다 — 검사에선 금화를 치운다
+  for(let i = 0; i < 400 && a.peek().gearT > 0; i++){ P.vx = 30; P.vy = -1; P.y = 150; a.peek().coins.length = 0; H.step(); }
   let fireSeen = false;
-  for(let i = 0; i < 3; i++){ H.step(); if(a.peek().fire > 0) fireSeen = true; }
+  for(let i = 0; i < 3; i++){ a.peek().coins.length = 0; H.step(); if(a.peek().fire > 0) fireSeen = true; }
   ok("기어가 끝나도 불꽃이 공짜로 붙지 않는다", a.peek().gearT <= 0 && !fireSeen, "불꽃=" + fireSeen);
 }
 {
