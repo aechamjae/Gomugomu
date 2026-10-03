@@ -1987,6 +1987,54 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v39: 난이도 선택 --- */
+{
+  const a = A(), D = () => a.diff();
+  D().set("normal");
+  a.startMain(); H.step();
+  ok("난이도 기본은 보통", D().sel === "normal" && D().now === "normal");
+  D().cycle();
+  ok("출항 화면에서 V(버튼)로 난이도를 바꾼다 — 보통 → 어려움 → 쉬움", D().sel === "hard" && D().cycle() && D().sel === "easy" && D().cycle() && D().sel === "normal");
+  // 고리 간격
+  const meanGap = (d) => {
+    D().set(d); let sum = 0, n = 0;
+    for(let r=0;r<8;r++){
+      a.startMain(); H.step();
+      const xs = [];
+      for(let x=0; x<560*22; x+=700) for(const q of a.route().scan(x)) if(!q.lane && xs.indexOf(q.x) < 0) xs.push(q.x);
+      xs.sort((u, v) => u - v);
+      for(let i=1;i<xs.length;i++){ sum += xs[i] - xs[i-1]; n++; }
+    }
+    return sum / n;
+  };
+  const ge = meanGap("easy"), gn = meanGap("normal"), gh = meanGap("hard");
+  ok("어려울수록 고리 간격이 넓다", ge < gn && gn < gh, ge.toFixed(0) + " < " + gn.toFixed(0) + " < " + gh.toFixed(0));
+  D().set("hard"); a.startMain(); H.step();
+  ok("어려움은 첫 보스가 더 일찍", Math.abs(D().bossAt - 400) < 1e-6, "bossAt=" + D().bossAt);
+  // 기록·보물 — 난이도별로 따로
+  const best0 = a.peek().dist, bn0 = a.diff().bests.hard;
+  a.hold(true); H.step(); a.hold(false);
+  T().teleport(a.peek().x + 22*300);
+  for(let i=0;i<3;i++) H.step();
+  T().setTreasure(1000);
+  const bank0 = a.bank();
+  const normalBest = H.evalIn("0");
+  a.die("바다");
+  if(a.peek().state === 9) a.decline();
+  ok("어려움 최고 기록은 따로 남는다", a.diff().bests.hard > 0 && a.diff().best === a.diff().bests.hard, "hard=" + Math.floor(a.diff().bests.hard));
+  ok("어려움은 창고에 보물이 ×1.4로 쌓인다", a.bank() - bank0 === 1400, (a.bank() - bank0) + "");
+  D().set("normal"); a.startMain(); H.step();
+  ok("보통으로 돌아오면 보통 기록을 보여 준다", D().best !== a.diff().bests.hard || a.diff().bests.hard === 0);
+  // 다른 모드는 늘 보통
+  D().set("hard");
+  a.startDaily(); H.step();
+  ok("오늘의 항해는 난이도와 상관없이 보통", D().now === "normal" && !D().cycle());
+  a.startPractice(0); H.step();
+  ok("연습 모드에선 난이도를 못 바꾼다", D().now === "normal" && !D().cycle() && D().sel === "hard");
+  D().set("normal");
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");

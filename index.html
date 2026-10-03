@@ -578,6 +578,27 @@ const RIVALS = [
   { name:"외눈 바론",   coat:"#2f3f6a", band:"#b03a34" }
 ];
 
+/* 난이도 — 본게임만. 오늘의 항해·60초 사냥·보스 러시·연습은 늘 '보통'(모두 같은 조건으로 겨루도록)
+   gap 고리 간격 · boss 중간보스 간격 · navy 해군 속도 · rival 라이벌 속도 · mob 잡몹 출현 · loot 창고에 쌓이는 보물 */
+const DIFFS = {
+  easy:   { name:"쉬움",   col:"#9fe0a0", gap:0.9,  boss:1.3, navy:0.85, rival:0.9,  mob:0.7,  loot:0.7, desc:"고리 간격이 좁고 보스·해군·라이벌이 느슨하다 · 창고 보물 ×0.7" },
+  normal: { name:"보통",   col:"#f4ecd9", gap:1,    boss:1,   navy:1,    rival:1,    mob:1,    loot:1,   desc:"원래 규칙" },
+  hard:   { name:"어려움", col:"#ff8f80", gap:1.07, boss:0.8, navy:1.1,  rival:1.08, mob:1.35, loot:1.4, desc:"고리 간격이 넓고 보스가 잦으며 잡몹이 많다 · 창고 보물 ×1.4" }
+};
+const DIFF_ORDER = ["easy", "normal", "hard"];
+let diffSel = "normal", bestDiff = { easy:0, hard:0 };
+const mainGame = () => !practiceMode && !dailyMode && !blitzMode && !rushMode;
+const diffNow = () => mainGame() ? diffSel : "normal";
+const diffK = (key) => DIFFS[diffNow()][key];
+const curBest = () => diffNow() === "normal" ? best : (bestDiff[diffNow()] || 0);   // 최고 기록은 난이도별로 따로
+function cycleDiff(){
+  if(state !== STATE.READY || !mainGame()) return false;   // 본게임 출항 화면에서만
+  diffSel = DIFF_ORDER[(DIFF_ORDER.indexOf(diffSel) + 1) % DIFF_ORDER.length];
+  reset();                        // 고리 간격이 바뀌니 바다를 새로 짠다
+  saveShop();
+  return true;
+}
+
 /* 항구 — 일정 거리마다 부두가 딸린 돛대가 나온다. 그 돛대를 잡으면 정박해서 이번 판 보물로 보급을 산다 */
 const PORT_FIRST = 900, PORT_EVERY = 1500;
 const PORT_ITEMS = [
@@ -962,7 +983,7 @@ function menuRows(){
     const top = H/2 - 108, rh = 33;
     const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
     return [
-      { y: top,        label: "1) 본게임", action: startMainGame },
+      { y: top,        label: "1) 본게임" + (diffSel !== "normal" ? " — " + DIFFS[diffSel].name : ""), action: startMainGame },
       { y: top + rh,   label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
       { y: top + rh*2, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
       { y: top + rh*3, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
@@ -1187,7 +1208,7 @@ function reset(){
   reviveUsed = false; reviveT = 0;
   runXp = 0;
   ghostRec = []; playT = 0;
-  runBest = best;             // 이번 판을 시작할 때의 최고 기록 — 깃발은 이 위치에 선다
+  runBest = curBest();        // 이번 판을 시작할 때의 (이 난이도) 최고 기록 — 깃발은 이 위치에 선다
   recordBroken = false;
   rope = null;
   state = STATE.READY;
@@ -1206,7 +1227,7 @@ function reset(){
   deathReason = "";
   boss = null;
   shots = [];
-  nextBossAt = 500;
+  nextBossAt = 500 * diffK("boss");
   nextBigAt = 2000;
   if(practiceMode && practiceMode.type === "boss"){
     // 연습 대상만 빨리, 반복해서 나오도록 — 크라켄(5)은 대형 슬롯, 나머지는 중간보스 슬롯
@@ -1557,11 +1578,11 @@ function syncHUD(){
   spdEl.textContent = Math.round(Math.hypot(p.vx, p.vy) * 4);
   spdEl.classList.toggle("onfire", fire > 0);
   styleEl.textContent = Math.floor(treasure);
-  bestEl.textContent = Math.floor(best);
+  bestEl.textContent = Math.floor(curBest());
   pauseBtn.textContent = state === STATE.PAUSE ? "▶ 계속하기" : "❚❚ 일시정지";
   const md = document.getElementById("mdist"), mt = document.getElementById("mtre");
   if(md) md.textContent = Math.floor(dist) + "m";
-  if(mt) mt.textContent = "보물 " + Math.floor(treasure) + " · 최고 " + Math.floor(best) + "m";
+  if(mt) mt.textContent = "보물 " + Math.floor(treasure) + " · 최고 " + Math.floor(curBest()) + "m";
   const ms = document.getElementById("mspd");
   if(ms){
     const spd = Math.round(Math.hypot(p.vx, p.vy) * 4);
@@ -1600,7 +1621,7 @@ function anchorBaseY(atDist){
 function gapFor(atDist){
   const t = Math.min(1, atDist / 3400);       // 간격이 벌어지는 속도도 함께 늦췄다 (1500 → 3400)
   const base = 176 + t * 104;
-  return Math.min(340, base + genRand() * (62 + t*26));
+  return Math.min(340, (base + genRand() * (62 + t*26)) * diffK("gap"));
 }
 
 function generate(){
@@ -1681,7 +1702,6 @@ function generate(){
 }
 
 function dexSee(){}   // TODO 바다 도감
-function diffK(){ return 1; }   // TODO 난이도
 
 /* ---------- 항로 갈림길 ---------- */
 // 본게임·오늘의 항해에만. 보물섬 해역이나 항구 바로 앞에선 갈라지지 않는다(항구는 한 줄짜리 돛대라야 잡기 쉽다)
@@ -1794,7 +1814,7 @@ function spawnMobs(x0, x1){
   const dm = x1 / 22;                          // 이 구간의 m 환산 거리
 
   // 식인 물고기 — 떼로 다니고, 지나갈 때 물 밖으로 튀어오른다
-  if(dm > 90 && genRand() < (dm < 400 ? 0.20 : 0.30)){
+  if(dm > 90 && genRand() < (dm < 400 ? 0.20 : 0.30) * diffK("mob")){
     const n = 1 + Math.floor(genRand()*3);
     const bx = x0 + (x1-x0)*0.35 + genRand()*90;
     for(let i=0;i<n;i++){
@@ -1806,7 +1826,7 @@ function spawnMobs(x0, x1){
   }
 
   // 폭탄 갈매기 — 공중에서 날아온다. 보통은 한 마리, 가끔 두 마리
-  if(dm > GULL_FROM && genRand() < (dm < 800 ? 0.10 : 0.16) * (wk("gull") ? 2 : 1)){
+  if(dm > GULL_FROM && genRand() < (dm < 800 ? 0.10 : 0.16) * (wk("gull") ? 2 : 1) * diffK("mob")){
     const n = genRand() < 0.25 ? 2 : 1;
     const gy = 120 + genRand()*170;
     for(let i=0;i<n;i++){
@@ -2229,6 +2249,7 @@ window.addEventListener("keydown", (e)=>{
     const gm = /^Digit([2-5])$/.exec(k);
     if(gm){ e.preventDefault(); selectGear(parseInt(gm[1], 10)); return; }
     if(k === "KeyC"){ e.preventDefault(); cycleCrew(); return; }
+    if(k === "KeyV"){ e.preventDefault(); cycleDiff(); return; }
   }
   if(k === "KeyP" || k === "Escape"){ e.preventDefault(); togglePause(); return; }
   if(k === "KeyR"){ reset(); return; }
@@ -2409,9 +2430,10 @@ function die(reason){
   if(runGrade && GRADE_ORDER.indexOf(runGrade[0]) > (bestGrade ? GRADE_ORDER.indexOf(bestGrade) : -1)){ bestGrade = runGrade[0]; newGradeRecord = true; }
   if(!practiceMode && runBounty > bestBounty){ bestBounty = runBounty; newBountyRecord = true; }
   if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
-    if(dist > best){ best = dist; saveBest(); }
+    if(diffNow() === "normal"){ if(dist > best){ best = dist; saveBest(); } }
+    else if(dist > (bestDiff[diffNow()] || 0)) bestDiff[diffNow()] = dist;   // 아래 saveShop()에 같이 저장된다
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
-    bank += Math.floor(treasure);
+    bank += Math.floor(treasure * diffK("loot"));
     if(!rushMode) crewGainXp(dist);
     saveShop();
     logRun();
@@ -2963,10 +2985,10 @@ function damageBoss(ranged, mark, power){
     } else if(b.type === ADMIRAL){
       // 해군 대장을 꺾으면 이번 항해엔 해군이 더 쫓아오지 않는다 — 대형 보스 일정은 그대로
       navyBeaten = true;
-      nextBossAt = dist + 500;
+      nextBossAt = dist + 500 * diffK("boss");
       pops.push({ x:p.x, y:p.y - 90, t:160, text:"해군 대장 격침 — 이번 항해엔 해군이 더 쫓아오지 않는다", color:"#bcd4f4" });
-    } else if(b.big){ nextBigAt = Math.max(nextBigAt + 2000, dist + 900); nextBossAt = dist + 500; }
-    else nextBossAt = dist + 500;
+    } else if(b.big){ nextBigAt = Math.max(nextBigAt + 2000, dist + 900); nextBossAt = dist + 500 * diffK("boss"); }
+    else nextBossAt = dist + 500 * diffK("boss");
     clearCuts();
     boss = null;
     shots = [];
@@ -3832,7 +3854,7 @@ function updateNavy(dt){
   if(navy){
     navy.t += dt;
     const k = Math.min(1, navy.t / NAVY_T);
-    const v = (NAVY_SPD[0] + (NAVY_SPD[1] - NAVY_SPD[0]) * k) * (crewOn("nav") ? 0.85 - 0.03 * (crewLv("nav") - 1) : 1);
+    const v = (NAVY_SPD[0] + (NAVY_SPD[1] - NAVY_SPD[0]) * k) * (crewOn("nav") ? 0.85 - 0.03 * (crewLv("nav") - 1) : 1) * diffK("navy");
     navy.x = Math.max(navy.x + v*dt, cam.x - 340);   // 화면 밖으로 너무 처지지 않게
     navy.fire -= dt;
     if(navy.fire <= 0 && navy.x > cam.x - 60){
@@ -4479,7 +4501,7 @@ function resetProfile(){
   lifeBossKills = 0; lifeKrakenKills = 0; lifeGhostKills = 0; lifeAdmiralKills = 0; unlockedTitles = new Set(); titleSel = null;
   bank = 0; upgrades = {}; bestBounty = 0; ownedSkins = ["red"]; skin = "red"; parrotOn = true;
   mapPieces = 0; mapsDone = 0; blitzBest = 0; rushBest = 0; bestGrade = "";
-  gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null; crewXp = {};
+  gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null; crewXp = {}; diffSel = "normal"; bestDiff = { easy:0, hard:0 };
   miniBest = { jelly:0, cannon:0, hop:0 }; miniMedals = { jelly:0, cannon:0, hop:0 }; miniPlays = 0; mini = null;
   techLv = { pistol:1, whip:1 }; mats = { melee:0, ranged:0, gear:0 }; eqRanged = "pistol"; eqMelee = "whip";
   lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[] };
@@ -4674,6 +4696,8 @@ function applyShopRecord(v){
     if(Array.isArray(r.crew)) crewOwned = r.crew.filter(id => crewDef(id));
     crewSel = r.crewS && crewOwned.indexOf(r.crewS) >= 0 ? r.crewS : null;
     if(r.crewXp) crewXp = Object.assign({}, r.crewXp);
+    if(DIFFS[r.diff]) diffSel = r.diff;
+    if(r.bestDiff) bestDiff = Object.assign({ easy:0, hard:0 }, r.bestDiff);
     if(r.mini){
       miniBest = Object.assign({ jelly:0, cannon:0, hop:0 }, r.mini.b);
       miniMedals = Object.assign({ jelly:0, cannon:0, hop:0 }, r.mini.m);
@@ -4696,7 +4720,7 @@ async function loadShop(){
 async function saveShop(){
   const v = JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, rush: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
                            tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel, crewXp,
-                           mini: { b: miniBest, m: miniMedals, n: miniPlays } });
+                           mini: { b: miniBest, m: miniMedals, n: miniPlays }, diff: diffSel, bestDiff });
   try{ if(window.storage){ await window.storage.set(K("swing:shop"), v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem(K("swing:shop"), v); }catch(e){}
 }
@@ -6804,7 +6828,9 @@ function screenButtons(){
     });
     const cd = crewDef(crewSel);
     const crewLabel = cd ? "선원 " + cd.name + " Lv." + crewLv(cd.id) + " (C)" : crewOwned.length ? "선원: 없음 (C)" : "선원 고용하기 →";
-    return gearRow.concat(row([[crewLabel, cycleCrew, cd ? cd.col : "rgba(244,236,217,.6)"], ["← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]]));
+    const bottom = [[crewLabel, cycleCrew, cd ? cd.col : "rgba(244,236,217,.6)"], ["← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]];
+    if(mainGame()) bottom.unshift(["난이도 " + DIFFS[diffSel].name + " (V)", cycleDiff, DIFFS[diffSel].col]);   // 본게임에서만
+    return gearRow.concat(row(bottom));
   }
   if(state === STATE.PAUSE) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 시작 (R)", reset, "#d9b877"], ["계속 (P)", togglePause, "#9fe0a0"]]);
   if(state === STATE.OVER) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 (R)", reset, "#9fe0a0"], ["결과 공유 (C)", shareResult, "#d9b877"]]);
@@ -6834,7 +6860,7 @@ const SHARE_BTN = { x: W - 190, y: H - 66, w: 170, h: 38 };   // 공유 안내 �
 let shareMsg = null;
 function resultText(){
   const title = currentTitleName();
-  const mode = blitzMode ? "60초 보물 사냥" : dailyMode ? "오늘의 항해 " + todayKey() : practiceMode ? "연습" : "본게임";
+  const mode = blitzMode ? "60초 보물 사냥" : dailyMode ? "오늘의 항해 " + todayKey() : practiceMode ? "연습" : rushMode ? "보스 러시" : "본게임" + (diffSel !== "normal" ? " (" + DIFFS[diffSel].name + ")" : "");
   const lines = [
     "🏴‍☠️ 고무팔 · 대항해 — " + mode,
     blitzMode ? "보물 " + Math.floor(treasure) : Math.floor(dist) + "m · 보물 " + Math.floor(treasure),
@@ -7273,6 +7299,8 @@ function draw(){
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 바다에 빠지면 -5초" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
+    if(mainGame()) centerText("난이도 " + DIFFS[diffSel].name + " — " + DIFFS[diffSel].desc + " · 이 난이도 최고 " + Math.floor(curBest()) + "m",
+                                                          H/2 - 130, "700 14px 'Pretendard', system-ui, sans-serif", DIFFS[diffSel].col);
     if(!practiceMode && !rushMode){ const wn = weeklyNow(); centerText("🌊 이번 주 해류: " + wn.name + " — " + wn.desc, H/2 - 113, "600 13px 'Pretendard', system-ui, sans-serif", wn.col); }
     centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 60, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 28, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
@@ -7336,7 +7364,7 @@ function draw(){
       line(reasonText, "700 " + sz + "px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
     }
     line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
-    if(!practiceMode) line("창고 보물 " + Math.floor(bank), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
+    if(!practiceMode) line("창고 보물 " + Math.floor(bank) + (diffK("loot") !== 1 ? "  (난이도 " + DIFFS[diffNow()].name + " ×" + diffK("loot") + ")" : ""), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
     if(missions.length){
       const done = missions.filter(m => m.done).length;
       line("미션 " + done + "/" + missions.length + " 완료", "600 15px 'Pretendard', system-ui, sans-serif", done ? "#9fe0a0" : "rgba(244,236,217,.6)", 20);
@@ -8311,6 +8339,9 @@ window.__swing = {
   crewLv: () => ({ xp: crewXp, lv: crewLv, up: crewLvUp, gain: crewGainXp, cdMul: crewCdMul }),
   boss: () => boss,
   setNextBoss: (v) => { nextBossAt = v; },
+  die: (r) => die(r || "바다"),
+  bank: () => bank,
+  diff: () => ({ sel: diffSel, now: diffNow(), cycle: cycleDiff, best: curBest(), bests: bestDiff, k: diffK, set: (d) => { diffSel = d; }, bossAt: nextBossAt }),
   crewTest: () => ({ list: CREW, page: () => crewPage, setPage: (n) => { crewPage = n; }, k: crewK,
                      barrel: () => { const b = { x: p.x + 300, gone: false }; barrels.push(b); breakBarrel(b); },
                      gearAdd: (kind) => { const g0 = gear; addGear(kind); return gear - g0; },
