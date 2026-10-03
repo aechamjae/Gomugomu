@@ -1895,6 +1895,47 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v39: 해군 대장 군함 --- */
+{
+  const a = A();
+  a.startMain(); H.step(); a.hold(true); H.step();
+  const N = () => a.navy();
+  N().setChases(1);
+  N().setNext(0);
+  H.step();
+  ok("두 번째 해군 추격 자리엔 해군 대장 군함이 대형 보스로 나온다", a.boss() && a.boss().type === 8 && a.boss().big && !N().n && N().chases === 2);
+  const b = a.boss();
+  ok("해군 대장 군함은 HP 10", b.maxHp === 10);
+  b.t = 30;  const w1 = a.weak().map(w => w.mark);
+  b.t = 130; const w2 = a.weak().map(w => w.mark);
+  b.t = 190; const w3 = a.weak().map(w => w.mark);
+  ok("대장은 늘, 화약고와 망루는 번갈아 드러난다", w1.join() === "대장,화약고" && w2.join() === "대장,망루" && w3.join() === "대장", w1 + " / " + w2 + " / " + w3);
+  // 그물
+  const st = a.peek();
+  T().pushShot({ x: st.x, y: st.y, vx: 0, vy: 0, g: 0, r: 16, kind: 4, spin: 0 });
+  H.step();
+  ok("그물에 맞으면 휘청하며 뒤로 끌려간다", a.peek().stun > 0 && a.peek().vx < 0, "vx=" + a.peek().vx.toFixed(1));
+  // 격침
+  const before = a.lifeStats().admiral;
+  const big0 = a.peek().dist;
+  b.hp = 1; b.invul = 0;
+  T().dmg(true, "test");
+  ok("해군 대장을 격침하면 칭호 '정의를 꺾은 자'", a.lifeStats().admiral === before + 1 && a.lifeStats().titles.indexOf("admiral1") >= 0);
+  ok("격침하면 이번 항해엔 해군이 더 안 쫓아온다", N().beaten === true);
+  while(a.peek().state === 10 || a.pick2().pending){ if(a.peek().state === 10) a.pickCard(0); H.step(); }
+  N().setNext(0);
+  a.setNextBoss(1e9);
+  for(let i=0;i<10;i++){ H.step(); if(a.peek().state === 10) a.pickCard(0); }
+  ok("격침 뒤엔 해군 추격도 대장 군함도 안 나온다", !N().n && !(a.boss() && a.boss().type === 8));
+  // 첫 추격은 그대로 군함
+  a.startMain(); H.step(); a.hold(true); H.step();
+  N().setNext(0); H.step();
+  ok("첫 해군 추격은 예전처럼 쫓아오는 군함", !!N().n && !a.boss());
+  a.startPractice(9); H.step();
+  ok("연습 목록 맨 끝은 해군 대장 군함", a.peek().practiceMode && a.peek().practiceMode.bossType === 8);
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");
