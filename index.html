@@ -557,6 +557,18 @@ const NAVY_SPD   = [5.5, 7.5];// 처음 → 끝 속도(px/프레임). 봇으로 
 const NAVY_FIRE  = 150;
 const NAVY_REWARD = 300;
 
+/* 라이벌 해적 — 가끔 나타나 결승 부표까지 경주를 건다. 이기면 현상금 */
+const RIVAL_FIRST = 800;
+const RIVAL_EVERY = [1600, 2400];
+const RIVAL_LEN   = 250;              // 경주 거리(m)
+const RIVAL_SPD   = 20.5;             // 기본 속도(px/프레임) — 스윙 중 봇 속도가 약 23, 봇 승률 약 70%
+const RIVAL_REWARD = 400;             // 이기면(경주마다 +100)
+const RIVALS = [
+  { name:"갈고리 잭",   coat:"#2f6a3a", band:"#1b1218" },
+  { name:"쌍칼 메이",   coat:"#6a2f5a", band:"#e0b040" },
+  { name:"외눈 바론",   coat:"#2f3f6a", band:"#b03a34" }
+];
+
 /* 항구 — 일정 거리마다 부두가 딸린 돛대가 나온다. 그 돛대를 잡으면 정박해서 이번 판 보물로 보급을 산다 */
 const PORT_FIRST = 900, PORT_EVERY = 1500;
 const PORT_ITEMS = [
@@ -1104,7 +1116,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
     barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT, rushIdx, rushT, rushDone, newRushRecord, bigSpawns,
     barrage, nextBarrageAt, shells, barragesCleared, floes, geysers, floeSaves, geyserHits, rocketCharge, rockets,
-    sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
+    sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, rival, nextRivalAt, rivalWins, rivalRaces, rivalRand = Math.random, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -1149,6 +1161,8 @@ function reset(){
   perks = {}; pickOffer = null; pickPending = false; pickReturn = null; undyingUsed = false;
   navyRand = dailyMode ? mulberry32(todaySeed() * 13 + 3) : Math.random;
   navy = null; navyEscapes = 0; nextNavyAt = NAVY_FIRST + navyRand()*400;
+  rivalRand = dailyMode ? mulberry32(todaySeed() * 17 + 9) : Math.random;
+  rival = null; rivalWins = 0; rivalRaces = 0; nextRivalAt = RIVAL_FIRST + rivalRand()*300;
   routes = []; routeLeft = 0; routeSeq = 0; routesDone = { up:0, low:0 };
   nextRouteAt = ROUTE_FIRST + genRand()*200;
   nextPortAt = PORT_FIRST; portIdx = 0; portAt = null; portPending = null; portBought = {}; portMsg = null;
@@ -1651,6 +1665,7 @@ function generate(){
 }
 
 function dexSee(){}   // TODO 바다 도감
+function diffK(){ return 1; }   // TODO 난이도
 
 /* ---------- 항로 갈림길 ---------- */
 // 본게임·오늘의 항해에만. 보물섬 해역이나 항구 바로 앞에선 갈라지지 않는다(항구는 한 줄짜리 돛대라야 잡기 쉽다)
@@ -3766,10 +3781,148 @@ function updateNavy(dt){
       navy = null;
       nextNavyAt = dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
     }
-  } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && !barrage && dist >= nextNavyAt){
+  } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && !barrage && !rival && dist >= nextNavyAt){
     navy = { x: cam.x - 260, t: 0, fire: 150 };
     missionFlash = { text: "해군 군함이 쫓아온다! 12초 동안 붙잡히면 끝", reward:0, t:150, weather:"storm" };
   }
+}
+
+/* ---------- 라이벌 해적 ---------- */
+// 라이벌은 물리 없이 고리를 따라 그네 궤적을 그리며 달린다 — 하늘길이 있으면 하늘길로
+function rivalSpeed(){
+  const r = rival, gapPx = r.x - p.x;
+  let v = r.spd * (1 + Math.sin(r.t * 0.013) * 0.08);
+  if(gapPx > 520) v *= 0.82;              // 너무 앞서면 숨을 고르고
+  else if(gapPx < -360) v *= 1.15;        // 너무 처지면 힘을 낸다 — 끝까지 긴장감 있게
+  if(crewOn("helm")) v *= 0.92 - 0.02 * (crewLv("helm") - 1);
+  return v;
+}
+function rivalPath(x){
+  // x 바로 앞뒤의 고리 두 개 사이를 처지는 호로 잇는다
+  let A = null, B = null;
+  for(const a of anchors){
+    if(a.cut || a.broken || a.lane === 2) continue;
+    if(a.x <= x && (!A || a.x > A.x)) A = a;
+    if(a.x > x && (!B || a.x < B.x)) B = a;
+  }
+  if(!A || !B) return { y: 200, A: null, t: 0 };
+  const t = (x - A.x) / Math.max(1, B.x - A.x);
+  const sag = Math.min(150, SEA - 70 - Math.max(A.y, B.y));
+  return { y: A.y + (B.y - A.y) * t + sag * Math.sin(Math.PI * t), A, t };
+}
+function startRival(){
+  const who = RIVALS[rivalRaces % RIVALS.length];
+  rivalRaces++;
+  rival = { x: p.x - 70, y: p.y, t: 0, spd: RIVAL_SPD * diffK("rival"), finish: p.x + RIVAL_LEN*22, who, over: null, overT: 0, A: null, armT: 0 };
+  missionFlash = { text: "라이벌 해적 '" + who.name + "'의 도전! " + RIVAL_LEN + "m 앞 결승 부표까지 경주", reward:0, t:170, bonus:true };
+  dexSee("rival");
+}
+function updateRival(dt){
+  if(!rival){
+    if(!practiceMode && !rushMode && !blitzMode && !boss && !navy && !barrage && !bonusOn && state === STATE.PLAY && dist >= nextRivalAt){
+      startRival();
+      nextRivalAt = dist + RIVAL_EVERY[0] + rivalRand()*(RIVAL_EVERY[1] - RIVAL_EVERY[0]);
+    }
+    return;
+  }
+  const r = rival;
+  r.t += dt;
+  if(r.over){
+    // 경주가 끝나면 이긴 쪽은 손을 흔들고, 라이벌은 앞쪽 하늘로 날아가 버린다
+    r.overT += dt;
+    r.x += 13 * dt; r.y -= (r.overT < 30 ? 1 : 4) * dt;
+    if(r.overT > 120) rival = null;
+    return;
+  }
+  r.x += rivalSpeed() * dt;
+  const path = rivalPath(r.x);
+  r.y += (path.y - r.y) * Math.min(1, 0.25 * dt);
+  r.A = path.t < 0.62 ? path.A : null;
+  if(p.x >= r.finish || r.x >= r.finish){
+    const won = p.x >= r.finish;
+    r.over = won ? "win" : "lose";
+    if(won){
+      const gain = RIVAL_REWARD + 100 * rivalWins;
+      rivalWins++;
+      treasure += gain;
+      addGear("near");
+      happyT = 60;
+      missionFlash = { text: "'" + r.who.name + "'을(를) 이겼다! 현상금 +" + gain, reward:0, t:150, record:true };
+      for(let i=0;i<30;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#9fe0a0");
+    } else {
+      missionFlash = { text: "'" + r.who.name + "'에게 졌다… 다음엔 꼭!", reward:0, t:130, weather:"storm" };
+      pops.push({ x:r.x, y:r.y - 40, t:90, text:"하하! 느려 터졌군!", color:"#f7a8a0" });
+    }
+  }
+}
+function drawRival(){
+  if(!rival) return;
+  const r = rival, x = r.x - cam.x, y = r.y;
+  // 결승 부표 — 체크무늬 깃발과 바다 위 점선
+  const fx = r.finish - cam.x;
+  if(fx > -60 && fx < W + 60 && (!r.over || r.overT < 100)){
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,215,106,.45)"; ctx.lineWidth = 2; ctx.setLineDash([8, 10]);
+    ctx.beginPath(); ctx.moveTo(fx, 40); ctx.lineTo(fx, SEA - 20); ctx.stroke();
+    ctx.setLineDash([]);
+    const by = SEA - 8 + Math.sin(time*0.06)*3;
+    ctx.fillStyle = "#e86a5a"; ctx.beginPath(); ctx.ellipse(fx, by, 16, 10, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#4e3f33"; ctx.fillRect(fx - 2, by - 74, 4, 68);
+    for(let i=0;i<4;i++) for(let j=0;j<3;j++){
+      ctx.fillStyle = (i + j) % 2 ? "#1b1218" : "#f4ecd9";
+      ctx.fillRect(fx + 2 + i*9, by - 74 + j*8, 9, 8);
+    }
+    ctx.restore();
+  }
+  if(x < -60 || x > W + 60) return;
+  ctx.save();
+  if(r.A){
+    // 고무팔은 아니지만 갈고리 밧줄을 건다
+    ctx.strokeStyle = "#3b2417"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x + 4, y - 4); ctx.lineTo(r.A.x - cam.x, r.A.drawY || r.A.y); ctx.stroke();
+    ctx.fillStyle = "#c9c2b4"; ctx.beginPath(); ctx.arc(r.A.x - cam.x, (r.A.drawY || r.A.y) + 6, 4, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(r.t * 0.08) * 0.25);
+  ctx.fillStyle = r.who.coat;                       // 코트 자락
+  ctx.beginPath(); ctx.moveTo(-2, -2); ctx.quadraticCurveTo(-18, 4, -26, 14); ctx.lineTo(4, 8); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.ellipse(0, 4, 12, 15, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = r.who.coat; ctx.beginPath(); ctx.ellipse(0, 4, 9.5, 12.5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#d8a07c"; ctx.beginPath(); ctx.arc(0, -11, 9, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = r.who.band;                       // 삼각 모자
+  ctx.beginPath(); ctx.moveTo(-15, -14); ctx.lineTo(0, -28); ctx.lineTo(15, -14); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#1b1218"; ctx.fillRect(1, -14, 6, 3);   // 안대
+  ctx.strokeStyle = "#2f2436"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(-4, 15); ctx.lineTo(-7, 25); ctx.moveTo(4, 15); ctx.lineTo(3, 26); ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.font = "700 12px 'Pretendard', system-ui, sans-serif"; ctx.textAlign = "center";
+  ctx.fillStyle = "#f7a8a0"; ctx.fillText(r.who.name, x, y - 38);
+  ctx.restore();
+}
+// 경주 상황판 — 화면 위 가운데, 라이벌이 화면 밖이면 가장자리에 화살표
+function drawRivalHud(){
+  if(!rival || rival.over || state !== STATE.PLAY) return;
+  const r = rival, lead = (p.x - r.x) / 22, left = Math.max(0, (r.finish - Math.max(p.x, r.x)) / 22);
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,.62)"; ctx.fillRect(W/2 - 150, 16, 300, 30);
+  ctx.strokeStyle = "rgba(247,168,160,.7)"; ctx.lineWidth = 1.5; ctx.strokeRect(W/2 - 150, 16, 300, 30);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "700 13px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = lead >= 0 ? "#9fe0a0" : "#f7a8a0";
+  ctx.fillText("⚑ 경주 — 결승까지 " + Math.ceil(left) + "m · " + (lead >= 0 ? "앞섬 +" : "뒤짐 ") + Math.abs(Math.round(lead)) + "m", W/2, 31);
+  const sx = r.x - cam.x;
+  if(sx > W - 10 || sx < 10){
+    const right = sx > W - 10, ax = right ? W - 22 : 22, ay = Math.max(70, Math.min(SEA - 40, r.y));
+    ctx.fillStyle = "#f7a8a0";
+    ctx.beginPath();
+    if(right){ ctx.moveTo(ax + 12, ay); ctx.lineTo(ax - 4, ay - 10); ctx.lineTo(ax - 4, ay + 10); }
+    else { ctx.moveTo(ax - 12, ay); ctx.lineTo(ax + 4, ay - 10); ctx.lineTo(ax + 4, ay + 10); }
+    ctx.closePath(); ctx.fill();
+    ctx.font = "700 11px 'Pretendard', system-ui, sans-serif";
+    ctx.fillText(r.who.name, right ? ax - 30 : ax + 30, ay + 22);
+  }
+  ctx.restore();
 }
 
 /* ---------- 항구 ---------- */
@@ -4038,7 +4191,7 @@ function update(dt){
   if(rushMode){
     rushT += dt;
     if(!boss && dist >= nextBossAt && rushIdx < RUSH_ORDER.length) spawnBoss(BIG_BOSSES.indexOf(RUSH_ORDER[rushIdx]) >= 0);
-  } else if(!boss && !navy){            // 해군 추격 중엔 보스가 끼어들지 않는다 — 따돌린 뒤에 나온다
+  } else if(!boss && !navy && !(rival && !rival.over)){   // 해군 추격·라이벌 경주 중엔 보스가 끼어들지 않는다 — 끝난 뒤에 나온다
     if(dist >= nextBigAt) spawnBoss(true);
     else if(dist >= nextBossAt && dist + 220 < nextBigAt) spawnBoss(false);
   }
@@ -4057,6 +4210,7 @@ function update(dt){
   updateParrot(dt);
   updateCrew(dt);
   updateNavy(dt);
+  updateRival(dt);
   checkMissions();
   if(!recordBroken && !practiceMode && runBest >= 50 && dist > runBest){
     recordBroken = true;
@@ -6811,6 +6965,7 @@ function draw(){
   drawParrot();
   drawCrew();
   drawNavy();
+  drawRival();
   drawSlingCue();
   drawFusen();
   drawReleaseCue();
@@ -6862,6 +7017,7 @@ function draw(){
   if(state === STATE.PLAY) drawGearGauge();
   if(state === STATE.PLAY && blitzMode) drawBlitzTimer();
   if(state === STATE.PLAY && rushMode) drawRushHud();
+  if(state === STATE.PLAY) drawRivalHud();
   if(state === STATE.PLAY) drawBossIntro();
   if(state === STATE.PLAY) drawSinkBanner();
   if(state === STATE.PLAY) drawMissions();
@@ -7010,6 +7166,7 @@ function draw(){
     if(perfects > 0) facts.push("PERFECT " + perfects);
     if(bossKills > 0) facts.push("보스 " + bossKills);
     if(skims > 0) facts.push("스치기 " + skims);
+    if(rivalRaces > 0) facts.push("경주 " + rivalWins + "/" + rivalRaces + "승");
     if(gears > 0) facts.push(GEARS[gearSel].name + " ×" + gears);
     if(facts.length) line(facts.join(" · "), "600 14px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)", 24);
     if(maxChain > 1){
@@ -7972,6 +8129,8 @@ window.__swing = {
   weekly: () => ({ now: weeklyNow(), force: (id) => { weeklyForce = id; }, list: WEEKLY, week: weekNo() }),
   crewLv: () => ({ xp: crewXp, lv: crewLv, up: crewLvUp, gain: crewGainXp, cdMul: crewCdMul }),
   boss: () => boss,
+  setNextBoss: (v) => { nextBossAt = v; },
+  rival: () => ({ r: rival, next: nextRivalAt, wins: rivalWins, races: rivalRaces, setNext: (v) => { nextRivalAt = v; }, start: startRival, speed: () => rival ? rivalSpeed() : 0 }),
   route: () => ({ list: routes, done: routesDone, next: nextRouteAt, port: nextPortAt,
                   scan: (x) => { cam.x = x; p.x = x + W*0.32; generate(); return anchors; } }),
   spawnBoss: (big, type) => { boss = null; bossIntro = null; spawnBoss(big, type); return boss; },

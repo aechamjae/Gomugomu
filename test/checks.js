@@ -1854,6 +1854,47 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v39: 라이벌 해적 레이스 --- */
+{
+  const a = A();
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);
+  a.rival().setNext(5);
+  const R = () => a.rival();
+  let st = a.peek();
+  for(let i=0;i<400 && !R().r && st.state !== 2;i++){ swing(a, st); H.step(); st = a.peek(); }
+  ok("정해진 거리가 되면 라이벌 해적이 경주를 건다", !!R().r && R().races === 1, "dist=" + Math.floor(st.dist));
+  if(st.state === 2){ a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false); R().start(); }
+  // 이기기 — 결승선을 플레이어 바로 앞으로 당긴다
+  T().setTreasure(0);
+  const w0 = R().wins;
+  R().r.finish = a.peek().x - 1;
+  H.step();
+  ok("먼저 결승에 닿으면 이기고 현상금", R().wins === w0 + 1 && R().r.over === "win" && a.peek().treasure >= 400, "보물 " + Math.floor(a.peek().treasure));
+  for(let i=0;i<130;i++){ H.step(); a.hold(true); }
+  ok("경주가 끝나면 라이벌은 떠난다", !R().r);
+  // 지기
+  a.startMain(); H.step(); a.hold(true); H.step();
+  R().start();
+  T().setTreasure(0);
+  R().r.x = R().r.finish + 1;
+  H.step();
+  ok("라이벌이 먼저 닿으면 지고 보상 없음", R().r.over === "lose" && R().wins === 0 && a.peek().treasure < 400);
+  // 경주 중엔 보스가 안 나온다 — 끝나면 나온다
+  a.startMain(); H.step(); a.hold(true); H.step();
+  R().start();
+  a.setNextBoss(0);
+  for(let i=0;i<5;i++) H.step();
+  const noBoss = !a.boss();
+  R().r.finish = a.peek().x - 1;
+  for(let i=0;i<3;i++) H.step();
+  ok("경주 중엔 보스가 끼어들지 않고, 끝나면 나온다", noBoss && !!a.boss());
+  a.startPractice(0); H.step();
+  a.rival().setNext(0);
+  for(let i=0;i<30;i++) H.step();
+  ok("연습 모드엔 라이벌이 없다", !a.rival().r);
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");
