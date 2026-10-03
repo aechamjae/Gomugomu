@@ -2035,6 +2035,58 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v39: 바다 도감 --- */
+{
+  const a = A(), X = () => a.dex();
+  ok("도감은 33종 — 생물·보스 9종·지형·해역·사건", X().list.length === 33 && X().list.filter(e => e.cat === "boss").length === 9);
+  a.startMain(); H.step(); a.hold(true); H.step();
+  ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
+  delete X().book.wind;
+  T().setTreasure(0);
+  const f0 = X().found;
+  X().see("wind");
+  ok("처음 만나면 도감 등록 + 보물 100", X().found === f0 + 1 && a.peek().treasure === 100 && X().book.wind === 1);
+  X().see("wind");
+  ok("두 번째부터는 횟수만 는다", a.peek().treasure === 100 && X().book.wind === 2);
+  X().book.fish = 29; ok("별은 횟수 단계 — 물고기 29마리 ★1", X().stars("fish") === 1);
+  X().book.fish = 30; ok("물고기 30마리 ★2", X().stars("fish") === 2);
+  // 보스 — 나타나면 등록(0), 격침하면 센다
+  delete X().book.boss3;
+  const b = a.spawnBoss(false, 3);
+  ok("보스는 나타나면 등록(격침 0)", X().book.boss3 === 0 && X().stars("boss3") === 0);
+  b.hp = 1; b.invul = 0; T().dmg(true, "test");
+  ok("격침하면 별이 붙는다", X().book.boss3 === 1 && X().stars("boss3") === 1);
+  // 실제 플레이 — 화면에 들어온 생물을 센다
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);
+  const g0 = X().book.gull || 0;
+  const st = a.peek();
+  st.gulls.push({ x: st.x + 200, base: 200, y: 200, t: 0, vx: -2, gone: false });
+  for(let i=0;i<10;i++) H.step();
+  ok("화면에 들어온 갈매기를 도감에 센다", (X().book.gull || 0) === g0 + 1);
+  for(let i=0;i<20;i++) H.step();
+  ok("같은 갈매기는 한 번만 센다", (X().book.gull || 0) === g0 + 1);
+  // 연습 모드는 무시
+  a.startPractice(0); H.step();
+  const n0 = X().book.storm || 0;
+  X().see("storm");
+  ok("연습 모드에선 도감이 안 바뀐다", (X().book.storm || 0) === n0);
+  // 완성 — 칭호와 두건
+  a.startMain(); H.step(); a.hold(true); H.step();
+  for(const e of X().list) if(!(e.id in X().book) && e.id !== "searoute") X().book[e.id] = 1;
+  delete X().book.searoute;
+  ok("하나 남았을 땐 박물학자 칭호가 없다", a.lifeStats().titles.indexOf("naturalist") < 0);
+  X().see("searoute");
+  ok("도감을 다 채우면 칭호 '바다의 박물학자'", X().found === 33 && a.lifeStats().titles.indexOf("naturalist") >= 0);
+  ok("칭호를 따면 박물학자 두건을 장착할 수 있다", a.shop().pickSkin(9) && a.shop().skin === "dex");
+  a.shop().pickSkin(0);
+  // 화면
+  X().open();
+  ok("항해 일지 → 바다 도감 화면, 9로 돌아간다", X().page() && a.rows().length === 1 && a.rows()[0].key === 9);
+  a.rows()[0].action();
+  ok("도감에서 일지로", !X().page() && a.rows().some(r => r.key === 4));
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");

@@ -766,7 +766,8 @@ const SKINS = [
   { id:"horizon", name:"하얀 수평선 두건", cost:0, title:"dist10k",   band:"#eef4f8", coat:"#5a7486" },
   // 미니게임 보상 — 미니게임 셋 다 금메달이면 풀린다
   { id:"jelly",   name:"해파리 두건",     cost:0, mini:true,         band:"#e6a8f0", coat:"#5a3a6a" },
-  { id:"ghost",   name:"망령 두건",       cost:0, title:"ghost1",    band:"#9fe8d8", coat:"#2a4a48" }
+  { id:"ghost",   name:"망령 두건",       cost:0, title:"ghost1",    band:"#9fe8d8", coat:"#2a4a48" },
+  { id:"dex",     name:"박물학자 두건",   cost:0, title:"naturalist", band:"#5fae6a", coat:"#2e4a2a" }
 ];
 let shopPage = 0, skinPage = 0;
 const SKIN_PER = 8;
@@ -987,7 +988,7 @@ function menuRows(){
       { y: top + rh,   label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
       { y: top + rh*2, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
       { y: top + rh*3, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
-      { y: top + rh*4, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; } },
+      { y: top + rh*4, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; dexPage = false; } },
       { y: top + rh*5, label: "6) 60초 보물 사냥" + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
       { y: top + rh*6, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
       { y: top + rh*7, label: "8) 설정", action: () => { state = STATE.SETTINGS; } },
@@ -1019,6 +1020,9 @@ function menuRows(){
       { y: H/2 + 116, label: "5) ← 뒤로가기", action: () => { state = STATE.MENU; } }
     ];
   }
+  if(state === STATE.LOG && dexPage){
+    return [{ key: 9, y: H - 30, label: "9) ← 항해 일지", action: () => { dexPage = false; } }];
+  }
   if(state === STATE.LOG && titlePage > 0){
     // 칭호 고르기 — 맨 앞은 '자동', 그 뒤로 칭호 목록. 숫자 키 1~7, 8) 페이지, 9) 일지로
     const PER = 7, all = [null].concat(TITLES), pages = Math.ceil(all.length / PER), pg = titlePage - 1;
@@ -1038,7 +1042,8 @@ function menuRows(){
     if(parrotUnlocked()) rows.push({ y: H - 74, label: "2) 앵무새 동료 " + (parrotOn ? "켜짐 — 끄기" : "꺼짐 — 켜기"),
                                      action: () => { parrotOn = !parrotOn; saveShop(); } });
     else rows.push({ y: H - 74, label: "앵무새 동료 — 보스 누적 " + PARROT_UNLOCK + "마리 격파 시 합류 (" + lifeBossKills + "/" + PARROT_UNLOCK + ")", action: () => {} });
-    rows.push({ key: 3, y: 256, label: "3) 칭호 고르기 →", action: () => { titlePage = 1; shopMsg = null; } });
+    rows.push({ key: 3, y: 236, label: "3) 칭호 고르기 →", action: () => { titlePage = 1; shopMsg = null; } });
+    rows.push({ key: 4, y: 260, label: "4) 바다 도감 (" + dexFound() + "/" + DEX.length + ") →", action: () => { dexPage = true; } });
     return rows;
   }
   if(state === STATE.SHOP){
@@ -1108,9 +1113,9 @@ function menuRows(){
     const pages = Math.ceil(SKINS.length / SKIN_PER), pg = Math.min(skinPage, pages - 1);
     const rows = SKINS.slice(pg*SKIN_PER, pg*SKIN_PER + SKIN_PER).map((k, i) => {
       const own = ownedSkins.indexOf(k.id) >= 0 || (k.title && !skinLocked(k));
-      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.mini ? "🔒 미니게임 금메달 3개" : k.dex ? "🔒 바다 도감 완성" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
+      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.mini ? "🔒 미니게임 금메달 3개" : k.title === "naturalist" ? "🔒 바다 도감 완성" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
       return { y: top - 24 + i*30, label: (i+1) + ") " + k.name + " — " + status,
-               action: () => pickSkin(k), dim: !own && (k.title || k.mini || k.dex ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
+               action: () => pickSkin(k), dim: !own && (k.title || k.mini ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
     });
     rows.push({ key: 9, y: top - 24 + SKIN_PER*30 + 4, label: "9) " + (pg < pages - 1 ? "다음 쪽 →" : "← 첫 쪽") + "  (" + (pg+1) + "/" + pages + ")",
                 action: () => { skinPage = (pg + 1) % pages; } });
@@ -1353,6 +1358,7 @@ function updateBiome(){
   const b = biomeAt(p.x / 22);
   if(b !== biomeShown){
     biomeShown = b;
+    if(!rushMode) dexSee("biome" + b);
     if(!practiceMode && !rushMode) missionFlash = { text: BIOMES[b].name + "에 들어섰다", reward:0, t:150, bonus:true };
   }
 }
@@ -1361,6 +1367,7 @@ function updateBonus(){
   const now = inBonus(p.x / 22);
   if(now && !bonusOn){
     bonusOn = true; bonusVisits++;
+    dexSee("bonus");
     missionFlash = { text: "보물섬 해역! 잡몹 없이 금화가 쏟아진다", reward:0, t:150, bonus:true };
     for(let i=0;i<24;i++) spark(p.x, p.y, "#ffd76a");
   } else if(!now && bonusOn){
@@ -1408,6 +1415,7 @@ function updateBarrage(dt){
     }
   } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && dist >= nextBarrageAt){
     barrage = { cd: 45, hit: false, t: 0 };
+    dexSee("barrage");
     missionFlash = { text: "적 해적선의 포격! 붉은 표식을 피해라", reward:0, t:150, weather:"storm" };
   }
   if(barrage) barrage.t += dt;
@@ -1427,6 +1435,7 @@ function updateWeather(dt){
     const r = weatherRand();
     const type = r < 0.36 ? "wind" : r < 0.7 ? "storm" : "fog";
     weather = { type, from: dist, to: dist + WEATHER_LEN };
+    dexSee(type);
     missionFlash = { text: type === "wind" ? "순풍이 분다! →" : type === "storm" ? "폭풍 구간 — 금화 2배" : "짙은 안개 — 금화 1.5배", reward:0, t:150, weather:type };
   }
 }
@@ -1514,6 +1523,7 @@ function updateParrot(dt){
 
 function collectMapPiece(m){
   m.got = true;
+  dexSee("map");
   mapGot++;
   mapPieces++;
   addShake(4, 12);
@@ -1701,7 +1711,101 @@ function generate(){
   mobs    = mobs.filter(m => m.x > cam.x - 420 && !m.gone);
 }
 
-function dexSee(){}   // TODO 바다 도감
+/* ---------- 바다 도감 ---------- */
+// 처음 만나면 등록(+보물), 만난(보스는 격침한) 횟수만큼 별이 붙는다. 다 채우면 칭호 '바다의 박물학자'·박물학자 두건
+const DEX_CATS = [
+  { id:"life",  name:"바다 생물", col:"#8fd6d8", st:[1, 30, 150] },
+  { id:"boss",  name:"현상수배",  col:"#f7a8a0", st:[1, 3, 10] },
+  { id:"sea",   name:"바다 지형", col:"#d9b877", st:[1, 10, 40] },
+  { id:"zone",  name:"해역·날씨", col:"#bfe4ff", st:[1, 5, 20] },
+  { id:"event", name:"항해 사건", col:"#e6a8f0", st:[1, 5, 20] }
+];
+const DEX = [
+  { id:"fish",  cat:"life", name:"식인 물고기" }, { id:"king", cat:"life", name:"해왕류" },
+  { id:"gull",  cat:"life", name:"폭탄 갈매기" }, { id:"jelly", cat:"life", name:"트램펄린 해파리" },
+  ...[0,1,2,3,4,5,6,7,8].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
+  { id:"gold",  cat:"sea", name:"황금 고리" },  { id:"rot", cat:"sea", name:"삭은 돛대" },
+  { id:"port",  cat:"sea", name:"항구" },       { id:"barrel", cat:"sea", name:"보물 통" },
+  { id:"meat",  cat:"sea", name:"고기" },       { id:"map", cat:"sea", name:"보물 지도 조각" },
+  { id:"floe",  cat:"sea", name:"유빙" },       { id:"geyser", cat:"sea", name:"용암 분수" },
+  { id:"biome0", cat:"zone", name:"노을 군도" }, { id:"biome1", cat:"zone", name:"빙하 해역" }, { id:"biome2", cat:"zone", name:"화산 해역" },
+  { id:"wind",  cat:"zone", name:"순풍" },      { id:"storm", cat:"zone", name:"폭풍" },
+  { id:"fog",   cat:"zone", name:"짙은 안개" }, { id:"bonus", cat:"zone", name:"보물섬 해역" },
+  { id:"barrage", cat:"event", name:"포격 구간" }, { id:"navy", cat:"event", name:"해군 추격" },
+  { id:"rival", cat:"event", name:"라이벌 해적" }, { id:"skyroute", cat:"event", name:"하늘길" }, { id:"searoute", cat:"event", name:"바닷길" }
+];
+const DEX_FIRST = 100;       // 처음 등록하면 이번 판 보물
+const dexName = (e) => e.cat === "boss" ? BOSSES[+e.id.slice(4)].name : e.name;
+const dexBook = () => lifeLog.dex || (lifeLog.dex = {});
+const dexFound = () => DEX.filter(e => e.id in dexBook()).length;
+function dexStars(e){
+  const n = dexBook()[e.id] || 0, st = DEX_CATS.find(c => c.id === e.cat).st;
+  return st.filter(v => n >= v).length;
+}
+// 처음 보는 것만 등록(보스는 나타났을 때 등록, 격침하면 dexSee로 센다)
+function dexMeet(id){
+  if(practiceMode) return false;
+  const book = dexBook(), e = DEX.find(q => q.id === id);
+  if(!e || id in book) return false;
+  book[id] = 0;
+  treasure += DEX_FIRST;
+  pops.push({ x:p.x, y:p.y - 74, t:110, text:"📖 도감 등록: " + dexName(e) + " +" + DEX_FIRST, color: DEX_CATS.find(c => c.id === e.cat).col });
+  if(dexFound() === DEX.length){
+    const unlocked = checkTitles();
+    if(unlocked){ newTitle = unlocked.name; pops.push({ x:p.x, y:p.y - 100, t:160, text:"도감 완성! 칭호 획득: " + unlocked.name, color:"#ffd76a" }); saveTitles(); }
+  }
+  saveLog();
+  return true;
+}
+function dexSee(id){
+  if(practiceMode) return;
+  dexMeet(id);
+  const book = dexBook();
+  if(id in book) book[id]++;
+}
+// 화면에 들어온 생물·지형을 몇 프레임마다 훑어 처음 들어온 것만 센다
+let dexScanT = 0;
+function updateDex(dt){
+  dexScanT -= dt;
+  if(dexScanT > 0 || practiceMode) return;
+  dexScanT = 6;
+  const L = cam.x - 20, R = cam.x + W + 20, on = (x) => x > L && x < R;
+  for(const m of mobs){
+    if(m.gone || m.dex || !on(m.x)) continue;
+    if(m.kind === 0 && m.air){ m.dex = true; dexSee("fish"); }
+    else if(m.kind === 1 && m.h > 20){ m.dex = true; dexSee("king"); }
+  }
+  for(const g of gulls) if(!g.gone && !g.dex && on(g.x)){ g.dex = true; dexSee("gull"); }
+  for(const j of jellies) if(!j.dex && on(j.x)){ j.dex = true; dexSee("jelly"); }
+  for(const b of barrels) if(!b.gone && !b.dex && on(b.x)){ b.dex = true; dexSee("barrel"); }
+  for(const q of floes) if(!q.dex && on(q.x)){ q.dex = true; dexSee("floe"); }
+  for(const g of geysers) if(!g.dex && on(g.x)){ g.dex = true; dexSee("geyser"); }
+}
+let dexPage = false;
+function drawDex(){
+  ctx.fillStyle = "rgba(13,27,38,0.92)";
+  ctx.fillRect(0,0,W,H);
+  centerText("바다 도감", 40, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+  const found = dexFound();
+  centerText("발견 " + found + "/" + DEX.length + "  ·  처음 만나면 보물 +" + DEX_FIRST + " · 만난 횟수(보스는 격침)만큼 별 · 다 채우면 칭호와 박물학자 두건",
+             68, "600 13px 'Pretendard', system-ui, sans-serif", found === DEX.length ? "#ffd76a" : "#9fe0a0");
+  const colX = [W/2 - 330, W/2 - 110, W/2 + 110], rowH = 31, top = 102;
+  const per = Math.ceil(DEX.length / 3);
+  DEX.forEach((e, i) => {
+    const cx = colX[Math.floor(i / per)], cy = top + (i % per) * rowH;
+    const cat = DEX_CATS.find(c => c.id === e.cat), has = e.id in dexBook();
+    ctx.fillStyle = has ? cat.col : "rgba(244,236,217,.18)";
+    ctx.beginPath(); ctx.arc(cx + 6, cy, 5, 0, Math.PI*2); ctx.fill();
+    if(has){
+      const st = dexStars(e);
+      leftText(dexName(e), cx + 18, cy, "700 14px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+      leftText("★".repeat(st) + "☆".repeat(3 - st) + "  ×" + (dexBook()[e.id] || 0), cx + 138, cy, "600 13px 'Pretendard', system-ui, sans-serif", st ? "#ffd76a" : "rgba(244,236,217,.45)");
+    } else {
+      leftText("??? · " + cat.name, cx + 18, cy, "500 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.32)");
+    }
+  });
+  for(const row of menuRows()) centerText(row.label, row.y, "600 15px 'Pretendard', system-ui, sans-serif", "#d9b877");
+}
 
 /* ---------- 항로 갈림길 ---------- */
 // 본게임·오늘의 항해에만. 보물섬 해역이나 항구 바로 앞에선 갈라지지 않는다(항구는 한 줄짜리 돛대라야 잡기 쉽다)
@@ -2072,6 +2176,7 @@ function grab(){
   if(state === STATE.PAUSE){ togglePause(); return; }
   if(state === STATE.READY){
     state = STATE.PLAY;
+    if(!rushMode) dexSee("biome0");      // 출발은 늘 노을 군도 — 해역이 바뀔 때만 세면 첫 해역은 등록이 안 된다
     // 특성 '예열' — 출항 화면에서 기어를 바꿀 수 있어서 출발하는 순간에 채운다
     if(tlv("gstart") && !practiceMode) gear = Math.max(gear, gearMax() * Math.min(0.9, 0.12 * tlv("gstart")));
   }
@@ -2105,6 +2210,9 @@ function grab(){
     }
     if(a.port && !a.portUsed){ a.portUsed = true; portPending = a; }
     routeGrab(a);
+    if(a.gold && a.goldUsed && !a.dex){ a.dex = true; dexSee("gold"); }
+    if(a.rot && !a.dex){ a.dex = true; dexSee("rot"); }
+    if(a.port && !a.dex){ a.dex = true; dexSee("port"); }
     if(a.rot && !a.creak){
       a.creak = a.creakMax = ROT_T * (1 + crewK("wright", 1, 0.2));   // 조선공이 덧대 주면 두 배 버틴다
       pops.push({ x:a.x, y:a.y-26, t:50, text:"삐걱…", color:"#c9a27a" });
@@ -2208,7 +2316,8 @@ window.addEventListener("keydown", (e)=>{
   if(inMenu()){
     if(k === "Escape"){
       e.preventDefault();
-      if(state === STATE.LOG && titlePage) titlePage = 0;          // 칭호 고르기 → 일지
+      if(state === STATE.LOG && dexPage) dexPage = false;          // 도감 → 일지
+      else if(state === STATE.LOG && titlePage) titlePage = 0;     // 칭호 고르기 → 일지
       else if(state === STATE.SHOP && shopPage >= 2) shopPage = shopPage === 3 ? 2 : 0;   // 기술 → 뽑기 → 창고
       else if(state === STATE.SHOP && shopPage === 1) shopPage = 0;   // 두건 → 창고
       else if(state !== STATE.MENU) state = STATE.MENU;
@@ -2602,11 +2711,12 @@ const TITLES = [
   { id:"ghost3",    name:"저승의 뱃사공",     desc:"유령선 누적 3척",         need:(s) => (s.ghost || 0) >= 3 },
   { id:"mapper",    name:"전설의 보물 사냥꾼", desc:"보물 지도 완성",         need:(s) => (s.maps || 0) >= 1 },
   { id:"kraken10",  name:"해왕을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 },
-  { id:"ghost10",   name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 }
+  { id:"ghost10",   name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 },
+  { id:"naturalist", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length }
 ];
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
-let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[] };
+let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[], dex:{} };
 
 /* 선장 레벨 — 판마다 모은 보물(+거리)이 경험치. 레벨 L에서 L+1까지 필요한 경험치는 점점 늘어난다 */
 const xpNeed = (L) => Math.round(400 + 180 * Math.pow(L, 1.35));
@@ -2671,7 +2781,7 @@ function pickTitle(id){
 }
 
 function checkTitles(){
-  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone });
+  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone, dexN: dexFound() });
   let unlocked = null;
   for(const t of TITLES){
     if(!unlockedTitles.has(t.id) && t.need(stats)){
@@ -2704,6 +2814,7 @@ function spawnBoss(big, forceType){
   if(type === 6){ boss.y = 90; boss.fire = 80; boss.grab = null; boss.ink = 100; }
   if(type === ADMIRAL){ boss.y = SEA - 10; boss.fire = 100; boss.net = 160; boss.walk = 0; boss.hp = boss.maxHp = 10; }   // 큰 군함이라 대형 보스보다 2만큼 질기다
   bossIntro = { type, big:!!big, t: 0, bounty: big ? (600 + bossKills*80) : (150 + bossKills*40) };
+  dexMeet("boss" + type);
 }
 
 // 보스 등장 컷인 — 위아래 띠가 양옆에서 밀려 들어오고 이름이 찍힌다 (약 2초)
@@ -2964,6 +3075,7 @@ function damageBoss(ranged, mark, power){
       if(b.type === 5) lifeKrakenKills++;
       if(b.type === 7) lifeGhostKills++;
       if(b.type === ADMIRAL) lifeAdmiralKills++;
+      dexSee("boss" + b.type);
       const unlocked = checkTitles();
       if(unlocked){
         newTitle = unlocked.name;
@@ -3890,6 +4002,7 @@ function updateNavy(dt){
       return;
     }
     navy = { x: cam.x - 260, t: 0, fire: 150 };
+    dexSee("navy");
     missionFlash = { text: "해군 군함이 쫓아온다! 12초 동안 붙잡히면 끝", reward:0, t:150, weather:"storm" };
   }
 }
@@ -4241,6 +4354,7 @@ function update(dt){
     if(Math.hypot(m.x - p.x, m.y - p.y) < 32){
       m.got = true;
       meatsGot++;
+      dexSee("meat");
       if(fusen < fusenMax()){
         fusen++;
         pops.push({ x:m.x, y:m.y-24, t:70, text:"고기! 풍선 " + fusen + "개", color:"#f7a8a0" });
@@ -4265,6 +4379,7 @@ function update(dt){
   updateHints(dt);
   updateBonus();
   updateRoutes();
+  updateDex(dt);
   updateBiome();
   updateWeather(dt);
   updateBarrage(dt);
@@ -4504,7 +4619,7 @@ function resetProfile(){
   gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null; crewXp = {}; diffSel = "normal"; bestDiff = { easy:0, hard:0 };
   miniBest = { jelly:0, cannon:0, hop:0 }; miniMedals = { jelly:0, cannon:0, hop:0 }; miniPlays = 0; mini = null;
   techLv = { pistol:1, whip:1 }; mats = { melee:0, ranged:0, gear:0 }; eqRanged = "pistol"; eqMelee = "whip";
-  lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[] };
+  lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[], dex:{} };
   dailyDate = ""; dailyBest = 0; ghostBest = null; streakDate = ""; streak = 0;
 }
 function loadProfile(){
@@ -7409,6 +7524,8 @@ function draw(){
       centerText(shopMsg.text, H/2 + 160, "700 14px 'Pretendard', system-ui, sans-serif", "#9fe0a0", Math.min(1, shopMsg.t/20));
       if(shopMsg.t <= 0) shopMsg = null;
     }
+  } else if(state === STATE.LOG && dexPage){
+    drawDex();
   } else if(state === STATE.LOG && titlePage){
     ctx.fillStyle = "rgba(13,27,38,0.9)";
     ctx.fillRect(0,0,W,H);
@@ -7441,16 +7558,15 @@ function draw(){
     });
     const cur = currentTitleName();
     TITLES.forEach((t, i) => {
-      // 칭호가 13개라 두 줄씩 19px 간격 — 아래 최근 기록 그래프(414)와 겹치지 않게
-      const cx = i % 2 ? W/2 + 30 : W/2 - 310, cy = 282 + Math.floor(i / 2) * 19;
+      // 칭호가 많아져 이름만 세 줄씩 — 조건은 '칭호 고르기'에서 본다. 아래 최근 기록 그래프(414)와 겹치지 않게
+      const cx = [W/2 - 310, W/2 - 95, W/2 + 120][i % 3], cy = 292 + Math.floor(i / 3) * 21;
       const has = unlockedTitles.has(t.id);
       leftText((has ? "★ " : "☆ ") + t.name, cx, cy, "700 13px 'Pretendard', system-ui, sans-serif",
                t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
-      leftText(t.desc, cx + 150, cy, "400 12px 'Pretendard', system-ui, sans-serif", has ? "rgba(244,236,217,.6)" : "rgba(244,236,217,.35)");
     });
     drawRecentChart(W/2 - 310, 414, 620, 32);
     menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 || row.key === 3 ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
-                                              i === 0 ? "#d9b877" : row.key === 3 ? "#ffd76a" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
+                                              i === 0 ? "#d9b877" : row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
   } else if(state === STATE.SHOP){
     ctx.fillStyle = "rgba(13,27,38,0.82)";
     ctx.fillRect(0,0,W,H);
@@ -8339,6 +8455,8 @@ window.__swing = {
   crewLv: () => ({ xp: crewXp, lv: crewLv, up: crewLvUp, gain: crewGainXp, cdMul: crewCdMul }),
   boss: () => boss,
   setNextBoss: (v) => { nextBossAt = v; },
+  dex: () => ({ list: DEX, book: dexBook(), found: dexFound(), stars: (id) => dexStars(DEX.find(e => e.id === id)), see: dexSee, meet: dexMeet,
+                page: () => dexPage, open: () => { state = STATE.LOG; titlePage = 0; dexPage = true; } }),
   die: (r) => die(r || "바다"),
   bank: () => bank,
   diff: () => ({ sel: diffSel, now: diffNow(), cycle: cycleDiff, best: curBest(), bests: bestDiff, k: diffK, set: (d) => { diffSel = d; }, bossAt: nextBossAt }),
