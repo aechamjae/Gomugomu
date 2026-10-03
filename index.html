@@ -291,7 +291,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v42";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v43";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -2580,7 +2580,7 @@ const BOSSES = [
   { name:"고리 도둑 문어", tag:"앞쪽 고리를 붙잡아 위아래로 끌고 간다" },
   { name:"망령의 유령선", tag:"유령일 땐 무적·망령 사슬 — 실체일 때 등불·선장을 노려라", big:true },
   { name:"해군 대장 군함", tag:"포격 표식과 그물을 피해 대장·화약고·망루를 노려라", big:true },
-  { name:"심해 상어 톱니턱",   tag:"뒤에서 쫓아와 솟구쳐 문다 — 뛰어오른 등지느러미, 떠오른 아가미를 쳐라" },
+  { name:"심해 상어 톱니턱",   tag:"매달린 돛대를 기어올라 물어뜯는다 — 이빨이 박힌 동안 아가미를 쳐라" },
   { name:"쇠사슬 바이스",     tag:"뒤에서 사슬을 걸어 끌어당긴다 — Q·W로 끊고, 던진 직후 빈틈을 쳐라" },
   { name:"패기의 검호 무상",   tag:"패왕의 기세는 기어 상태로만 버틴다 — 기세 뒤 지친 몸을 노려라" },
   { name:"번개 신관 뇌명",     tag:"낙뢰는 기어 상태나 바위 기둥으로 버틴다 — 북 셋을 모두 부숴라" }
@@ -2837,7 +2837,7 @@ function spawnBoss(big, forceType){
   if(type === 5){ boss.y = SEA - 40; boss.sub = 200; }
   if(type === 7){ boss.y = SEA - 14; boss.sub = 190; boss.phase = 0; boss.fire = 80; boss.summon = 90; boss.walk = 0; }
   if(type === 6){ boss.y = 90; boss.fire = 80; boss.grab = null; boss.ink = 100; }
-  if(type === SHARK){ boss.x = p.x - 420; boss.y = SEA + 34; boss.mode = "swim"; boss.cd = 90; boss.vx = 0; }
+  if(type === SHARK){ boss.x = p.x - 420; boss.y = SEA + 34; boss.mode = "hunt"; boss.cd = 60; boss.a = null; }
   if(type === VICE){ boss.x = p.x - 420; boss.y = 230; boss.cd = 100; boss.open = 0; }
   if(type === MUSANG){ boss.y = 140; boss.haki = 130; boss.charge = 0; boss.tired = 0; boss.fire = 90; }
   if(type === THUNDER){ boss.y = 96; boss.hp = boss.maxHp = 3; boss.drums = [true, true, true]; boss.storm = 220; boss.warn = 0; boss.boltT = 0; boss.fire = 110; }
@@ -2981,9 +2981,11 @@ function weakPoints(b){
     }
 
   } else if(b.type === SHARK){
-    // 뛰어오른 동안엔 등지느러미, 수면에 떠 있는 동안엔 아가미
-    if(b.mode === "leap") out.push({ x:b.x - Math.sign(b.vx || 1)*8, y:b.y - 26, r:24, mark:"등지느러미" });
-    else if(b.mode === "surf") out.push({ x:b.x + 26, y:SEA - 16, r:22, mark:"아가미" });
+    // 돛대를 물어 이빨이 박혀 있는 동안만 — 아가미(크게)와 늘어진 꼬리
+    if(b.mode === "stuck"){
+      out.push({ x:b.x + 16, y:b.y + 26, r:26, mark:"아가미" });
+      out.push({ x:b.x + Math.sin(b.t*0.3)*10, y:b.y + 78, r:18, mark:"꼬리" });
+    }
 
   } else if(b.type === VICE){
     // 사슬을 던진 직후엔 본체가 비고, 배 뒤 화약통은 낮지만 늘 노출
@@ -5196,6 +5198,7 @@ function drawMast(a, active){
   }
 
   // 걸 수 있는 밧줄 고리
+  if(a.broken){ a.drawY = y; return; }      // 톱니턱에 물린 기둥 — 고리가 없다
   if(a.cut){
     ctx.strokeStyle = "#b03a34"; ctx.lineWidth = 4;
     ctx.beginPath();
@@ -5627,46 +5630,55 @@ function skyRelocate(b, dt, homeY, ahead){
   }
   return b.dive !== 0;
 }
+// 톱니턱 — 뒤에서 헤엄쳐 와, 플레이어가 매달린 돛대(없으면 막 지나온 돛대)를 기어올라 물어뜯어 부순다.
+// 매달려 있었다면 줄이 끊겨 떨어진다. 이빨이 박혀 버둥대는 동안만 약점이 드러난다 — 몸을 돌려 뒤로 쳐야 한다
+function sharkTarget(b){
+  if(rope && !rope.a.broken && !rope.a.sky) return rope.a;
+  let t = null;
+  for(const a of anchors){
+    if(a.broken || a.sky || a.x > p.x || a.x < b.x - 40) continue;
+    if(!t || a.x > t.x) t = a;              // 플레이어 바로 뒤의 돛대
+  }
+  return t;
+}
 function updateShark(b, dt){
   const rage = b.hp <= 1 ? 0.7 : 1;
-  if(b.mode === "swim"){
-    // 한참 뒤처져 있으면 깊이 잠수해 빠르게 따라붙는다(chaseBehind가 속도를 올린다)
-    const deep = (p.x - 190) - b.x > 280;
-    b.y += ((SEA + (deep ? 120 : 34)) - b.y) * 0.1 * dt;
-    chaseBehind(b, 190, dt, 14);                  // 물속에선 자유롭게 되돌아간다
+  if(b.mode === "hunt"){
+    if(b.cd > 0) b.cd -= dt;
+    const tgt = sharkTarget(b);
+    const tx = tgt ? tgt.x : p.x - 160;
+    const dx = tx - b.x;
+    const far = dx > 300;
+    // 한참 처지면 깊이 잠수해 플레이어보다 빠르게, 가까우면 돛대를 향해 일정한 속도로
+    const v = far ? Math.max(22, Math.abs(p.vx) + 8) : (rage < 1 ? 11 : 8.5);
+    b.x += Math.max(-v, Math.min(v, dx)) * dt;
+    b.y += ((SEA + (far ? 120 : 30)) - b.y) * 0.1 * dt;
     if(b.t % 4 < 1) spark(b.x + (Math.random()-0.5)*40, SEA + 2, "#8fd6d8");
-    b.cd -= dt;
-    if(b.cd <= 0 && !deep){ b.mode = "warn"; b.cd = 34; }
-  } else if(b.mode === "warn"){
-    chaseBehind(b, 150, dt, 6);
-    b.cd -= dt;
-    if(b.t % 2 < 1) spark(b.x, SEA, "#f4f6f8");
-    if(b.cd <= 0){
-      // 플레이어가 34프레임 뒤 있을 자리로 솟구친다
-      const T = 34, g = 0.35;
-      const tx = p.x + p.vx*T*0.9, ty = Math.max(70, Math.min(SEA - 40, p.y + p.vy*T*0.4));
-      b.mode = "leap"; b.g = g;
-      b.vx = (tx - b.x) / T; b.vy = (ty - (SEA + 10)) / T - 0.5*g*T;
-      b.y = SEA + 10;
+    if(tgt && Math.abs(dx) < 14 && b.cd <= 0){
+      b.mode = "climb"; b.a = tgt;
       for(let i=0;i<14;i++) spark(b.x, SEA, "#8fd6d8");
+      if(rope && rope.a === tgt) pops.push({ x:p.x, y:p.y - 44, t:60, text:"톱니턱이 돛대를 기어오른다! 옮겨 타라", color:"#f7a8a0" });
     }
-  } else if(b.mode === "leap"){
-    b.x += b.vx*dt; b.y += b.vy*dt; b.vy += b.g*dt;
-    if(b.x < p.x - 520 && b.y > SEA - 40){ b.mode = "swim"; b.cd = 100; return; }
-    // 턱 — 날아가는 쪽 앞머리에 닿으면 물린다
-    const sp = Math.hypot(b.vx, b.vy) || 1, jx = b.x + b.vx/sp*36, jy = b.y + b.vy/sp*36;
-    if(stun <= 0 && iframes <= 0 && distOriginToSeg(pPrevX - jx, pPrevY - jy, p.x - jx, p.y - jy) < 16 + 13){
-      knock(false);
-      pops.push({ x:p.x, y:p.y - 40, t:50, text:"콱!", color:"#f7a8a0" });
+  } else if(b.mode === "climb"){
+    const a = b.a;
+    if(!a || a.broken){ b.mode = "drop"; return; }
+    b.x = a.x;
+    b.y = Math.max(a.y + 40, b.y - 9 * dt);
+    if(b.y <= a.y + 40){
+      // 콱 — 돛대가 부러진다
+      a.broken = true; a.cut = 0;
+      if(rope && rope.a === a){ rope = null; sling = null; grabCd = Math.max(grabCd, 8); p.vy = Math.min(p.vy, -6); p.vx = Math.max(p.vx, 4); pops.push({ x:p.x, y:p.y - 40, t:60, text:"돛대를 물어뜯었다!", color:"#f7a8a0" }); }
+      addShake(6, 14);
+      for(let i=0;i<20;i++) spark(a.x, a.y + 20, i % 2 ? "#6b4426" : "#f4f6f8");
+      b.mode = "stuck"; b.cd = 115 * rage;
     }
-    if(b.y > SEA - 6 && b.vy > 0){ b.mode = "surf"; b.cd = 110 * rage; b.y = SEA - 6; for(let i=0;i<18;i++) spark(b.x, SEA, "#8fd6d8"); }
-  } else if(b.mode === "surf"){
-    b.y = SEA - 6 + Math.sin(b.t*0.2)*2;
-    // 수면에 떠서 플레이어 바로 아래를 따라 헤엄친다 — 그대로 두면 순식간에 지나쳐 버려 칠 틈이 없었다
-    b.x += Math.max(-8, Math.min(26, (p.x + 30 - b.x) * 0.06)) * dt;
-    if(b.x < p.x - 420){ b.mode = "swim"; b.cd = 100; }    // 놓쳤다 — 깊이 잠수해서 다시 쫓아온다
+  } else if(b.mode === "stuck"){
+    // 이빨이 박혀 버둥댄다 — 플레이어가 너무 멀어지면 그냥 놓고 내려간다
     b.cd -= dt;
-    if(b.cd <= 0){ b.mode = "swim"; b.cd = 140 * rage; }
+    if(b.cd <= 0 || b.x < p.x - 700){ b.mode = "drop"; }
+  } else if(b.mode === "drop"){
+    b.y += 12 * dt;
+    if(b.y >= SEA + 30){ b.y = SEA + 30; b.mode = "hunt"; b.cd = 70 * rage; b.a = null; for(let i=0;i<16;i++) spark(b.x, SEA, "#8fd6d8"); }
   }
 }
 function updateVice(b, dt){
@@ -5781,32 +5793,34 @@ function breakDrum(b){
 }
 
 function drawShark(b, x, hurt){
-  const y = b.y;
-  if(b.mode === "swim" || b.mode === "warn"){
+  if(b.mode === "hunt"){
     // 물속 그림자 + 지느러미
-    ctx.fillStyle = "rgba(11,32,42,0.7)";
+    const deep = b.y > SEA + 80;
+    ctx.fillStyle = deep ? "rgba(11,32,42,0.35)" : "rgba(11,32,42,0.7)";
     ctx.beginPath(); ctx.ellipse(x, SEA + 20, 70, 15, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = b.mode === "warn" ? "#f4f6f8" : "#3a4a56";
-    ctx.beginPath(); ctx.moveTo(x - 16, SEA + 4); ctx.lineTo(x + 4, SEA - (b.mode === "warn" ? 34 : 22)); ctx.lineTo(x + 14, SEA + 4); ctx.closePath(); ctx.fill();
+    if(!deep){
+      ctx.fillStyle = "#3a4a56";
+      ctx.beginPath(); ctx.moveTo(x - 16, SEA + 4); ctx.lineTo(x + 4, SEA - 26); ctx.lineTo(x + 14, SEA + 4); ctx.closePath(); ctx.fill();
+    }
     return;
   }
-  const ang = b.mode === "leap" ? Math.atan2(b.vy, b.vx) : 0;
-  const flip = b.mode === "leap" && b.vx < 0 ? -1 : 1;
+  // 돛대에 매달려 머리를 위로 — 기어오르기·물기·내려가기
+  const wig = b.mode === "stuck" ? Math.sin(b.t*0.35)*0.18 : 0;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(flip < 0 ? ang + Math.PI : ang);
-  ctx.scale(flip, 1);
+  ctx.translate(x, b.y);
+  ctx.rotate(-Math.PI/2 + wig);
   ctx.fillStyle = hurt ? "#f4ecd9" : "#4a5e6c";
-  ctx.beginPath(); ctx.ellipse(0, 0, 58, 20, 0, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#dfe6ee"; ctx.beginPath(); ctx.ellipse(6, 8, 44, 10, 0, 0, Math.PI); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-30, 0, 58, 20, 0, 0, Math.PI*2); ctx.fill();               // 몸(머리가 위)
+  ctx.fillStyle = "#dfe6ee"; ctx.beginPath(); ctx.ellipse(-24, 8, 44, 10, 0, 0, Math.PI); ctx.fill();
   ctx.fillStyle = hurt ? "#f4ecd9" : "#4a5e6c";
-  ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(-18, -44); ctx.lineTo(14, -16); ctx.closePath(); ctx.fill();         // 등지느러미
-  ctx.beginPath(); ctx.moveTo(-54, 0); ctx.lineTo(-80, -22); ctx.lineTo(-72, 0); ctx.lineTo(-80, 20); ctx.closePath(); ctx.fill();   // 꼬리
-  ctx.fillStyle = "#f4f6f8";                                                                                               // 톱니 이빨
-  for(let i=0;i<5;i++){ ctx.beginPath(); ctx.moveTo(30 + i*5, 4); ctx.lineTo(32 + i*5, 10); ctx.lineTo(34 + i*5, 4); ctx.fill(); }
-  ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.arc(36, -6, 3, 0, Math.PI*2); ctx.fill();
-  ctx.strokeStyle = "#2a3a46"; ctx.lineWidth = 2;
-  ctx.beginPath(); for(let i=0;i<3;i++){ ctx.moveTo(18 - i*5, -6); ctx.lineTo(16 - i*5, 6); } ctx.stroke();               // 아가미
+  ctx.beginPath(); ctx.moveTo(-36, -16); ctx.lineTo(-48, -42); ctx.lineTo(-16, -16); ctx.closePath(); ctx.fill();   // 등지느러미
+  ctx.beginPath(); ctx.moveTo(-84, 0); ctx.lineTo(-110, -22); ctx.lineTo(-102, 0); ctx.lineTo(-110, 20); ctx.closePath(); ctx.fill();   // 꼬리
+  ctx.fillStyle = "#f4f6f8";                                                                // 톱니 이빨
+  for(let i=0;i<5;i++){ ctx.beginPath(); ctx.moveTo(0 + i*5 - 8, 4); ctx.lineTo(2 + i*5 - 8, 11); ctx.lineTo(4 + i*5 - 8, 4); ctx.fill(); }
+  ctx.fillStyle = b.mode === "stuck" ? "#b03a34" : "#1b1218";
+  ctx.beginPath(); ctx.arc(6, -6, 3, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = b.mode === "stuck" ? "#f7a8a0" : "#2a3a46"; ctx.lineWidth = 2.5;     // 아가미 — 박혀 있을 땐 붉게 드러난다
+  ctx.beginPath(); for(let i=0;i<3;i++){ ctx.moveTo(-12 - i*6, -8); ctx.lineTo(-14 - i*6, 8); } ctx.stroke();
   ctx.restore();
 }
 function drawVice(b, x, hurt){

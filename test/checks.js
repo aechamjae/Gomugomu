@@ -2107,19 +2107,27 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("중간보스 추첨에 새 4종(9~12)이 들어 있다", [9,10,11,12].every(t => mids.has(t)) && !mids.has(5) && !mids.has(8), [...mids].sort((x,y)=>x-y).join(","));
   ok("연습 목록에 새 보스 4종(10~13번)", (() => { a.startPractice(13); H.step(); return a.peek().practiceMode.bossType === 12; })());
 
-  // 톱니턱 — 뒤에서 쫓아오고, 물속에선 약점이 없다
+  // 톱니턱 — 뒤에서 헤엄쳐 와 매달린 돛대를 물어뜯는다
   fresh();
   let b = a.spawnBoss(false, 9);
   ok("톱니턱은 플레이어 뒤에서 나타난다", b.x < a.peek().x);
-  for(let i=0;i<20;i++) H.step();
-  ok("물속을 헤엄치는 동안엔 약점이 없다", b.mode === "swim" && a.weak().length === 0);
-  b.cd = 1e9;
-  for(let i=0;i<60;i++){ swing(a, a.peek()); H.step(); }
+  for(let i=0;i<5;i++) H.step();
+  ok("헤엄치는 동안엔 약점이 없다", b.mode === "hunt" && a.weak().length === 0);
+  for(let i=0;i<60;i++){ swing(a, a.peek()); b.cd = 999; H.step(); }
   ok("뒤 추격 보스전엔 카메라가 앞으로 당겨진다", a.peek().x - a.cam().x > 900*0.42, Math.round(a.peek().x - a.cam().x) + "px");
-  b.mode = "leap"; b.vx = 4; b.vy = -6; b.g = 0.35;
-  ok("솟구친 동안엔 등지느러미가 약점", a.weak().map(w => w.mark).join() === "등지느러미");
-  b.mode = "surf"; b.cd = 100;
-  ok("떠 있는 동안엔 아가미가 약점", a.weak().map(w => w.mark).join() === "아가미");
+  // 매달린 채 가만히 있으면 그 돛대로 와서 기어올라 부순다
+  fresh();
+  b = a.spawnBoss(false, 9);
+  const hang = a.peek().rope && a.peek().rope.a;
+  b.x = hang.x - 200; b.cd = 0;
+  let climbed = false;
+  for(let i=0;i<200 && b.mode !== "stuck";i++){ a.hold(true); a.keys.right = false; H.step(); if(b.mode === "climb") climbed = true; }
+  ok("매달린 돛대로 헤엄쳐 와 기어오른다", climbed && b.a === hang);
+  ok("돛대를 물어뜯으면 부러지고 줄이 끊긴다", hang.broken && (!a.peek().rope || a.peek().rope.a !== hang) && b.mode === "stuck");
+  ok("이빨이 박힌 동안엔 아가미·꼬리가 약점", a.weak().map(w => w.mark).join() === "아가미,꼬리");
+  ok("부러진 돛대는 다시 잡을 수 없다", a.pick() !== hang);
+  for(let i=0;i<200 && b.mode !== "hunt";i++){ T().setFusen(3); swing(a, a.peek()); H.step(); }   // 떨어져도 풍선으로 버틴다
+  ok("한참 버둥대다 다시 물속으로", b.mode === "hunt" && a.weak().length === 0, "mode=" + b.mode + " state=" + a.peek().state);
 
   // 쇠사슬 바이스 — 사슬에 걸리면 끌려가고, Q로 끊는다
   fresh();
@@ -2165,14 +2173,16 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   b.invul = 0; T().dmg(true, "test");
   ok("맞히면 북이 하나 부서진다", b.hp === 2 && a.weak().length === 2 && b.drums.filter(Boolean).length === 2);
   a.setRope(null);   // 잡은 고리가 하필 바위 기둥이면 낙뢰를 버티니까(그건 아래에서 따로 본다)
-  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2; H.step(); H.step();
-  ok("기어 없이 낙뢰를 맞으면 휘청", a.peek().stun > 0);
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2;
+  for(let i=0;i<5 && !(b.boltT > 0);i++) H.step();   // 한 프레임이 정확히 1이 아니라 warn=2가 두 프레임에 딱 안 끝날 수 있다
+  ok("기어 없이 낙뢰를 맞으면 휘청", a.peek().stun > 0, "state=" + a.peek().state + " warn=" + b.warn + " boltT=" + b.boltT + " dive=" + b.dive + " gear=" + JSON.stringify(a.gearInfo().buff) + " giant=" + !!a.gearInfo().giant);
   fresh();
   b = a.spawnBoss(false, 12);
   const pillar = { x: a.peek().x + 40, y: a.peek().y - 80, kind: 1 };
   a.peek().anchors.push(pillar);
   a.setRope(pillar);
-  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2; H.step(); H.step();
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2;
+  for(let i=0;i<5 && !(b.boltT > 0);i++) H.step();
   ok("바위 기둥에 매달려 있으면 낙뢰를 버틴다", a.peek().stun <= 0);
   fresh();
   b = a.spawnBoss(false, 12);
@@ -2204,7 +2214,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     for(let i=0;i<240;i++){ P.vx = 6; P.vy = 0; P.y = 150; T().setShield(9); H.step(); }
     const gap = Math.abs(b.x - a.peek().x);
     const name = { 9:"톱니턱", 10:"바이스", 11:"무상", 12:"뇌명" }[type];
-    ok(name + " — 최고 속도로 달아나도 다시 따라붙는다", gap < 650 && b.dive === 0 || (type === 9 && gap < 650), "거리 " + Math.round(gap) + "px · dive " + b.dive + (type === 9 ? " · " + b.mode : ""));
+    ok(name + " — 최고 속도로 달아나도 다시 따라붙는다", gap < 650 && (b.dive === 0 || type === 9), "거리 " + Math.round(gap) + "px · dive " + b.dive + (type === 9 ? " · " + b.mode : ""));
     if(type !== 9) ok(name + " — 앞질러 가는 동안엔 약점이 없다", dove && divedNoWeak);
   }
   a.toMenu();
