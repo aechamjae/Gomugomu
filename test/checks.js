@@ -1795,6 +1795,65 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v39: 항로 갈림길 --- */
+{
+  const a = A();
+  a.startMain(); H.step();
+  // 카메라를 앞으로 밀며 5000m까지 지형을 만들어 본다
+  let pairs = 0, routesSeen = new Set(), portInRoute = 0, ports = 0, lowOk = true, upOk = true;
+  for(let x=0; x<5000*22; x+=700){
+    const an = a.route().scan(x);
+    for(const q of an){
+      if(q.lane === 1 && q.y > 100) upOk = false;
+      if(q.lane === 2 && q.y < 230) lowOk = false;
+      if(q.lane) routesSeen.add(q.route);
+      if(q.lane === 1 && an.some(o => o.lane === 2 && o.route === q.route && Math.abs(o.x - q.x) < 30)) pairs++;
+    }
+    for(const r of a.route().list) for(const q of an) if(q.port && r.x1 && q.x > r.x0 - 40 && q.x < r.x1 + 40){ portInRoute++; }
+    ports += an.filter(q => q.port).length;
+  }
+  ok("갈림길이 생기고 위·아래 고리가 짝으로 선다", routesSeen.size >= 3 && pairs > 10, "갈림길 " + routesSeen.size + "개 · 짝 " + pairs);
+  ok("하늘길 고리는 높이, 바닷길 고리는 낮게", upOk && lowOk);
+  ok("항구 돛대는 갈림길 안에 서지 않는다", portInRoute === 0 && ports > 0, "항구 " + ports);
+
+  // 바닷길 금화 2배
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);
+  const st = a.peek();
+  T().setTreasure(0);
+  st.coins.push({ x: st.x, y: st.y, got:false });
+  H.step();
+  const g1 = a.peek().treasure;
+  T().setTreasure(0);
+  const st2 = a.peek();
+  st2.coins.push({ x: st2.x, y: st2.y, got:false, dbl:true });
+  H.step();
+  const g2 = a.peek().treasure;
+  ok("바닷길 금화는 2배", g1 > 0 && Math.abs(g2 - g1*2) <= 1, g1 + " → " + g2);
+
+  // 갈림길을 다 지나면 많이 탄 쪽 보상
+  const R = a.route();
+  const p0 = a.peek();
+  R.list.push({ id: 999, x0: p0.x - 900, x1: p0.x - 10, up: 3, low: 1, done: false, shown: true });
+  T().setTreasure(0);
+  H.step();
+  ok("하늘길을 더 많이 타고 지나가면 하늘길 돌파 보상", R.done.up === 1 && a.peek().treasure >= 150, "보물 " + Math.floor(a.peek().treasure));
+  R.list.push({ id: 998, x0: p0.x - 900, x1: a.peek().x - 10, up: 0, low: 4, done: false, shown: true });
+  H.step();
+  ok("바닷길로 지나가면 바닷길 돌파", R.done.low === 1);
+  R.list.push({ id: 997, x0: p0.x - 900, x1: a.peek().x - 10, up: 0, low: 1, done: false, shown: true });
+  H.step();
+  ok("거의 안 잡고 넘으면 보상 없음", R.done.low === 1 && R.done.up === 1);
+
+  // 오늘의 항해 — 갈림길 위치도 같다
+  const snapR = () => { a.startDaily(); H.step(); const an = a.route().scan(1500*22); return JSON.stringify(an.filter(q => q.lane).slice(0, 6).map(q => [Math.round(q.x), Math.round(q.y)])); };
+  ok("오늘의 항해는 갈림길도 매번 같은 자리", snapR() === snapR());
+
+  // 연습 모드엔 없다
+  a.startPractice(0); H.step();
+  ok("연습 모드엔 갈림길이 없다", !a.route().scan(3000*22).some(q => q.lane));
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");
