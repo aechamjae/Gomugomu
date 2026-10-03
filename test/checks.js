@@ -1936,6 +1936,57 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v39: 신규 선원 5명 --- */
+{
+  const a = A(), CT = () => a.crewTest(), C = a.crew();
+  ok("선원은 9명 — 선의·고고학자·조선공·음악가·조타수 추가", CT().list.length === 9 && ["doctor","arch","wright","music","helm"].every(id => CT().list.some(c => c.id === id)));
+  a.shopPage(4); CT().setPage(0);
+  const rows1 = a.rows().filter(r => /\d\) /.test(r.label) && r.swatch).length;
+  CT().setPage(1);
+  const rows2 = a.rows().filter(r => /\d\) /.test(r.label) && r.swatch).length;
+  ok("창고 선원 쪽은 5명 + 4명 두 쪽", rows1 === 5 && rows2 === 4, rows1 + "/" + rows2);
+  CT().setPage(0);
+  const stunWith = (id) => { C.set(id); a.startMain(); H.step(); a.hold(true); H.step(); return T().hit(false); };
+  const s0 = stunWith(null), s1 = stunWith("doctor");
+  ok("선의 — 휘청 시간 -30%", Math.abs(s1 - s0 * 0.7) < 0.01, s0.toFixed(1) + " → " + s1.toFixed(1));
+  C.set("doctor"); a.startMain(); H.step();
+  ok("선의 — 출발할 때 보호막 1", CT().shield() === 1);
+  C.set(null); a.startMain(); H.step();
+  ok("선의가 없으면 보호막 없이 출발", CT().shield() === 0);
+  // 고고학자 — 보물 통
+  const barrelGain = (id) => { C.set(id); a.startMain(); H.step(); a.hold(true); H.step(); T().setTreasure(0); CT().barrel(); return a.peek().treasure; };
+  const b0 = barrelGain(null), b1 = barrelGain("arch");
+  ok("고고학자 — 보물 통 보물 +50%", b1 === Math.round(b0 * 1.5), b0 + " → " + b1);
+  // 조선공 — 항구 값·삭은 돛대
+  C.set(null); a.startMain(); H.step(); CT().setPortIdx(1); const pr0 = CT().portPrice(0);
+  C.set("wright"); a.startMain(); H.step(); CT().setPortIdx(1); const pr1 = CT().portPrice(0);
+  ok("조선공 — 항구 값 -20%", pr1 === Math.round(pr0 * 0.8 / 10) * 10, pr0 + " → " + pr1);
+  a.hold(true); H.step(); a.hold(false);
+  const rot = CT().grabRot();
+  ok("조선공 — 삭은 돛대가 두 배 오래 버틴다", rot.creak === 144, "creak=" + rot.creak);
+  // 음악가 — 기어 게이지
+  C.set(null); a.startMain(); H.step(); a.hold(true); H.step(); T().setGear(0); const g0 = CT().gearAdd("kill");
+  C.set("music"); a.startMain(); H.step(); a.hold(true); H.step(); T().setGear(0); const g1 = CT().gearAdd("kill");
+  ok("음악가 — 기어 게이지 +25%", Math.abs(g1 - g0 * 1.25) < 1e-6, g0 + " → " + g1);
+  // 조타수 — 갈림길 보상 2배, 라이벌 느려짐
+  C.set("helm"); a.startMain(); H.step(); a.hold(true); H.step();
+  const R = a.route(); const p0 = a.peek();
+  R.list.push({ id: 991, x0: p0.x - 900, x1: p0.x - 10, up: 3, low: 0, done: false, shown: true });
+  T().setTreasure(0); H.step();
+  ok("조타수 — 갈림길 보상 2배", a.peek().treasure >= 300, "보물 " + Math.floor(a.peek().treasure));
+  a.rival().start(); a.rival().r.t = 0;
+  const v1 = a.rival().speed();
+  C.set(null); a.startMain(); H.step(); a.hold(true); H.step();
+  a.rival().start(); a.rival().r.t = 0;
+  const v0 = a.rival().speed();
+  ok("조타수 — 라이벌 해적이 8% 느려진다", Math.abs(v1 - v0 * 0.92) < 1e-6, v0.toFixed(2) + " → " + v1.toFixed(2));
+  // 레벨이 오르면 효과가 세진다
+  C.set("doctor"); a.crewLv().gain(4100);
+  ok("선원 레벨이 오르면 효과도 세진다(선의 Lv.3 -38%)", Math.abs(CT().k("doctor", 0.3, 0.04) - 0.38) < 1e-9);
+  C.set(null);
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");

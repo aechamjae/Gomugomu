@@ -513,8 +513,17 @@ const CREW = [
   { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1" },
   { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 바람 절반 · 순풍 강화 · 해군이 느려진다" },
   { id:"sword",  name:"검객",   cost:250000, col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다" },
-  { id:"sniper", name:"저격수", cost:350000, col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다" }
+  { id:"sniper", name:"저격수", cost:350000, col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다" },
+  { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -30% · 출발할 때 보호막 1" },
+  { id:"arch",   name:"고고학자", cost:200000, col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50%" },
+  { id:"wright", name:"조선공", cost:160000, col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20%" },
+  { id:"music",  name:"음악가", cost:220000, col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25%" },
+  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 보상 2배 · 라이벌이 느려진다" }
 ];
+const CREW_PER = 5;          // 창고 선원 쪽 한 쪽에 5명씩
+let crewPage = 0;
+// 새 선원 5명의 효과 — 레벨이 오를수록 조금씩 세진다(Lv.1 기준값에서 단계마다 더한다)
+const crewK = (id, base, per) => crewOn(id) ? base + per * (crewLv(id) - 1) : 0;
 const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 240, CREW_SNIPE_R = 520;
 let crewOwned = [], crewSel = null, crewMate = null, crewFx = [], crewKills = 0;
 const crewDef = (id) => CREW.find(c => c.id === id) || null;
@@ -1028,15 +1037,18 @@ function menuRows(){
       return rows;
     }
     if(shopPage === 4){
-      // 선원 — 1~4 고용·데려가기(데려가는 선원을 다시 누르면 혼자 출항), 9 창고로
-      const rows = CREW.map((c, i) => {
+      // 선원 — 한 쪽에 5명씩. 1~5 고용·데려가기(데려가는 선원을 다시 누르면 혼자 출항), 8 다음 쪽, 9 창고로
+      const pages = Math.ceil(CREW.length / CREW_PER), pg = Math.min(crewPage, pages - 1);
+      const rows = CREW.slice(pg*CREW_PER, pg*CREW_PER + CREW_PER).map((c, i) => {
         const own = crewOwned.indexOf(c.id) >= 0, on = crewSel === c.id;
         const status = on ? "동행 중 (누르면 내린다)" : own ? "데려가기" : "고용 " + c.cost;
         const lvTxt = own ? " Lv." + crewLv(c.id) + (crewNext(c.id) ? " (" + (crewXp[c.id] || 0) + "/" + crewNext(c.id) + "m)" : " 최고") : "";
         return { y: top - 6 + i*(rowH + 8), label: (i+1) + ") " + c.name + lvTxt + " — " + c.desc + " · " + status,
                  action: () => hireCrew(c), dim: !own && bank < c.cost, on, swatch: c.col };
       });
-      rows.push({ key: 9, y: top + 4*(rowH + 8) + 30, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
+      rows.push({ key: 8, y: top + CREW_PER*(rowH + 8) + 6, label: "8) " + (pg < pages - 1 ? "다음 쪽 →" : "← 첫 쪽") + "  (" + (pg+1) + "/" + pages + ")",
+                  action: () => { crewPage = (pg + 1) % pages; } });
+      rows.push({ key: 9, y: top + CREW_PER*(rowH + 8) + 38, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
       return rows;
     }
     if(shopPage === 2){
@@ -1185,7 +1197,7 @@ function reset(){
   chain = 0;
   chainTimer = 0;
   maxChain = 0;
-  shield = 0;
+  shield = crewOn("doctor") && !practiceMode ? 1 : 0;   // 선의가 붕대를 감아 준다
   bits = [];
   pops = [];
   missAnim = null;
@@ -1412,7 +1424,7 @@ function breakBarrel(b, how){
   b.gone = true;
   barrelsBroken++;
   const y = barrelY(b);
-  const bv = wk("barrel") ? 60 : 30;
+  const bv = Math.round((wk("barrel") ? 60 : 30) * (1 + crewK("arch", 0.5, 0.1)));
   treasure += bv;
   const n = 6;
   for(let i=0;i<n;i++){
@@ -1501,7 +1513,7 @@ function collectMapPiece(m){
 function addGear(kind){
   if(gearT > 0 || state !== STATE.PLAY) return;
   const was = gear;
-  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0) * (1 + 0.10 * tlv("gcharge")) * (1 + 0.3 * pk("gearup")));   // 특성 '투지'·강화 '투혼'
+  gear = Math.min(gearMax(), gear + (GEAR_GAIN[kind] || 0) * (1 + 0.10 * tlv("gcharge")) * (1 + 0.3 * pk("gearup")) * (1 + crewK("music", 0.25, 0.05)));   // 특성 '투지'·강화 '투혼'·음악가
   if(was < gearMax() && gear >= gearMax())
     pops.push({ x:p.x, y:p.y-56, t:90, text:GEARS[gearSel].name + " 준비! (E)", color:GEARS[gearSel].col });
 }
@@ -1638,6 +1650,9 @@ function generate(){
     // 오늘의 항해는 코스가 고정이라 같은 조각을 재시작마다 주울 수 있으니 빼 둔다
     if(!practiceMode && !dailyMode && x/22 > MAP_FROM && genRand() < MAP_CHANCE){
       mapItems.push({ x: lastAX + gap*0.5, y: 70 + genRand()*40, got:false });
+    } else if(crewOn("arch") && !practiceMode && !dailyMode && x/22 > MAP_FROM && Math.random() < MAP_CHANCE * (1 + 0.15 * (crewLv("arch") - 1))){
+      // 고고학자 몫은 따로 굴린다(요리사 고기와 같은 이유)
+      mapItems.push({ x: lastAX + gap*0.5, y: 70 + Math.random()*40, got:false });
     }
     if(!practiceMode && x/22 > (wk("jelly") ? 80 : JELLY_FROM) && genRand() < JELLY_CHANCE * (wk("jelly") ? 3 : 1)){
       jellies.push({ x: lastAX + gap*(0.35 + genRand()*0.3), base: SEA - 130 - genRand()*80, t: genRand()*100, cd:0 });
@@ -2071,7 +2086,7 @@ function grab(){
     if(a.port && !a.portUsed){ a.portUsed = true; portPending = a; }
     routeGrab(a);
     if(a.rot && !a.creak){
-      a.creak = ROT_T;
+      a.creak = a.creakMax = ROT_T * (1 + crewK("wright", 1, 0.2));   // 조선공이 덧대 주면 두 배 버틴다
       pops.push({ x:a.x, y:a.y-26, t:50, text:"삐걱…", color:"#c9a27a" });
     }
     if(airTime > 34){
@@ -2848,7 +2863,7 @@ function knock(hard, mild){
   stun = fire > 0 ? base / 2 : base;       // 불꽃 효과 = 스턴 시간 절반
   if(fire > 0){ hard = false; mild = true; }  // 불붙은 동안엔 넉백·무적시간도 가볍게 넘긴다(스턴 시간은 위에서 이미 반영)
   const def = buff() ? buff().def : 0;       // 기어 2·4의 방어력 — 스턴과 감속을 그만큼 줄인다
-  stun *= (1 - def) * (1 - 0.2 * pk("tough"));
+  stun *= (1 - def) * (1 - 0.2 * pk("tough")) * (1 - crewK("doctor", 0.3, 0.04));
   sling = null;
   iframes = mild ? 60 : 78;
   rope = null;
@@ -2874,7 +2889,7 @@ function knockKing(){
     return;
   }
   if(fire > 0){                            // 불붙은 동안엔 해왕류의 일격도 가볍게 버텨낸다(스턴 시간도 절반)
-    stun = STUN_STRONG / 2 * (1 - 0.2 * pk("tough")); iframes = 50;
+    stun = STUN_STRONG / 2 * (1 - 0.2 * pk("tough")) * (1 - crewK("doctor", 0.3, 0.04)); iframes = 50;
     p.vx *= 0.55;
     p.vy = Math.min(p.vy, -4.2);
     pops.push({ x:p.x, y:p.y-28, t:50, text:"불타는 몸으로 버텼다!", color:"#f0a24e" });
@@ -2882,7 +2897,7 @@ function knockKing(){
     return;
   }
   const def = buff() ? buff().def : 0;
-  stun = STUN_STRONG * (1 - def) * (1 - 0.2 * pk("tough"));
+  stun = STUN_STRONG * (1 - def) * (1 - 0.2 * pk("tough")) * (1 - crewK("doctor", 0.3, 0.04));
   sling = null;
   iframes = 90;
   addShake(11, 26);
@@ -3864,7 +3879,7 @@ function rivalSpeed(){
   let v = r.spd * (1 + Math.sin(r.t * 0.013) * 0.08);
   if(gapPx > 520) v *= 0.82;              // 너무 앞서면 숨을 고르고
   else if(gapPx < -360) v *= 1.15;        // 너무 처지면 힘을 낸다 — 끝까지 긴장감 있게
-  if(crewOn("helm")) v *= 0.92 - 0.02 * (crewLv("helm") - 1);
+  v *= 1 - crewK("helm", 0.08, 0.02);
   return v;
 }
 function rivalPath(x){
@@ -3996,7 +4011,7 @@ function drawRivalHud(){
 }
 
 /* ---------- 항구 ---------- */
-function portPrice(it){ return Math.round(it.price * (1 + 0.3 * (portIdx - 1)) / 10) * 10; }
+function portPrice(it){ return Math.round(it.price * (1 + 0.3 * (portIdx - 1)) * (1 - crewK("wright", 0.2, 0.03)) / 10) * 10; }
 function openPort(a){
   portIdx++;
   portAt = a; portBought = {}; portMsg = null;
@@ -4133,7 +4148,7 @@ function update(dt){
     airTime = 0;
   } else {
     const ak = buff() ? 1 + (buff().spd - 1) * 2.5 : 1;
-    const airK = ak * (1 + 0.25 * pk("air"));
+    const airK = ak * (1 + 0.25 * pk("air")) * (1 + crewK("helm", 0.2, 0.03));
     if(keys.left)  p.vx -= AIR*airK*dt;
     if(keys.right) p.vx += AIR*airK*dt;
     if(keys.down)  p.vy += DIVE*dt;
@@ -4256,7 +4271,7 @@ function update(dt){
   if(grabCd > 0) grabCd -= dt;
   if(chain > 0){
     chainTimer += dt;
-    if(chainTimer > CHAIN_DECAY_T * (1 + 0.5 * pk("combo"))){ chain = 0; chainTimer = 0; }
+    if(chainTimer > CHAIN_DECAY_T * (1 + 0.5 * pk("combo")) * (1 + crewK("music", 0.4, 0.05))){ chain = 0; chainTimer = 0; }
   }
   if(rushMode){
     rushT += dt;
@@ -4880,7 +4895,7 @@ function sea(){
 function drawMast(a, active){
   let x = a.x - cam.x;
   if(x < -170 || x > W+170) return;
-  if(a.creak > 0 && !a.broken) x += Math.sin(time*1.4) * (1 + 2.5*(1 - a.creak/ROT_T));
+  if(a.creak > 0 && !a.broken) x += Math.sin(time*1.4) * (1 + 2.5*(1 - a.creak/(a.creakMax || ROT_T)));
   const bob = Math.sin(time*0.026 + a.x*0.01)*3;
   const y = a.y + bob;
 
@@ -5847,6 +5862,25 @@ function drawCrew(){
     ctx.beginPath(); ctx.arc(-6.5, -2, 3.2, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = "#e8b48c";                              // 긴 코
     ctx.fillRect(5, -5, 7, 2.2);
+  } else if(cd.id === "doctor"){                            // 선의 — 붉은 십자 하얀 모자
+    ctx.fillStyle = "#f4f6f8"; ctx.fillRect(-7, -15, 14, 7);
+    ctx.fillStyle = "#d84a4a"; ctx.fillRect(-1, -14, 2, 5); ctx.fillRect(-3, -12.5, 6, 2);
+  } else if(cd.id === "arch"){                              // 고고학자 — 챙 넓은 탐험 모자
+    ctx.fillStyle = "#8a6a3c"; ctx.fillRect(-11, -10, 22, 3);
+    ctx.beginPath(); ctx.arc(0, -10, 6, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#3b2417"; ctx.fillRect(-6, -11, 12, 1.6);
+  } else if(cd.id === "wright"){                            // 조선공 — 이마 위로 올린 고글
+    ctx.fillStyle = "#4a8ad8"; ctx.beginPath(); ctx.arc(0, -8, 7, Math.PI*1.05, Math.PI*1.95); ctx.fill();
+    ctx.fillStyle = "#3b2417"; ctx.fillRect(-7, -10, 14, 2.5);
+    ctx.fillStyle = "#ffd76a"; ctx.beginPath(); ctx.arc(-3, -9, 2.4, 0, Math.PI*2); ctx.arc(3, -9, 2.4, 0, Math.PI*2); ctx.fill();
+  } else if(cd.id === "music"){                             // 음악가 — 높은 실크 모자
+    ctx.fillStyle = "#1b1218"; ctx.fillRect(-9, -11, 18, 2.5); ctx.fillRect(-5.5, -22, 11, 12);
+    ctx.fillStyle = "#e6a8f0"; ctx.fillRect(-5.5, -14, 11, 2);
+  } else if(cd.id === "helm"){                              // 조타수 — 닻 무늬 선원 모자
+    ctx.fillStyle = "#2f4f7a"; ctx.beginPath(); ctx.arc(0, -9, 7, Math.PI, 0); ctx.fill();
+    ctx.fillRect(-8, -9.5, 16, 2.4);
+    ctx.strokeStyle = "#f4ecd9"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(0, -11); ctx.moveTo(-2, -12); ctx.quadraticCurveTo(0, -10, 2, -12); ctx.stroke();
   } else {
     ctx.fillStyle = cd.col; ctx.fillRect(-7, -11, 14, 4);   // 검객 — 두건
   }
@@ -5854,7 +5888,11 @@ function drawCrew(){
   ctx.beginPath();
   if(cd.id === "sword"){ ctx.moveTo(4, 6); ctx.lineTo(16, -8); }
   else if(cd.id === "sniper"){ ctx.moveTo(2, 4); ctx.lineTo(20, 2); }
-  else if(cd.id === "cook"){ ctx.arc(10, 6, 4, 0, Math.PI*2); }
+  else if(cd.id === "cook" || cd.id === "helm"){ ctx.arc(10, 6, cd.id === "helm" ? 6 : 4, 0, Math.PI*2); if(cd.id === "helm"){ ctx.moveTo(4, 6); ctx.lineTo(16, 6); ctx.moveTo(10, 0); ctx.lineTo(10, 12); } }
+  else if(cd.id === "doctor"){ ctx.moveTo(-3, 2); ctx.quadraticCurveTo(0, 12, 6, 6); }
+  else if(cd.id === "arch"){ ctx.moveTo(4, 4); ctx.lineTo(10, -2); ctx.arc(12, -4, 3.5, 0, Math.PI*2); }
+  else if(cd.id === "wright"){ ctx.moveTo(4, 6); ctx.lineTo(13, -3); ctx.moveTo(10, -6); ctx.lineTo(16, 0); }
+  else if(cd.id === "music"){ ctx.moveTo(2, 8); ctx.lineTo(16, -4); ctx.moveTo(6, -2); ctx.lineTo(14, 8); }
   else { ctx.moveTo(4, -2); ctx.lineTo(14, -6); }
   ctx.stroke();
   ctx.restore();
@@ -7391,11 +7429,11 @@ function draw(){
     const shopTitle = shopPage === 2 ? "기술 뽑기" : shopPage === 3 ? TECH_CATS[techCat].unit : "보물 창고";
     centerText(shopTitle, H/2 - 200, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("가진 보물 " + Math.floor(bank), H/2 - 168, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
-    if(shopPage >= 2){
+    if(shopPage === 2 || shopPage === 3){      // 선원 쪽(4)엔 선원 레벨 안내가 같은 자리에 들어간다
       centerText("비급 — " + TECH_ORDER.map(c => TECH_CATS[c].name + " " + mats[c]).join(" · ") + "   |   장착: Q " + techOf(eqRanged).name + " · W " + techOf(eqMelee).name,
                  H/2 - 142, "600 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
     }
-    if(shopPage === 4) centerText("선원 레벨 — 함께 항해한 거리만큼 오른다(최고 Lv.5) · 레벨마다 검객·저격수 쿨타임 -8% · 요리사 고기 +15% · 항해사 해군 감속 +3%",
+    if(shopPage === 4) centerText("선원 레벨 — 함께 항해한 거리만큼 오른다(최고 Lv.5) · 레벨이 오를 때마다 선원 효과가 조금씩 세진다",
                                   H/2 - 136, "500 12px 'Pretendard', system-ui, sans-serif", "rgba(159,224,160,.85)");
     for(const row of menuRows()){
       const font = (shopPage === 3 && row.y < H/2 - 92 + 3*32) ? "500 13px 'Pretendard', system-ui, sans-serif" : "500 15px 'Pretendard', system-ui, sans-serif";
@@ -8273,6 +8311,11 @@ window.__swing = {
   crewLv: () => ({ xp: crewXp, lv: crewLv, up: crewLvUp, gain: crewGainXp, cdMul: crewCdMul }),
   boss: () => boss,
   setNextBoss: (v) => { nextBossAt = v; },
+  crewTest: () => ({ list: CREW, page: () => crewPage, setPage: (n) => { crewPage = n; }, k: crewK,
+                     barrel: () => { const b = { x: p.x + 300, gone: false }; barrels.push(b); breakBarrel(b); },
+                     gearAdd: (kind) => { const g0 = gear; addGear(kind); return gear - g0; },
+                     portPrice: (i) => portPrice(PORT_ITEMS[i]), setPortIdx: (n) => { portIdx = n; }, shield: () => shield,
+                     grabRot: () => { const a = { x: p.x + 40, y: p.y - 60, kind: 0, rot: true }; anchors.push(a); rope = null; grabCd = 0; stun = 0; holding = false; grab(); return a; } }),
   rival: () => ({ r: rival, next: nextRivalAt, wins: rivalWins, races: rivalRaces, setNext: (v) => { nextRivalAt = v; }, start: startRival, speed: () => rival ? rivalSpeed() : 0 }),
   route: () => ({ list: routes, done: routesDone, next: nextRouteAt, port: nextPortAt,
                   scan: (x) => { cam.x = x; p.x = x + W*0.32; generate(); return anchors; } }),
