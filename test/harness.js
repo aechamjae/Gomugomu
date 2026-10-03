@@ -13,6 +13,11 @@ function makeCtx(){
                   "rect","arcTo","measureText"]) c[k] = noop;
   c.createLinearGradient = c.createRadialGradient = () => ({ addColorStop: noop });
   c.measureText = () => ({ width: 10 });
+  // 실제 브라우저처럼 음수 반지름이면 오류를 낸다(IndexSizeError) — 가짜 캔버스라 놓치던 버그를 잡으려고
+  const bad = (name, ...rs) => { if(rs.some(r => r < 0)) throw new Error(name + ": 음수 반지름 " + rs.join(",")); };
+  c.arc = (x, y, r) => bad("arc", r);
+  c.ellipse = (x, y, rx, ry) => bad("ellipse", rx, ry);
+  c.arcTo = (x1, y1, x2, y2, r) => bad("arcTo", r);
   return c;
 }
 

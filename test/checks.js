@@ -1931,6 +1931,16 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.startMain(); H.step(); a.hold(true); H.step();
   N().setNext(0); H.step();
   ok("첫 해군 추격은 예전처럼 쫓아오는 군함", !!N().n && !a.boss());
+  // 실제 기기에서 멈춘 버그 — 연속 포격 표식(t 음수)을 그리다 음수 반지름 오류로 게임 루프가 끊겼다
+  {
+    a.startPractice(9); H.step(); a.hold(true); H.step();
+    let err = null, shellsSeen = 0;
+    const B = a.spawnBoss(true, 8); B.fire = 1; B.hp = 3;     // 격노(3발)
+    try{
+      for(let i=0;i<240;i++){ H.step(); shellsSeen = Math.max(shellsSeen, a.peek().shells.length); a.hold(true); }
+    }catch(e){ err = e.message; }
+    ok("해군 대장 포격 표식을 그려도 오류가 나지 않는다", !err && shellsSeen >= 2, err || "표식 " + shellsSeen);
+  }
   a.startPractice(9); H.step();
   ok("연습 목록 맨 끝은 해군 대장 군함", a.peek().practiceMode && a.peek().practiceMode.bossType === 8);
   a.toMenu();

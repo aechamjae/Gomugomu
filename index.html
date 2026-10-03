@@ -291,7 +291,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v39";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v40";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -6726,7 +6726,8 @@ function drawShells(){
   for(const q of shells){
     const x = q.x - cam.x;
     if(!q.boom){
-      const k = q.t / SHELL_WARN;
+      if(q.t < 0) continue;              // 해군 대장의 연속 포격은 t가 음수(대기)로 시작한다 — 아직 표식 없음
+      const k = Math.min(1, q.t / SHELL_WARN);
       ctx.save();
       ctx.strokeStyle = "rgba(230,70,60," + (0.5 + k*0.5).toFixed(2) + ")";
       ctx.lineWidth = 2.5;
@@ -7630,10 +7631,18 @@ function loop(now){
   if(dt > 3) dt = 3;
   // 보스 격침 순간의 슬로모션 — 실제 시간 기준으로 줄어든다
   if(slowT > 0 && state === STATE.PLAY){ slowT -= dt; dt *= 0.3; }
-  update(dt);
-  draw();
+  // 다음 프레임을 먼저 예약한다 — 그리기·갱신 중 오류가 한 번 나도 게임이 통째로 멈추지 않게.
+  // (v39에서 음수 반지름 원 하나 때문에 루프가 끊겨 화면이 굳었다)
   requestAnimationFrame(loop);
+  try{
+    update(dt);
+    draw();
+  }catch(e){
+    if(!loopErr){ loopErr = true; try{ console.error(e); }catch(_){} }
+    fit();                                 // save()가 짝 없이 남았을 수 있으니 캔버스 상태를 초기화
+  }
 }
+let loopErr = false;
 document.addEventListener("visibilitychange", ()=>{
   last = performance.now();
   if(document.hidden && state === STATE.PLAY) togglePause();   // 창을 벗어나면 자동 정지
