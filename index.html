@@ -715,9 +715,11 @@ const SKINS = [
   { id:"bolt",    name:"번개 두건",       cost:0, title:"perfect50", band:"#f0c030", coat:"#6a5418" },
   { id:"horizon", name:"하얀 수평선 두건", cost:0, title:"dist10k",   band:"#eef4f8", coat:"#5a7486" },
   // 미니게임 보상 — 미니게임 셋 다 금메달이면 풀린다
-  { id:"jelly",   name:"해파리 두건",     cost:0, mini:true,         band:"#e6a8f0", coat:"#5a3a6a" }
+  { id:"jelly",   name:"해파리 두건",     cost:0, mini:true,         band:"#e6a8f0", coat:"#5a3a6a" },
+  { id:"ghost",   name:"망령 두건",       cost:0, title:"ghost1",    band:"#9fe8d8", coat:"#2a4a48" }
 ];
-let shopPage = 0;
+let shopPage = 0, skinPage = 0;
+const SKIN_PER = 8;
 const skinLocked = (k) => (k.title && !unlockedTitles.has(k.title)) || (k.mini && ownedSkins.indexOf(k.id) < 0);
 let parrotOn = true;
 const parrotUnlocked = () => lifeBossKills >= PARROT_UNLOCK;
@@ -998,7 +1000,7 @@ function menuRows(){
         return { y: top + i*rowH, label: (i+1) + ") " + u.name + " " + lv + "/" + max + " — " + u.desc + " · " + price,
                  action: () => buyUpgrade(u), dim: lv >= max || bank < u.cost[lv] };
       });
-      rows.push({ y: top + UPGRADES.length*rowH + 16, label: (UPGRADES.length + 1) + ") 두건 스킨 보기 →", action: () => { shopPage = 1; shopMsg = null; } });
+      rows.push({ y: top + UPGRADES.length*rowH + 16, label: (UPGRADES.length + 1) + ") 두건 스킨 보기 →", action: () => { shopPage = 1; skinPage = 0; shopMsg = null; } });
       rows.push({ y: top + UPGRADES.length*rowH + 50, label: (UPGRADES.length + 2) + ") 기술 뽑기 · 강화 →", action: () => { shopPage = 2; shopMsg = null; }, hot: true });
       rows.push({ y: top + UPGRADES.length*rowH + 84, label: (UPGRADES.length + 3) + ") 선원 고용 · 동행 →", action: () => { shopPage = 4; shopMsg = null; } });
       rows.push({ y: top + UPGRADES.length*rowH + 118, label: (UPGRADES.length + 4) + ") ← 메뉴로", action: () => { state = STATE.MENU; } });
@@ -1048,15 +1050,18 @@ function menuRows(){
       rows.push({ key: 9, y: top + 8*rowH + 20, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
       return rows;
     }
-    const rows = SKINS.map((k, i) => {
+    // 두건은 한 쪽에 8개씩 — 1~8 두건, 9) 다음 쪽, 0) 메뉴로, '← 업그레이드'는 클릭 전용
+    const pages = Math.ceil(SKINS.length / SKIN_PER), pg = Math.min(skinPage, pages - 1);
+    const rows = SKINS.slice(pg*SKIN_PER, pg*SKIN_PER + SKIN_PER).map((k, i) => {
       const own = ownedSkins.indexOf(k.id) >= 0 || (k.title && !skinLocked(k));
-      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.mini ? "🔒 미니게임 금메달 3개" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
+      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.mini ? "🔒 미니게임 금메달 3개" : k.dex ? "🔒 바다 도감 완성" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
       return { y: top - 24 + i*30, label: (i+1) + ") " + k.name + " — " + status,
-               action: () => pickSkin(k), dim: !own && (k.title || k.mini ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
+               action: () => pickSkin(k), dim: !own && (k.title || k.mini || k.dex ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
     });
-    // 두건이 9개라 숫자 키 1~9는 두건 차지 — 돌아가기는 0번과 클릭
-    rows.push({ key: -1, y: top - 24 + SKINS.length*30 + 8, label: "← 업그레이드", action: () => { shopPage = 0; shopMsg = null; } });
-    rows.push({ key: 0, y: top - 24 + SKINS.length*30 + 40, label: "0) ← 메뉴로", action: () => { state = STATE.MENU; shopPage = 0; } });
+    rows.push({ key: 9, y: top - 24 + SKIN_PER*30 + 4, label: "9) " + (pg < pages - 1 ? "다음 쪽 →" : "← 첫 쪽") + "  (" + (pg+1) + "/" + pages + ")",
+                action: () => { skinPage = (pg + 1) % pages; } });
+    rows.push({ key: -1, y: top - 24 + SKIN_PER*30 + 34, label: "← 업그레이드", action: () => { shopPage = 0; shopMsg = null; } });
+    rows.push({ key: 0, y: top - 24 + SKIN_PER*30 + 64, label: "0) ← 메뉴로", action: () => { state = STATE.MENU; shopPage = 0; } });
     return rows;
   }
   if(state === STATE.PRACTICE_SELECT){
@@ -1085,7 +1090,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     airTime, deathReason, chain, chainTimer, maxChain, bestChain = 0, shield,
     boss, shots, nextBossAt, nextBigAt, bossKills, stun, iframes, grabCd, pPrevX, pPrevY,
     mobs, lastKingX, skillCd, fist, gunCd, gun, fire, stallX, stallT,
-    lifeBossKills = 0, lifeKrakenKills = 0, unlockedTitles = new Set(), newTitle, warnY,
+    lifeBossKills = 0, lifeKrakenKills = 0, lifeGhostKills = 0, unlockedTitles = new Set(), newTitle, warnY,
     meats, fusen, fusenAnim, perfectStreak, perfects,
     missions, missionFlash, coinsGot, fishKills, kingKills, meatsGot, maxAir, runBest, recordBroken,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
@@ -2424,11 +2429,14 @@ const TITLES = [
   { id:"hunter",    name:"현상금 사냥꾼",     desc:"보스 누적 10마리",        need:(s) => s.boss >= 10 },
   { id:"perfect50", name:"타이밍의 달인",     desc:"PERFECT 누적 50회",       need:(s) => (s.perfects || 0) >= 50 },
   { id:"kraken1",   name:"크라켄 슬레이어",   desc:"크라켄 1마리 격파",       need:(s) => s.kraken >= 1 },
+  { id:"ghost1",    name:"유령선 퇴마사",     desc:"망령의 유령선 1척 격침",   need:(s) => (s.ghost || 0) >= 1 },
   { id:"veteran",   name:"그랑 라인의 폭풍",  desc:"보스 누적 30마리",        need:(s) => s.boss >= 30 },
   { id:"dist10k",   name:"대항해자",          desc:"누적 항해 10000m",        need:(s) => (s.dist || 0) >= 10000 },
   { id:"kraken3",   name:"심해의 재앙",       desc:"크라켄 누적 3마리",       need:(s) => s.kraken >= 3 },
+  { id:"ghost3",    name:"저승의 뱃사공",     desc:"유령선 누적 3척",         need:(s) => (s.ghost || 0) >= 3 },
   { id:"mapper",    name:"전설의 보물 사냥꾼", desc:"보물 지도 완성",         need:(s) => (s.maps || 0) >= 1 },
-  { id:"kraken10",  name:"해왕을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 }
+  { id:"kraken10",  name:"해왕을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 },
+  { id:"ghost10",   name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 }
 ];
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
@@ -2497,7 +2505,7 @@ function pickTitle(id){
 }
 
 function checkTitles(){
-  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, maps: mapsDone });
+  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, maps: mapsDone });
   let unlocked = null;
   for(const t of TITLES){
     if(!unlockedTitles.has(t.id) && t.need(stats)){
@@ -2512,9 +2520,10 @@ function clearCuts(){
   for(const a of anchors) a.cut = 0;
 }
 
-function spawnBoss(big){
+function spawnBoss(big, forceType){
   let type;
-  if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
+  if(forceType !== undefined) type = forceType;
+  else if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
   else if(rushMode) type = RUSH_ORDER[rushIdx];
   else if(big){ type = BIG_BOSSES[Math.floor(Math.random()*BIG_BOSSES.length)]; bigSpawns++; }   // 2000m마다 크라켄·유령선 같은 확률
   else type = MID_BOSSES[Math.floor(Math.random()*MID_BOSSES.length)];
@@ -2779,6 +2788,7 @@ function damageBoss(ranged, mark, power){
       if(lifeBossKills === PARROT_UNLOCK)
         pops.push({ x:b.x, y:b.y-100, t:180, text:"앵무새가 동료로 합류했다!", color:"#3fae5a" });
       if(b.type === 5) lifeKrakenKills++;
+      if(b.type === 7) lifeGhostKills++;
       const unlocked = checkTitles();
       if(unlocked){
         newTitle = unlocked.name;
@@ -4117,7 +4127,7 @@ function dedupeAccounts(){
 // (저장분이 없는 항목은 읽기가 아무것도 안 하므로 먼저 비워 두지 않으면 앞 계정 값이 남는다)
 function resetProfile(){
   best = 0; bestChain = 0;
-  lifeBossKills = 0; lifeKrakenKills = 0; unlockedTitles = new Set(); titleSel = null;
+  lifeBossKills = 0; lifeKrakenKills = 0; lifeGhostKills = 0; unlockedTitles = new Set(); titleSel = null;
   bank = 0; upgrades = {}; bestBounty = 0; ownedSkins = ["red"]; skin = "red"; parrotOn = true;
   mapPieces = 0; mapsDone = 0; blitzBest = 0; rushBest = 0; bestGrade = "";
   gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null; crewXp = {};
@@ -4347,6 +4357,7 @@ function applyTitleRecord(v){
     const r = JSON.parse(v);
     lifeBossKills = r.boss || 0;
     lifeKrakenKills = r.kraken || 0;
+    lifeGhostKills = r.ghost || 0;
     unlockedTitles = new Set(r.unlocked || []);
     titleSel = r.sel || null;
   }catch(e){}
@@ -4364,7 +4375,7 @@ async function loadTitles(){
   }catch(e){}
 }
 async function saveTitles(){
-  const v = JSON.stringify({ boss: lifeBossKills, kraken: lifeKrakenKills, unlocked: [...unlockedTitles], sel: titleSel });
+  const v = JSON.stringify({ boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, unlocked: [...unlockedTitles], sel: titleSel });
   try{ if(window.storage){ await window.storage.set(K("swing:titles"), v); return; } }catch(e){}
   try{ if(window.localStorage) localStorage.setItem(K("swing:titles"), v); }catch(e){}
 }
@@ -6929,7 +6940,7 @@ function draw(){
     const stats = [
       ["항해 횟수", L.runs + "판"], ["총 항해 거리", commas(L.dist) + "m"], ["최고 거리", Math.floor(best) + "m"],
       ["최고 현상금", "฿ " + commas(bestBounty)], ["콤보·등급", "×" + bestChain + (bestGrade ? " · " + bestGrade : "")], ["보스 격파", lifeBossKills + "마리"],
-      ["크라켄 격파", lifeKrakenKills + "마리"], ["PERFECT", L.perfects + "회"], ["미션 완료", L.missions + "개"],
+      ["크라켄·유령선", lifeKrakenKills + " · " + lifeGhostKills], ["PERFECT", L.perfects + "회"], ["미션 완료", L.missions + "개"],
       ["갈매기 격추", L.gulls + "마리"], ["보물 통", L.barrels + "개"], ["황금 고리", L.golds + "번"],
       ["수면 스치기", L.skims + "회"], ["기어 발동", L.gears + "번"], ["보물 지도", mapPieces + "/" + MAP_PIECES + " 조각" + (mapsDone ? " · 완성 " + mapsDone : "")]
     ];
@@ -6941,9 +6952,10 @@ function draw(){
     });
     const cur = currentTitleName();
     TITLES.forEach((t, i) => {
-      const cx = i % 2 ? W/2 + 30 : W/2 - 310, cy = 282 + Math.floor(i / 2) * 24;
+      // 칭호가 13개라 두 줄씩 19px 간격 — 아래 최근 기록 그래프(414)와 겹치지 않게
+      const cx = i % 2 ? W/2 + 30 : W/2 - 310, cy = 282 + Math.floor(i / 2) * 19;
       const has = unlockedTitles.has(t.id);
-      leftText((has ? "★ " : "☆ ") + t.name, cx, cy, "700 14px 'Pretendard', system-ui, sans-serif",
+      leftText((has ? "★ " : "☆ ") + t.name, cx, cy, "700 13px 'Pretendard', system-ui, sans-serif",
                t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
       leftText(t.desc, cx + 150, cy, "400 12px 'Pretendard', system-ui, sans-serif", has ? "rgba(244,236,217,.6)" : "rgba(244,236,217,.35)");
     });
@@ -7836,6 +7848,9 @@ window.__swing = {
   toMiniList: () => { state = STATE.MINI_SELECT; },
   weekly: () => ({ now: weeklyNow(), force: (id) => { weeklyForce = id; }, list: WEEKLY, week: weekNo() }),
   crewLv: () => ({ xp: crewXp, lv: crewLv, up: crewLvUp, gain: crewGainXp, cdMul: crewCdMul }),
+  boss: () => boss,
+  spawnBoss: (big, type) => { boss = null; bossIntro = null; spawnBoss(big, type); return boss; },
+  lifeStats: () => ({ boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, titles: [...unlockedTitles] }),
   port: () => ({ idx: portIdx, next: nextPortAt, bought: portBought, act: portAct, leave: leavePort, price: (i) => portPrice(PORT_ITEMS[i]) })
 };
 

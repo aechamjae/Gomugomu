@@ -1776,6 +1776,25 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.crew().set(null);
 }
 
+/* --- v39: 유령선 칭호 --- */
+{
+  const a = A();
+  a.startMain(); H.step();
+  const before = a.lifeStats().ghost;
+  ok("유령선 칭호를 따기 전엔 망령 두건이 잠겨 있다", a.lifeStats().titles.indexOf("ghost1") >= 0 || !a.shop().pickSkin(8));
+  const b = a.spawnBoss(true, 7);
+  b.hp = 1; b.invul = 0;
+  T().dmg(true, "test");
+  const st = a.lifeStats();
+  ok("유령선을 격침하면 유령선 격파 수가 오른다", st.ghost === before + 1 && a.boss() === null, "ghost=" + st.ghost);
+  ok("유령선 1척이면 칭호 '유령선 퇴마사'", st.titles.indexOf("ghost1") >= 0);
+  ok("칭호를 따면 망령 두건을 장착할 수 있다", a.shop().pickSkin(8) && a.shop().skin === "ghost");
+  a.shop().pickSkin(0);
+  const k = a.spawnBoss(true, 5); k.hp = 1; k.invul = 0; T().dmg(true, "test");
+  ok("크라켄 격침은 유령선 수에 안 센다", a.lifeStats().ghost === before + 1);
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");
