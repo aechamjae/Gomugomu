@@ -2048,7 +2048,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 바다 도감 --- */
 {
   const a = A(), X = () => a.dex();
-  ok("도감은 33종 — 생물·보스 9종·지형·해역·사건", X().list.length === 33 && X().list.filter(e => e.cat === "boss").length === 9);
+  ok("도감은 37종 — 생물·보스 13종·지형·해역·사건", X().list.length === 37 && X().list.filter(e => e.cat === "boss").length === 13);
   a.startMain(); H.step(); a.hold(true); H.step();
   ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
   delete X().book.wind;
@@ -2086,7 +2086,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   delete X().book.searoute;
   ok("하나 남았을 땐 박물학자 칭호가 없다", a.lifeStats().titles.indexOf("naturalist") < 0);
   X().see("searoute");
-  ok("도감을 다 채우면 칭호 '바다의 박물학자'", X().found === 33 && a.lifeStats().titles.indexOf("naturalist") >= 0);
+  ok("도감을 다 채우면 칭호 '바다의 박물학자'", X().found === X().list.length && a.lifeStats().titles.indexOf("naturalist") >= 0);
   ok("칭호를 따면 박물학자 두건을 장착할 수 있다", a.shop().pickSkin(9) && a.shop().skin === "dex");
   a.shop().pickSkin(0);
   // 화면
@@ -2094,6 +2094,91 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("항해 일지 → 바다 도감 화면, 9로 돌아간다", X().page() && a.rows().length === 1 && a.rows()[0].key === 9);
   a.rows()[0].action();
   ok("도감에서 일지로", !X().page() && a.rows().some(r => r.key === 4));
+  a.toMenu();
+}
+
+/* --- v41: 중간보스 4종 --- */
+{
+  const a = A();
+  const fresh = () => { a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(true); };
+  const mids = new Set();
+  for(let i=0;i<400;i++){ const b = a.spawnBoss(false); mids.add(b.type); }
+  ok("중간보스 추첨에 새 4종(9~12)이 들어 있다", [9,10,11,12].every(t => mids.has(t)) && !mids.has(5) && !mids.has(8), [...mids].sort((x,y)=>x-y).join(","));
+  ok("연습 목록에 새 보스 4종(10~13번)", (() => { a.startPractice(13); H.step(); return a.peek().practiceMode.bossType === 12; })());
+
+  // 톱니턱 — 뒤에서 쫓아오고, 물속에선 약점이 없다
+  fresh();
+  let b = a.spawnBoss(false, 9);
+  ok("톱니턱은 플레이어 뒤에서 나타난다", b.x < a.peek().x);
+  for(let i=0;i<20;i++) H.step();
+  ok("물속을 헤엄치는 동안엔 약점이 없다", b.mode === "swim" && a.weak().length === 0);
+  b.cd = 1e9;
+  for(let i=0;i<60;i++){ swing(a, a.peek()); H.step(); }
+  ok("뒤 추격 보스전엔 카메라가 앞으로 당겨진다", a.peek().x - a.cam().x > 900*0.42, Math.round(a.peek().x - a.cam().x) + "px");
+  b.mode = "leap"; b.vx = 4; b.vy = -6; b.g = 0.35;
+  ok("솟구친 동안엔 등지느러미가 약점", a.weak().map(w => w.mark).join() === "등지느러미");
+  b.mode = "surf"; b.cd = 100;
+  ok("떠 있는 동안엔 아가미가 약점", a.weak().map(w => w.mark).join() === "아가미");
+
+  // 쇠사슬 바이스 — 사슬에 걸리면 끌려가고, Q로 끊는다
+  fresh();
+  b = a.spawnBoss(false, 10);
+  ok("쇠사슬 바이스도 뒤에서", b.x < a.peek().x && a.weak().map(w => w.mark).join() === "화약통");
+  let st = a.peek();
+  T().pushShot({ x: st.x, y: st.y, vx: 0, vy: 0, g: 0, r: 12, kind: 5, spin: 0 });
+  H.step();
+  ok("갈고리에 맞으면 사슬에 걸린다", !!a.hook());
+  const vx0 = a.peek().vx;
+  a.keys.right = false;
+  for(let i=0;i<10;i++) H.step();
+  ok("사슬에 걸리면 뒤로 끌려간다", a.peek().vx < vx0 - 3, vx0.toFixed(1) + " → " + a.peek().vx.toFixed(1));
+  a.fire();
+  ok("Q(피스톨)를 쓰면 사슬이 끊어진다", !a.hook());
+  b.open = 50;
+  ok("사슬을 던진 직후엔 본체가 빈다", a.weak().some(w => w.mark === "바이스"));
+
+  // 무상 — 패왕의 기세
+  fresh();
+  b = a.spawnBoss(false, 11);
+  ok("무상은 기세를 쓰기 전엔 약점이 없다", a.weak().length === 0);
+  T().setGear(0);
+  b.haki = 0; H.step();
+  ok("기세를 모으기 시작한다", b.charge > 0);
+  for(let i=0;i<60;i++){ H.step(); a.hold(true); }
+  ok("기세를 모으는 동안 기어 게이지가 저절로 찬다", a.gearInfo().max <= a.peek().gear + 1e-6, "gear=" + Math.floor(a.peek().gear));
+  const t0 = a.peek().treasure;
+  for(let i=0;i<40 && b.charge > 0;i++){ H.step(); a.hold(true); }
+  ok("기어 없이 기세를 맞으면 휘청", a.peek().stun > 0 && b.tired > 0);
+  ok("기세 뒤 지친 몸이 약점", a.weak().map(w => w.mark).join() === "무상");
+  fresh();
+  b = a.spawnBoss(false, 11);
+  b.charge = 3; T().setGear(1e6); a.fireGear();
+  const tr0 = a.peek().treasure;
+  for(let i=0;i<5;i++) H.step();
+  ok("기어 상태면 기세를 버틴다(+80)", a.peek().stun <= 0 && a.peek().treasure >= tr0 + 80 && b.tired > 0);
+
+  // 뇌명 — 북 셋, 낙뢰
+  fresh();
+  b = a.spawnBoss(false, 12);
+  ok("뇌명은 HP 3 = 북 셋", b.maxHp === 3 && a.weak().filter(w => w.mark === "북").length === 3);
+  b.invul = 0; T().dmg(true, "test");
+  ok("맞히면 북이 하나 부서진다", b.hp === 2 && a.weak().length === 2 && b.drums.filter(Boolean).length === 2);
+  b.warn = 2; H.step(); H.step();
+  ok("기어 없이 낙뢰를 맞으면 휘청", a.peek().stun > 0);
+  fresh();
+  b = a.spawnBoss(false, 12);
+  const pillar = { x: a.peek().x + 40, y: a.peek().y - 80, kind: 1 };
+  a.peek().anchors.push(pillar);
+  a.setRope(pillar);
+  b.warn = 2; H.step(); H.step();
+  ok("바위 기둥에 매달려 있으면 낙뢰를 버틴다", a.peek().stun <= 0);
+  fresh();
+  b = a.spawnBoss(false, 12);
+  b.warn = 3; T().setGear(1e6); a.fireGear();
+  for(let i=0;i<4;i++) H.step();
+  ok("기어 상태면 낙뢰를 버틴다", a.peek().stun <= 0);
+  b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t");
+  ok("북을 셋 다 부수면 격침", !a.boss());
   a.toMenu();
 }
 

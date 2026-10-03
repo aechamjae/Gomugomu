@@ -291,7 +291,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v40";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v41";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -952,7 +952,11 @@ const PRACTICE_OPTIONS = [
   { type:"boss", bossType:6, label:"고리 도둑 문어 연습" },
   { type:"boss", bossType:7, label:"망령의 유령선 연습 (대형)" },
   { type:"king", label:"해왕류 폭주 연습" },
-  { type:"boss", bossType:8, label:"해군 대장 군함 연습 (대형)" }
+  { type:"boss", bossType:8, label:"해군 대장 군함 연습 (대형)" },
+  { type:"boss", bossType:9,  label:"심해 상어 톱니턱 연습 (뒤 추격)" },
+  { type:"boss", bossType:10, label:"쇠사슬 바이스 연습 (뒤 추격)" },
+  { type:"boss", bossType:11, label:"패기의 검호 무상 연습 (기어 필수)" },
+  { type:"boss", bossType:12, label:"번개 신관 뇌명 연습 (기어 필수)" }
 ];
 
 function practiceLabel(){
@@ -1156,7 +1160,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
     barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT, rushIdx, rushT, rushDone, newRushRecord, bigSpawns,
     barrage, nextBarrageAt, shells, barragesCleared, floes, geysers, floeSaves, geyserHits, rocketCharge, rockets,
-    sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyChases, navyBeaten, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, rival, nextRivalAt, rivalWins, rivalRaces, rivalRand = Math.random, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
+    sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyChases, navyBeaten, viceHook, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, rival, nextRivalAt, rivalWins, rivalRaces, rivalRand = Math.random, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
 
 function reset(){
   genRand = dailyMode ? mulberry32(todaySeed()) : Math.random;
@@ -1200,7 +1204,7 @@ function reset(){
   sling = null; slingCd = 0; slings = 0;
   perks = {}; pickOffer = null; pickPending = false; pickReturn = null; undyingUsed = false;
   navyRand = dailyMode ? mulberry32(todaySeed() * 13 + 3) : Math.random;
-  navy = null; navyEscapes = 0; navyChases = 0; navyBeaten = false; nextNavyAt = NAVY_FIRST + navyRand()*400;
+  navy = null; viceHook = null; navyEscapes = 0; navyChases = 0; navyBeaten = false; nextNavyAt = NAVY_FIRST + navyRand()*400;
   rivalRand = dailyMode ? mulberry32(todaySeed() * 17 + 9) : Math.random;
   rival = null; rivalWins = 0; rivalRaces = 0; nextRivalAt = RIVAL_FIRST + rivalRand()*300;
   routes = []; routeLeft = 0; routeSeq = 0; routesDone = { up:0, low:0 };
@@ -1724,7 +1728,7 @@ const DEX_CATS = [
 const DEX = [
   { id:"fish",  cat:"life", name:"식인 물고기" }, { id:"king", cat:"life", name:"해왕류" },
   { id:"gull",  cat:"life", name:"폭탄 갈매기" }, { id:"jelly", cat:"life", name:"트램펄린 해파리" },
-  ...[0,1,2,3,4,5,6,7,8].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
+  ...[0,1,2,3,4,5,6,7,8,9,10,11,12].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
   { id:"gold",  cat:"sea", name:"황금 고리" },  { id:"rot", cat:"sea", name:"삭은 돛대" },
   { id:"port",  cat:"sea", name:"항구" },       { id:"barrel", cat:"sea", name:"보물 통" },
   { id:"meat",  cat:"sea", name:"고기" },       { id:"map", cat:"sea", name:"보물 지도 조각" },
@@ -2575,13 +2579,33 @@ const BOSSES = [
   { name:"심해의 크라켄", tag:"눈이 드러난 순간에만 통한다", big:true },
   { name:"고리 도둑 문어", tag:"앞쪽 고리를 붙잡아 위아래로 끌고 간다" },
   { name:"망령의 유령선", tag:"유령일 땐 무적·망령 사슬 — 실체일 때 등불·선장을 노려라", big:true },
-  { name:"해군 대장 군함", tag:"포격 표식과 그물을 피해 대장·화약고·망루를 노려라", big:true }
+  { name:"해군 대장 군함", tag:"포격 표식과 그물을 피해 대장·화약고·망루를 노려라", big:true },
+  { name:"심해 상어 톱니턱",   tag:"뒤에서 쫓아와 솟구쳐 문다 — 뛰어오른 등지느러미, 떠오른 아가미를 쳐라" },
+  { name:"쇠사슬 바이스",     tag:"뒤에서 사슬을 걸어 끌어당긴다 — Q·W로 끊고, 던진 직후 빈틈을 쳐라" },
+  { name:"패기의 검호 무상",   tag:"패왕의 기세는 기어 상태로만 버틴다 — 기세 뒤 지친 몸을 노려라" },
+  { name:"번개 신관 뇌명",     tag:"낙뢰는 기어 상태나 바위 기둥으로 버틴다 — 북 셋을 모두 부숴라" }
 ];
 const BIG_BOSSES = [5, 7];   // 대형 슬롯은 크라켄·유령선 중 무작위(반반)
 const ADMIRAL = 8;           // 해군 대장 군함 — 대형 슬롯이 아니라 두 번째 해군 추격 자리에 나온다
 const isBigType = (t) => BIG_BOSSES.indexOf(t) >= 0 || t === ADMIRAL;
 const GHOST_S = 1.4;         // 유령선 그림 배율 — 약점 좌표도 같은 배율을 쓴다
-const MID_BOSSES = [0, 1, 2, 3, 4, 6];   // 크라켄(5)은 대형 슬롯 전용
+const MID_BOSSES = [0, 1, 2, 3, 4, 6, 9, 10, 11, 12];   // 크라켄(5)·유령선(7)·해군 대장(8)은 따로
+const SHARK = 9, VICE = 10, MUSANG = 11, THUNDER = 12;
+const CHASERS = [SHARK, VICE];           // 뒤에서 쫓아오는 보스 — 앞질러 나가는 재배치(dive)를 쓰지 않는다
+// 기어 상태 — 기어 2·4·5가 켜져 있거나, 기어 3 거대 주먹이 막 터진 순간. 패왕의 기세·낙뢰는 이걸로만 버틴다
+const gearGuard = () => !!(buff() || giant);
+// 기세·낙뢰를 버티지 못했을 때 — 보호막으로도 못 막는다
+function overwhelm(text){
+  const sh = shield; shield = 0; stun = 0; iframes = 0;
+  knock(false);
+  shield = sh;
+  p.vx = Math.min(p.vx, -5);
+  pops.push({ x:p.x, y:p.y - 46, t:80, text, color:"#d8a8ff" });
+}
+// 경고 동안엔 기어 게이지가 저절로 차오른다 — 누를 타이밍만 맞추면 되게
+function gearSurge(dt){
+  if(gearT <= 0) gear = Math.min(gearMax(), gear + gearMax() / 50 * dt);
+}
 
 /* 보스 격파 랜덤 보상 — 매번 격파할 때마다 하나를 무작위로 준다 */
 // 가중치 뽑기 — 강한 것(보호막)은 드물게, 흔해도 괜찮은 것(보물 폭풍)은 자주
@@ -2813,6 +2837,10 @@ function spawnBoss(big, forceType){
   if(type === 5){ boss.y = SEA - 40; boss.sub = 200; }
   if(type === 7){ boss.y = SEA - 14; boss.sub = 190; boss.phase = 0; boss.fire = 80; boss.summon = 90; boss.walk = 0; }
   if(type === 6){ boss.y = 90; boss.fire = 80; boss.grab = null; boss.ink = 100; }
+  if(type === SHARK){ boss.x = p.x - 420; boss.y = SEA + 34; boss.mode = "swim"; boss.cd = 90; boss.vx = 0; }
+  if(type === VICE){ boss.x = p.x - 420; boss.y = 230; boss.cd = 100; boss.open = 0; }
+  if(type === MUSANG){ boss.y = 140; boss.haki = 130; boss.charge = 0; boss.tired = 0; boss.fire = 90; }
+  if(type === THUNDER){ boss.y = 96; boss.hp = boss.maxHp = 3; boss.drums = [true, true, true]; boss.storm = 220; boss.warn = 0; boss.boltT = 0; boss.fire = 110; }
   if(type === ADMIRAL){ boss.y = SEA - 10; boss.fire = 100; boss.net = 160; boss.walk = 0; boss.hp = boss.maxHp = 10; }   // 큰 군함이라 대형 보스보다 2만큼 질기다
   bossIntro = { type, big:!!big, t: 0, bounty: big ? (600 + bossKills*80) : (150 + bossKills*40) };
   dexMeet("boss" + type);
@@ -2952,6 +2980,24 @@ function weakPoints(b){
       out.push({ x:b.x + Math.sin(b.walk)*58*GHOST_S, y:b.y - 48*GHOST_S + b.sink, r:24, mark:"선장" });
     }
 
+  } else if(b.type === SHARK){
+    // 뛰어오른 동안엔 등지느러미, 수면에 떠 있는 동안엔 아가미
+    if(b.mode === "leap") out.push({ x:b.x - Math.sign(b.vx || 1)*8, y:b.y - 26, r:24, mark:"등지느러미" });
+    else if(b.mode === "surf") out.push({ x:b.x + 26, y:SEA - 16, r:22, mark:"아가미" });
+
+  } else if(b.type === VICE){
+    // 사슬을 던진 직후엔 본체가 비고, 배 뒤 화약통은 낮지만 늘 노출
+    if(b.open > 0) out.push({ x:b.x, y:b.y - 6, r:24, mark:"바이스" });
+    out.push({ x:b.x - 4, y:b.y + 52, r:18, mark:"화약통" });
+
+  } else if(b.type === MUSANG){
+    // 기세를 쏟은 뒤 지친 몸만 — 그 전엔 기어로 기세를 버텨야 한다
+    if(b.tired > 0) out.push({ x:b.x, y:b.y, r:30, mark:"무상" });
+
+  } else if(b.type === THUNDER){
+    // 둘레를 도는 북 셋 — 하나씩 부순다
+    for(let i=0;i<3;i++) if(b.drums[i]){ const d = drumPos(b, i); out.push({ x:d.x, y:d.y, r:20, mark:"북" }); }
+
   } else if(b.type === ADMIRAL){
     // 해군 대장 군함 — 갑판을 오가는 대장, 뱃머리 화약고(뚜껑이 열릴 때만), 높은 망루
     // 화약고 뚜껑과 망루 감시병은 번갈아 드러난다 — 늘 열려 있는 건 낮은 갑판의 대장뿐
@@ -3048,7 +3094,9 @@ function damageBoss(ranged, mark, power){
   const b = boss;
   // 기어 강화 중엔 공격력 배율이 붙는다(기어 3 거대 주먹은 자체 공격력 4)
   const amt = (power || 1) * (buff() ? buff().atk : 1);
-  b.hp = Math.max(0, b.hp - amt); b.flash = 16; b.invul = b.big ? 44 : 30;
+  if(b.type === THUNDER){ breakDrum(b); b.hp = b.drums.filter(Boolean).length + 0; }   // 북 하나 = 체력 1(공격력 배율과 상관없이)
+  else b.hp = Math.max(0, b.hp - amt);
+  b.flash = 16; b.invul = b.big ? 44 : 30;
   if(amt !== 1) pops.push({ x: ranged ? b.x : p.x, y: (ranged ? b.y : p.y) - 52, t:50, text:"피해 " + (Math.round(amt*10)/10), color:gearCol() });
   addShake(b.hp <= 0 ? 12 : 6, b.hp <= 0 ? 30 : 14);
   treasure += b.big ? 60 : 40;
@@ -3069,6 +3117,7 @@ function damageBoss(ranged, mark, power){
     bossKills++;
     slowT = 42;
     sinkBanner = { t: 0, name: BOSSES[b.type].name, big: b.big };
+    viceHook = null;
     if(!practiceMode){        // 연습 모드에서 무한 반복 격파해도 칭호·기록은 오염되지 않게
       lifeBossKills++;
       if(lifeBossKills === PARROT_UNLOCK)
@@ -3343,6 +3392,14 @@ function updateBoss(dt){
       }
     }
 
+  } else if(b.type === SHARK){
+    updateShark(b, dt);
+  } else if(b.type === VICE){
+    updateVice(b, dt);
+  } else if(b.type === MUSANG){
+    updateMusang(b, dt);
+  } else if(b.type === THUNDER){
+    updateThunder(b, dt);
   } else if(b.type === ADMIRAL){
     // 해군 대장 군함 — 가라앉지 않는다. 뒤처지면 전속력으로 앞질러 나가 다시 자리를 잡는다(그동안은 약점 없음)
     if(b.dive === 0 && b.x < p.x - 220) b.dive = 2;
@@ -3581,6 +3638,10 @@ function updateShots(dt){
           p.vy = Math.min(p.vy, -2.4);
           pops.push({ x:p.x, y:p.y-26, t:44, text:"돌풍!", color:"#c7ecec" });
           for(let k=0;k<12;k++) spark(p.x, p.y, "#c7ecec");
+        } else if(q.kind === 5){
+          // 쇠사슬 바이스의 갈고리 — 걸리면 뒤로 끌려간다
+          if(!invinc() && shield <= 0){ viceHook = { t: 0 }; rope = null; pops.push({ x:p.x, y:p.y-44, t:60, text:"사슬에 걸렸다! Q·W로 끊어라", color:"#c9c2b4" }); }
+          else knock(false);
         } else if(q.kind === 4){
           // 해군 대장의 그물 — 휘청에 더해 뒤로 끌려간다
           const before = stun;
@@ -3666,6 +3727,7 @@ function pistolCd(){ return SKILL_CD * (1 - 0.12 * upLv("pistol")); }
 let skillMax = SKILL_CD, gunMax = GUN_CD, volley = null;
 function firePistol(){
   if(state !== STATE.PLAY || skillCd > 0 || fist || stun > 0) return;
+  cutViceHook();
   skillCd = skillMax = rangedCd();
   if(eqRanged === "gatling"){ fireGatling(); return; }
   const rifle = eqRanged === "rifle";
@@ -3806,6 +3868,7 @@ function strikeArea(inArea, how, power, opt){
 /* ---------- 근거리 기술 (W) — 채찍 / 바주카 / 도끼 ---------- */
 function fireGun(){
   if(state !== STATE.PLAY || gunCd > 0 || stun > 0) return;
+  cutViceHook();
   gunCd = gunMax = meleeCd();
   const face = p.face || 1;
   const t = techOf(eqMelee);
@@ -4452,7 +4515,9 @@ function update(dt){
     // 평형점에서 멈춰버려 영원히 따라잡지 못한다 (실제로 그렇게 멈추는 걸 테스트로 확인함)
     cam.x += STALL_PUSH_SPD * dt;
   } else {
-    cam.x += ((p.x - W*0.32) - cam.x) * 0.13 * dt;
+    // 뒤에서 쫓는 보스와 싸울 땐 플레이어를 화면 가운데쯤에 둬서 뒤쪽이 보이게 한다
+    const lead = boss && CHASERS.indexOf(boss.type) >= 0 ? 0.5 : 0.32;
+    cam.x += ((p.x - W*lead) - cam.x) * 0.13 * dt;
   }
   if(cam.x < 0) cam.x = 0;
   cam.z += ((1 - Math.min(0.11, sp/250)) - cam.z) * 0.05 * dt;
@@ -5490,6 +5555,23 @@ function drawShots(){
       ctx.fillStyle = "#8fd6d8";
       ctx.beginPath();
       ctx.moveTo(10,0); ctx.lineTo(2,-6); ctx.lineTo(2,6); ctx.closePath(); ctx.fill();
+    } else if(q.kind === 5){
+      // 쇠사슬 갈고리
+      ctx.rotate(Math.atan2(q.vy, q.vx));
+      ctx.strokeStyle = "#9a9aa6"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-18, 0); ctx.lineTo(4, 0); ctx.stroke();
+      ctx.beginPath(); ctx.arc(8, 0, 7, -Math.PI*0.7, Math.PI*0.7); ctx.stroke();
+    } else if(q.kind === 6){
+      // 무상의 참격 — 초승달
+      ctx.rotate(Math.atan2(q.vy, q.vx));
+      ctx.strokeStyle = "rgba(216,168,255,.9)"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(-6, 0, 16, -1.2, 1.2); ctx.stroke();
+    } else if(q.kind === 7){
+      // 뇌명의 전기 구슬
+      ctx.fillStyle = "rgba(255,230,120,.9)";
+      ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = "#fff8d0"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-10, -4); ctx.lineTo(-2, 2); ctx.lineTo(2, -3); ctx.lineTo(11, 4); ctx.stroke();
     } else if(q.kind === 4){
       // 해군 그물 — 빙글 돌며 펼쳐진다
       ctx.rotate(q.spin * 0.5);
@@ -5516,6 +5598,281 @@ function drawShots(){
     }
     ctx.restore();
   }
+}
+
+/* ---------- 중간보스 v41 — 톱니턱·쇠사슬 바이스·무상·뇌명 ---------- */
+// 뒤에서 쫓는 보스의 기본 걸음 — 플레이어 뒤 gap 자리로 다가오되, 플레이어가 되돌아오면 거의 물러서지 않는다(그래야 칠 수 있다)
+function chaseBehind(b, gap, dt, back){
+  const want = (p.x - gap) - b.x;
+  b.x += Math.max(-(back || 1.5), Math.min(30, want * 0.08)) * dt;
+}
+function updateShark(b, dt){
+  const rage = b.hp <= 1 ? 0.7 : 1;
+  if(b.mode === "swim"){
+    b.y += ((SEA + 34) - b.y) * 0.1 * dt;
+    chaseBehind(b, 190, dt, 14);                  // 물속에선 자유롭게 되돌아간다
+    if(b.t % 4 < 1) spark(b.x + (Math.random()-0.5)*40, SEA + 2, "#8fd6d8");
+    b.cd -= dt;
+    if(b.cd <= 0){ b.mode = "warn"; b.cd = 34; }
+  } else if(b.mode === "warn"){
+    chaseBehind(b, 150, dt, 6);
+    b.cd -= dt;
+    if(b.t % 2 < 1) spark(b.x, SEA, "#f4f6f8");
+    if(b.cd <= 0){
+      // 플레이어가 34프레임 뒤 있을 자리로 솟구친다
+      const T = 34, g = 0.35;
+      const tx = p.x + p.vx*T*0.9, ty = Math.max(70, Math.min(SEA - 40, p.y + p.vy*T*0.4));
+      b.mode = "leap"; b.g = g;
+      b.vx = (tx - b.x) / T; b.vy = (ty - (SEA + 10)) / T - 0.5*g*T;
+      b.y = SEA + 10;
+      for(let i=0;i<14;i++) spark(b.x, SEA, "#8fd6d8");
+    }
+  } else if(b.mode === "leap"){
+    b.x += b.vx*dt; b.y += b.vy*dt; b.vy += b.g*dt;
+    // 턱 — 날아가는 쪽 앞머리에 닿으면 물린다
+    const sp = Math.hypot(b.vx, b.vy) || 1, jx = b.x + b.vx/sp*36, jy = b.y + b.vy/sp*36;
+    if(stun <= 0 && iframes <= 0 && distOriginToSeg(pPrevX - jx, pPrevY - jy, p.x - jx, p.y - jy) < 16 + 13){
+      knock(false);
+      pops.push({ x:p.x, y:p.y - 40, t:50, text:"콱!", color:"#f7a8a0" });
+    }
+    if(b.y > SEA - 6 && b.vy > 0){ b.mode = "surf"; b.cd = 110 * rage; b.y = SEA - 6; for(let i=0;i<18;i++) spark(b.x, SEA, "#8fd6d8"); }
+  } else if(b.mode === "surf"){
+    b.y = SEA - 6 + Math.sin(b.t*0.2)*2;
+    // 수면에 떠서 플레이어 바로 아래를 따라 헤엄친다 — 그대로 두면 순식간에 지나쳐 버려 칠 틈이 없었다
+    b.x += Math.max(-8, Math.min(26, (p.x + 30 - b.x) * 0.06)) * dt;
+    b.cd -= dt;
+    if(b.cd <= 0){ b.mode = "swim"; b.cd = 140 * rage; }
+  }
+}
+function updateVice(b, dt){
+  const rage = b.hp <= 1 ? 0.7 : 1;
+  chaseBehind(b, 220, dt);
+  b.y = 230 + Math.sin(b.t*0.03)*40;           // 기구를 타고 뒤쪽 공중에 떠 있다
+  if(b.open > 0) b.open -= dt;
+  b.cd -= dt;
+  if(b.cd <= 0 && !viceHook){
+    b.cd = 150 * rage;
+    b.open = 80;
+    aimShot({ x:b.x + 10, y:b.y - 8 }, 11, 0, 5, 12);
+    pops.push({ x:b.x, y:b.y - 110, t:45, text:"사슬이다!", color:"#c9c2b4" });
+  }
+  if(viceHook){
+    // 걸렸다 — 뒤로 끌려간다. → 를 누르고 버티면 덜 끌리고, Q·W를 쓰면 끊어진다(firePistol·fireGun)
+    viceHook.t += dt;
+    p.vx -= (keys.right ? 0.24 : 0.5) * dt;
+    if(p.vx < -11) p.vx = -11;
+    if(p.x < b.x + 46){ viceHook = null; knock(false); pops.push({ x:p.x, y:p.y - 40, t:50, text:"끌려가 얻어맞았다!", color:"#f7a8a0" }); }
+    else if(viceHook.t > 90) viceHook = null;
+  }
+}
+function cutViceHook(){
+  if(!viceHook) return;
+  viceHook = null;
+  pops.push({ x:p.x, y:p.y - 44, t:60, text:"사슬을 끊었다!", color:"#c9c2b4" });
+  for(let i=0;i<10;i++) spark(p.x, p.y, "#c9c2b4");
+}
+function updateMusang(b, dt){
+  const rage = b.hp <= 1 ? 0.75 : 1;
+  const CAP = 9.2;
+  const want = Math.min(p.vx, CAP*0.9) + ((p.x + 300) - b.x) * 0.03;
+  b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+  b.y = 140 + Math.sin(b.t*0.03)*34;
+  if(b.tired > 0){ b.tired -= dt; return; }       // 지친 동안엔 아무것도 못 한다
+  if(b.charge > 0){
+    b.charge -= dt;
+    gearSurge(dt);
+    if(b.charge <= 0){
+      // 패왕의 기세 — 기어 상태가 아니면 짓눌린다
+      addShake(10, 26);
+      flash = settings.flash ? 0.6 : 0;
+      for(let i=0;i<30;i++) spark(b.x, b.y, i % 2 ? "#8f4fd0" : "#1b1218");
+      if(state === STATE.PLAY){
+        if(gearGuard()){ treasure += 80; addGear("near"); pops.push({ x:p.x, y:p.y - 46, t:80, text:"기세를 버텼다! +80", color:"#ffd76a" }); }
+        else overwhelm("패왕의 기세에 짓눌렸다!");
+      }
+      b.tired = 130; b.haki = 260 * rage;
+    }
+    return;
+  }
+  b.haki -= dt;
+  if(b.haki <= 0){ b.charge = 90; return; }
+  b.fire -= dt;
+  if(b.fire <= 0){ b.fire = 100 * rage; aimShot({ x:b.x, y:b.y }, 9, 0, 6, 14); }   // 참격
+}
+const drumPos = (b, i) => ({ x: b.x + Math.cos(b.t*0.03 + i*2.094)*70, y: b.y + 20 + Math.sin(b.t*0.03 + i*2.094)*34 });
+function updateThunder(b, dt){
+  const rage = b.hp <= 1 ? 0.75 : 1;
+  const CAP = 9.2;
+  const want = Math.min(p.vx, CAP*0.9) + ((p.x + 290) - b.x) * 0.03;
+  b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+  b.y = 96 + Math.sin(b.t*0.025)*18;
+  if(b.boltT > 0) b.boltT -= dt;
+  if(b.warn > 0){
+    b.warn -= dt;
+    gearSurge(dt);
+    if(b.warn <= 0){
+      // 낙뢰 — 화면 전체. 기어 상태거나 바위 기둥에 매달려 있으면 버틴다
+      b.boltT = 22;
+      addShake(8, 20);
+      flash = settings.flash ? 1 : 0;
+      if(state === STATE.PLAY){
+        if(gearGuard()){ treasure += 60; pops.push({ x:p.x, y:p.y - 46, t:70, text:"번개를 버텼다! +60", color:"#ffd76a" }); }
+        else if(rope && rope.a.kind === 1){ pops.push({ x:p.x, y:p.y - 46, t:70, text:"바위 기둥이 번개를 받아냈다", color:"#cfeaf2" }); }
+        else overwhelm("낙뢰에 맞았다!");
+      }
+      b.storm = 280 * rage;
+    }
+    return;
+  }
+  b.storm -= dt;
+  if(b.storm <= 0){ b.warn = 90; return; }
+  b.fire -= dt;
+  if(b.fire <= 0){ b.fire = 120 * rage; aimShot({ x:b.x, y:b.y + 10 }, 7, 0, 7, 12); }   // 전기 구슬
+}
+// 낙뢰를 맞은 북 — 맞힌 자리(주먹 또는 몸)에서 가장 가까운 북이 부서진다
+function breakDrum(b){
+  const hx = fist ? fist.x : p.x, hy = fist ? fist.y : p.y;
+  let bi = -1, bd = 1e9;
+  for(let i=0;i<3;i++) if(b.drums[i]){ const d = drumPos(b, i), dd = Math.hypot(d.x - hx, d.y - hy); if(dd < bd){ bd = dd; bi = i; } }
+  if(bi >= 0){ b.drums[bi] = false; const d = drumPos(b, bi); for(let i=0;i<16;i++) spark(d.x, d.y, "#ffd76a"); }
+}
+
+function drawShark(b, x, hurt){
+  const y = b.y;
+  if(b.mode === "swim" || b.mode === "warn"){
+    // 물속 그림자 + 지느러미
+    ctx.fillStyle = "rgba(11,32,42,0.7)";
+    ctx.beginPath(); ctx.ellipse(x, SEA + 20, 70, 15, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = b.mode === "warn" ? "#f4f6f8" : "#3a4a56";
+    ctx.beginPath(); ctx.moveTo(x - 16, SEA + 4); ctx.lineTo(x + 4, SEA - (b.mode === "warn" ? 34 : 22)); ctx.lineTo(x + 14, SEA + 4); ctx.closePath(); ctx.fill();
+    return;
+  }
+  const ang = b.mode === "leap" ? Math.atan2(b.vy, b.vx) : 0;
+  const flip = b.mode === "leap" && b.vx < 0 ? -1 : 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(flip < 0 ? ang + Math.PI : ang);
+  ctx.scale(flip, 1);
+  ctx.fillStyle = hurt ? "#f4ecd9" : "#4a5e6c";
+  ctx.beginPath(); ctx.ellipse(0, 0, 58, 20, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#dfe6ee"; ctx.beginPath(); ctx.ellipse(6, 8, 44, 10, 0, 0, Math.PI); ctx.fill();
+  ctx.fillStyle = hurt ? "#f4ecd9" : "#4a5e6c";
+  ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(-18, -44); ctx.lineTo(14, -16); ctx.closePath(); ctx.fill();         // 등지느러미
+  ctx.beginPath(); ctx.moveTo(-54, 0); ctx.lineTo(-80, -22); ctx.lineTo(-72, 0); ctx.lineTo(-80, 20); ctx.closePath(); ctx.fill();   // 꼬리
+  ctx.fillStyle = "#f4f6f8";                                                                                               // 톱니 이빨
+  for(let i=0;i<5;i++){ ctx.beginPath(); ctx.moveTo(30 + i*5, 4); ctx.lineTo(32 + i*5, 10); ctx.lineTo(34 + i*5, 4); ctx.fill(); }
+  ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.arc(36, -6, 3, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "#2a3a46"; ctx.lineWidth = 2;
+  ctx.beginPath(); for(let i=0;i<3;i++){ ctx.moveTo(18 - i*5, -6); ctx.lineTo(16 - i*5, 6); } ctx.stroke();               // 아가미
+  ctx.restore();
+}
+function drawVice(b, x, hurt){
+  const by = b.y;
+  // 쇳빛 기구 + 바구니 — 바구니 밑에 화약통을 매달았다
+  ctx.fillStyle = "#5a5a66"; ctx.beginPath(); ctx.ellipse(x, by - 92, 40, 46, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#3a3a44"; for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.ellipse(x + i*16, by - 92, 5, 45, 0, 0, Math.PI*2); ctx.fill(); }
+  ctx.strokeStyle = "#6b4426"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x - 28, by - 60); ctx.lineTo(x - 20, by + 14); ctx.moveTo(x + 28, by - 60); ctx.lineTo(x + 20, by + 14); ctx.stroke();
+  ctx.fillStyle = "#54331f"; ctx.fillRect(x - 24, by + 10, 48, 22);
+  ctx.beginPath(); ctx.moveTo(x - 4, by + 32); ctx.lineTo(x - 4, by + 40); ctx.stroke();
+  ctx.fillStyle = hurt ? "#f4ecd9" : "#8a5a2c"; ctx.beginPath(); ctx.ellipse(x - 4, by + 52, 12, 14, 0, 0, Math.PI*2); ctx.fill();   // 화약통
+  ctx.strokeStyle = "#d9b877"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 15, by + 48); ctx.lineTo(x + 7, by + 48); ctx.stroke();
+  // 바이스 — 쇠 갑옷, 사슬을 빙빙 돌린다(던진 직후엔 멈춤)
+  const y = by - 6;
+  ctx.fillStyle = hurt ? "#f4ecd9" : "#5a5a66"; ctx.fillRect(x - 13, y - 4, 26, 32);
+  ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(x, y - 14, 10, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#2f2f38"; ctx.fillRect(x - 11, y - 26, 22, 8);
+  ctx.fillStyle = "#b03a34"; ctx.fillRect(x - 6, y - 16, 12, 3);
+  if(b.open <= 0 && !viceHook){
+    ctx.strokeStyle = "#c9c2b4"; ctx.lineWidth = 3;
+    const a = b.t * 0.3;
+    ctx.beginPath(); ctx.moveTo(x + 12, y); ctx.lineTo(x + 12 + Math.cos(a)*34, y - 20 + Math.sin(a)*34); ctx.stroke();
+    ctx.fillStyle = "#9a9aa6"; ctx.beginPath(); ctx.arc(x + 12 + Math.cos(a)*34, y - 20 + Math.sin(a)*34, 6, 0, Math.PI*2); ctx.fill();
+  }
+  if(viceHook){
+    // 플레이어에게 걸린 사슬
+    ctx.strokeStyle = "#c9c2b4"; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x + 12, y); ctx.lineTo(p.x - cam.x, p.y); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+function drawMusang(b, x, hurt){
+  const y = b.y;
+  if(b.charge > 0){
+    // 패왕의 기세 — 검붉은 기운이 부풀어 오른다
+    const k = 1 - b.charge / 90;
+    ctx.strokeStyle = "rgba(143,79,208," + (0.35 + k*0.5).toFixed(2) + ")"; ctx.lineWidth = 4 + k*6;
+    ctx.beginPath(); ctx.arc(x, y, 40 + k*150, 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = "rgba(27,18,24,.6)"; ctx.lineWidth = 2;
+    for(let i=0;i<8;i++){ const a = i*0.785 + time*0.05; ctx.beginPath(); ctx.moveTo(x + Math.cos(a)*30, y + Math.sin(a)*30); ctx.lineTo(x + Math.cos(a)*(50 + k*90), y + Math.sin(a)*(50 + k*90)); ctx.stroke(); }
+  }
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = hurt ? "#f4ecd9" : "#2a2a3a";                        // 검은 도포
+  ctx.beginPath(); ctx.moveTo(-14, -8); ctx.lineTo(14, -8); ctx.lineTo(20, 26); ctx.lineTo(-20, 26); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(0, -18, 10, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#1b1218"; ctx.fillRect(-10, -30, 20, 6);              // 상투
+  ctx.beginPath(); ctx.arc(0, -32, 4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = b.tired > 0 ? "#f7a8a0" : "#1b1218";
+  ctx.fillRect(-6, -19, 4, 2); ctx.fillRect(2, -19, 4, 2);
+  if(b.tired > 0){ ctx.fillStyle = "#8fd6d8"; ctx.beginPath(); ctx.arc(13, -24, 3, 0, Math.PI*2); ctx.fill(); }   // 땀
+  ctx.restore();
+  // 칼 — 몸 둘레를 돈다
+  const tx = x + Math.cos(b.t*0.07)*44, ty = y + Math.sin(b.t*0.07)*44;
+  ctx.strokeStyle = "#dfe6ee"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x + Math.cos(b.t*0.07)*12, y + Math.sin(b.t*0.07)*12); ctx.lineTo(tx, ty); ctx.stroke();
+}
+function drawThunder(b, x, hurt){
+  const y = b.y;
+  ctx.fillStyle = "rgba(70,70,90,.85)";                                 // 먹구름
+  for(const [ox, r] of [[-30, 22], [0, 28], [30, 22]]){ ctx.beginPath(); ctx.arc(x + ox, y + 30, r, 0, Math.PI*2); ctx.fill(); }
+  ctx.fillStyle = hurt ? "#f4ecd9" : "#e0c060";                         // 신관
+  ctx.beginPath(); ctx.moveTo(x - 12, y - 4); ctx.lineTo(x + 12, y - 4); ctx.lineTo(x + 16, y + 22); ctx.lineTo(x - 16, y + 22); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(x, y - 14, 9, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#1b1218"; ctx.fillRect(x - 9, y - 26, 18, 5);
+  for(let i=0;i<3;i++){
+    if(!b.drums[i]) continue;
+    const d = drumPos(b, i);
+    ctx.strokeStyle = "rgba(255,215,106,.5)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(d.x - cam.x, d.y); ctx.stroke();
+    ctx.fillStyle = hurt ? "#f4ecd9" : "#b03a34";
+    ctx.beginPath(); ctx.ellipse(d.x - cam.x, d.y, 16, 12, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ffd76a"; ctx.font = "800 11px 'Pretendard', system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("雷", d.x - cam.x, d.y + 1);
+  }
+  if(b.warn > 0){
+    // 낙뢰 예고 — 화면 곳곳에 번쩍이는 기둥
+    const k = 1 - b.warn / 90;
+    ctx.strokeStyle = "rgba(255,240,150," + (0.15 + k*0.4).toFixed(2) + ")"; ctx.lineWidth = 2; ctx.setLineDash([10, 12]);
+    for(let gx = -((cam.x) % 110); gx < W; gx += 110){ ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, SEA); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+  if(b.boltT > 0){
+    ctx.strokeStyle = "rgba(255,250,200," + (b.boltT / 22).toFixed(2) + ")"; ctx.lineWidth = 5;
+    for(let gx = -((cam.x) % 110); gx < W; gx += 110){
+      ctx.beginPath(); ctx.moveTo(gx, 0);
+      for(let yy = 60; yy <= SEA; yy += 60) ctx.lineTo(gx + (Math.random() - 0.5)*30, yy);
+      ctx.stroke();
+    }
+  }
+}
+// 기세·낙뢰 경고 — 화면 가운데 위
+function drawBossWarn(){
+  if(!boss || state !== STATE.PLAY) return;
+  let text = null, col = "#d8a8ff", left = 0;
+  if(boss.type === MUSANG && boss.charge > 0){ text = "패왕의 기세! 기어(E)를 켜고 버텨라"; left = boss.charge; }
+  else if(boss.type === THUNDER && boss.warn > 0){ text = "낙뢰가 온다! 기어(E)를 켜거나 바위 기둥에 매달려라"; left = boss.warn; col = "#ffe680"; }
+  if(!text) return;
+  ctx.save();
+  ctx.fillStyle = "rgba(13,20,30,.7)"; ctx.fillRect(W/2 - 250, 132, 500, 46);
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(W/2 - 250, 132, 500, 46);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "800 16px 'Pretendard', system-ui, sans-serif"; ctx.fillStyle = col;
+  ctx.fillText(text, W/2, 148);
+  ctx.font = "700 12px ui-monospace, Menlo, monospace";
+  ctx.fillStyle = gearGuard() ? "#9fe0a0" : "#f4ecd9";
+  ctx.fillText(gearGuard() ? "기어 상태 — 버틸 수 있다" : (left / 60).toFixed(1) + "초 · 기어 게이지 " + Math.floor(gear / gearMax() * 100) + "%", W/2, 167);
+  ctx.restore();
 }
 
 const admiralHatch = (b) => (b.t % 220) < 60;
@@ -5703,6 +6060,14 @@ function drawBoss(){
 
   } else if(b.type === ADMIRAL){
     drawAdmiralShip(b, x, hurt);
+  } else if(b.type === SHARK){
+    drawShark(b, x, hurt);
+  } else if(b.type === VICE){
+    drawVice(b, x, hurt);
+  } else if(b.type === MUSANG){
+    drawMusang(b, x, hurt);
+  } else if(b.type === THUNDER){
+    drawThunder(b, x, hurt);
 
   } else if(b.type === 3){
     // 밧줄 끊는 자 — 고리 위에 웅크리고 앉아 칼을 든다
@@ -7335,6 +7700,7 @@ function draw(){
   if(state === STATE.PLAY) drawBarrageText();
   if(state === STATE.PLAY) drawSpeedLines();
   if(boss && state === STATE.PLAY) drawBossBar();
+  drawBossWarn();
   if(state === STATE.PLAY) drawSkillGauge();
   if(state === STATE.PLAY) drawGunGauge();
   if(state === STATE.PLAY) drawFusenGauge();
@@ -8411,6 +8777,9 @@ function miniKey(k, down, e){
 }
 
 window.__swing = {
+  hook: () => viceHook,
+  cam: () => cam,
+  setRope: (a) => { rope = a ? { a, len: 120 } : null; },
   peek: () => ({ x:p.x, y:p.y, vx:p.vx, vy:p.vy, rope, dist, treasure, state, SEA, boss, shots, stun, bossKills,
                  mobs, skillCd, fist, gunCd, gun, deathReason, chain, chainTimer, maxChain, bestChain, shield,
                  practiceMode, dailyMode, fire, slowT, bossIntro, shakeT, meats, fusen, perfects, perfectStreak, missions, recordBroken, weather, skims, nearMisses, goldRings, anchors, gear, gearT, gears, runBounty, newBountyRecord, runGrade, barrels, barrelsBroken, gulls, gullKills, gullHits, arcsDone, coins, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzMode, blitzT, rushMode, rushIdx, rushDone, barrage, shells, barragesCleared, floes, geysers, floeSaves, geyserHits, rocketCharge, rockets }),
