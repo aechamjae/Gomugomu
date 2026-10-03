@@ -291,7 +291,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v41";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v42";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -5604,16 +5604,39 @@ function drawShots(){
 // 뒤에서 쫓는 보스의 기본 걸음 — 플레이어 뒤 gap 자리로 다가오되, 플레이어가 되돌아오면 거의 물러서지 않는다(그래야 칠 수 있다)
 function chaseBehind(b, gap, dt, back){
   const want = (p.x - gap) - b.x;
+  if(want > 280){
+    // 한참 처졌다 — 플레이어보다 반드시 빠르게(고정 속도면 최고 속도의 플레이어를 영영 못 따라잡는다)
+    b.x += Math.min(want, (Math.max(22, Math.abs(p.vx) + 8) + want * 0.04) * dt);
+    return;
+  }
   b.x += Math.max(-(back || 1.5), Math.min(30, want * 0.08)) * dt;
+}
+// 앞쪽 공중 보스(무상·뇌명) — 뒤처지면 하늘 높이 솟아 앞질러 나간 뒤 다시 내려온다(그동안은 약점·공격 없음)
+function skyRelocate(b, dt, homeY, ahead){
+  if(b.dive === 0 && b.x < p.x - 240) b.dive = 1;
+  if(b.dive === 1){
+    b.y += (-170 - b.y) * 0.07 * dt;
+    if(b.t % 4 < 1) spark(b.x, b.y, "#efe2c4");
+    if(b.y <= -150) b.dive = 2;
+  } else if(b.dive === 2){
+    b.x += (Math.max(21, Math.abs(p.vx) + 7) + Math.max(0, p.x - b.x) * 0.05) * dt;
+    if(b.x > p.x + ahead) b.dive = 3;
+  } else if(b.dive === 3){
+    b.y += (homeY - b.y) * 0.07 * dt;
+    if(Math.abs(b.y - homeY) < 6) b.dive = 0;
+  }
+  return b.dive !== 0;
 }
 function updateShark(b, dt){
   const rage = b.hp <= 1 ? 0.7 : 1;
   if(b.mode === "swim"){
-    b.y += ((SEA + 34) - b.y) * 0.1 * dt;
+    // 한참 뒤처져 있으면 깊이 잠수해 빠르게 따라붙는다(chaseBehind가 속도를 올린다)
+    const deep = (p.x - 190) - b.x > 280;
+    b.y += ((SEA + (deep ? 120 : 34)) - b.y) * 0.1 * dt;
     chaseBehind(b, 190, dt, 14);                  // 물속에선 자유롭게 되돌아간다
     if(b.t % 4 < 1) spark(b.x + (Math.random()-0.5)*40, SEA + 2, "#8fd6d8");
     b.cd -= dt;
-    if(b.cd <= 0){ b.mode = "warn"; b.cd = 34; }
+    if(b.cd <= 0 && !deep){ b.mode = "warn"; b.cd = 34; }
   } else if(b.mode === "warn"){
     chaseBehind(b, 150, dt, 6);
     b.cd -= dt;
@@ -5629,6 +5652,7 @@ function updateShark(b, dt){
     }
   } else if(b.mode === "leap"){
     b.x += b.vx*dt; b.y += b.vy*dt; b.vy += b.g*dt;
+    if(b.x < p.x - 520 && b.y > SEA - 40){ b.mode = "swim"; b.cd = 100; return; }
     // 턱 — 날아가는 쪽 앞머리에 닿으면 물린다
     const sp = Math.hypot(b.vx, b.vy) || 1, jx = b.x + b.vx/sp*36, jy = b.y + b.vy/sp*36;
     if(stun <= 0 && iframes <= 0 && distOriginToSeg(pPrevX - jx, pPrevY - jy, p.x - jx, p.y - jy) < 16 + 13){
@@ -5640,12 +5664,29 @@ function updateShark(b, dt){
     b.y = SEA - 6 + Math.sin(b.t*0.2)*2;
     // 수면에 떠서 플레이어 바로 아래를 따라 헤엄친다 — 그대로 두면 순식간에 지나쳐 버려 칠 틈이 없었다
     b.x += Math.max(-8, Math.min(26, (p.x + 30 - b.x) * 0.06)) * dt;
+    if(b.x < p.x - 420){ b.mode = "swim"; b.cd = 100; }    // 놓쳤다 — 깊이 잠수해서 다시 쫓아온다
     b.cd -= dt;
     if(b.cd <= 0){ b.mode = "swim"; b.cd = 140 * rage; }
   }
 }
 function updateVice(b, dt){
   const rage = b.hp <= 1 ? 0.7 : 1;
+  // 한참 처지면 기구를 높이 띄워(화면 위로) 뒤쪽 자리까지 날아온 뒤 다시 내려온다 — 그동안은 약점·사슬 없음
+  if(b.dive === 0 && b.x < p.x - 480){ b.dive = 1; viceHook = null; b.open = 0; }
+  if(b.dive === 1){
+    b.y += (-170 - b.y) * 0.07 * dt;
+    if(b.y <= -150) b.dive = 2;
+    return;
+  } else if(b.dive === 2){
+    b.x += (Math.max(22, Math.abs(p.vx) + 10) + Math.max(0, (p.x - 220) - b.x) * 0.05) * dt;
+    if(b.x > p.x - 240) b.dive = 3;
+    return;
+  } else if(b.dive === 3){
+    chaseBehind(b, 220, dt);
+    b.y += (230 - b.y) * 0.07 * dt;
+    if(Math.abs(b.y - 230) < 6) b.dive = 0;
+    return;
+  }
   chaseBehind(b, 220, dt);
   b.y = 230 + Math.sin(b.t*0.03)*40;           // 기구를 타고 뒤쪽 공중에 떠 있다
   if(b.open > 0) b.open -= dt;
@@ -5673,6 +5714,7 @@ function cutViceHook(){
 }
 function updateMusang(b, dt){
   const rage = b.hp <= 1 ? 0.75 : 1;
+  if(skyRelocate(b, dt, 140, 380)) return;       // 월보로 하늘을 차고 앞질러 간다 — 기세·지친 시간은 그대로 멈춰 둔다
   const CAP = 9.2;
   const want = Math.min(p.vx, CAP*0.9) + ((p.x + 300) - b.x) * 0.03;
   b.x += Math.max(-4, Math.min(CAP, want)) * dt;
@@ -5702,11 +5744,12 @@ function updateMusang(b, dt){
 const drumPos = (b, i) => ({ x: b.x + Math.cos(b.t*0.03 + i*2.094)*70, y: b.y + 20 + Math.sin(b.t*0.03 + i*2.094)*34 });
 function updateThunder(b, dt){
   const rage = b.hp <= 1 ? 0.75 : 1;
+  if(b.boltT > 0) b.boltT -= dt;
+  if(skyRelocate(b, dt, 96, 360)) return;        // 먹구름을 타고 하늘 높이 앞질러 간다
   const CAP = 9.2;
   const want = Math.min(p.vx, CAP*0.9) + ((p.x + 290) - b.x) * 0.03;
   b.x += Math.max(-4, Math.min(CAP, want)) * dt;
   b.y = 96 + Math.sin(b.t*0.025)*18;
-  if(b.boltT > 0) b.boltT -= dt;
   if(b.warn > 0){
     b.warn -= dt;
     gearSurge(dt);
@@ -5858,7 +5901,7 @@ function drawThunder(b, x, hurt){
 }
 // 기세·낙뢰 경고 — 화면 가운데 위
 function drawBossWarn(){
-  if(!boss || state !== STATE.PLAY) return;
+  if(!boss || boss.dive || state !== STATE.PLAY) return;   // 앞질러 가는 동안엔 기세·낙뢰가 멈춰 있다
   let text = null, col = "#d8a8ff", left = 0;
   if(boss.type === MUSANG && boss.charge > 0){ text = "패왕의 기세! 기어(E)를 켜고 버텨라"; left = boss.charge; }
   else if(boss.type === THUNDER && boss.warn > 0){ text = "낙뢰가 온다! 기어(E)를 켜거나 바위 기둥에 매달려라"; left = boss.warn; col = "#ffe680"; }

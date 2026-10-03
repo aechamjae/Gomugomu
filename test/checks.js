@@ -2143,17 +2143,17 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   b = a.spawnBoss(false, 11);
   ok("무상은 기세를 쓰기 전엔 약점이 없다", a.weak().length === 0);
   T().setGear(0);
-  b.haki = 0; H.step();
+  b.dive = 0; b.x = a.peek().x + 300; b.haki = 0; H.step();
   ok("기세를 모으기 시작한다", b.charge > 0);
-  for(let i=0;i<60;i++){ H.step(); a.hold(true); }
+  for(let i=0;i<60;i++){ b.dive = 0; b.x = a.peek().x + 300; H.step(); a.hold(true); }
   ok("기세를 모으는 동안 기어 게이지가 저절로 찬다", a.gearInfo().max <= a.peek().gear + 1e-6, "gear=" + Math.floor(a.peek().gear));
   const t0 = a.peek().treasure;
-  for(let i=0;i<40 && b.charge > 0;i++){ H.step(); a.hold(true); }
+  for(let i=0;i<40 && b.charge > 0;i++){ b.dive = 0; b.x = a.peek().x + 300; H.step(); a.hold(true); }
   ok("기어 없이 기세를 맞으면 휘청", a.peek().stun > 0 && b.tired > 0);
   ok("기세 뒤 지친 몸이 약점", a.weak().map(w => w.mark).join() === "무상");
   fresh();
   b = a.spawnBoss(false, 11);
-  b.charge = 3; T().setGear(1e6); a.fireGear();
+  b.dive = 0; b.x = a.peek().x + 300; b.charge = 3; T().setGear(1e6); a.fireGear();
   const tr0 = a.peek().treasure;
   for(let i=0;i<5;i++) H.step();
   ok("기어 상태면 기세를 버틴다(+80)", a.peek().stun <= 0 && a.peek().treasure >= tr0 + 80 && b.tired > 0);
@@ -2164,22 +2164,49 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("뇌명은 HP 3 = 북 셋", b.maxHp === 3 && a.weak().filter(w => w.mark === "북").length === 3);
   b.invul = 0; T().dmg(true, "test");
   ok("맞히면 북이 하나 부서진다", b.hp === 2 && a.weak().length === 2 && b.drums.filter(Boolean).length === 2);
-  b.warn = 2; H.step(); H.step();
+  a.setRope(null);   // 잡은 고리가 하필 바위 기둥이면 낙뢰를 버티니까(그건 아래에서 따로 본다)
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2; H.step(); H.step();
   ok("기어 없이 낙뢰를 맞으면 휘청", a.peek().stun > 0);
   fresh();
   b = a.spawnBoss(false, 12);
   const pillar = { x: a.peek().x + 40, y: a.peek().y - 80, kind: 1 };
   a.peek().anchors.push(pillar);
   a.setRope(pillar);
-  b.warn = 2; H.step(); H.step();
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2; H.step(); H.step();
   ok("바위 기둥에 매달려 있으면 낙뢰를 버틴다", a.peek().stun <= 0);
   fresh();
   b = a.spawnBoss(false, 12);
-  b.warn = 3; T().setGear(1e6); a.fireGear();
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 3; T().setGear(1e6); a.fireGear();
   for(let i=0;i<4;i++) H.step();
   ok("기어 상태면 낙뢰를 버틴다", a.peek().stun <= 0);
   b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t");
   ok("북을 셋 다 부수면 격침", !a.boss());
+  a.toMenu();
+}
+
+/* --- v42: 새 중간보스가 빠른 플레이어를 놓치지 않는다 --- */
+{
+  const a = A();
+  for(const type of [9, 10, 11, 12]){
+    a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(false);
+    const b = a.spawnBoss(false, type);
+    const P = T().P();
+    let maxGap = 0, divedNoWeak = true, dove = false;
+    // 최고 속도로 4초 동안 앞으로 날아간다
+    for(let i=0;i<240;i++){
+      P.vx = 27; P.vy = 0; P.y = 150; a.peek().coins.length = 0;
+      T().setShield(9);
+      H.step();
+      if(a.peek().state !== 1) break;
+      if(b.dive){ dove = true; if(a.weak().length) divedNoWeak = false; }
+    }
+    // 그다음 4초 천천히 — 그 안에 다시 따라붙어 자리를 잡아야 한다
+    for(let i=0;i<240;i++){ P.vx = 6; P.vy = 0; P.y = 150; T().setShield(9); H.step(); }
+    const gap = Math.abs(b.x - a.peek().x);
+    const name = { 9:"톱니턱", 10:"바이스", 11:"무상", 12:"뇌명" }[type];
+    ok(name + " — 최고 속도로 달아나도 다시 따라붙는다", gap < 650 && b.dive === 0 || (type === 9 && gap < 650), "거리 " + Math.round(gap) + "px · dive " + b.dive + (type === 9 ? " · " + b.mode : ""));
+    if(type !== 9) ok(name + " — 앞질러 가는 동안엔 약점이 없다", dove && divedNoWeak);
+  }
   a.toMenu();
 }
 
