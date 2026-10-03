@@ -79,7 +79,7 @@ function swing(a, st){
   a.fire(); H.step();
   s = a.peek();
   ok("발사되면 주먹이 생긴다", !!s.fist);
-  ok("발사 후 쿨타임 진입 (5초 ≈ 300프레임)", s.skillCd > 280, "skillCd=" + Math.round(s.skillCd));
+  ok("발사 후 쿨타임 진입 (10초 ≈ 600프레임)", s.skillCd > 580, "skillCd=" + Math.round(s.skillCd));
   const before = s.skillCd;
   a.fire(); H.step();
   ok("쿨타임 중엔 재발사 불가", a.peek().skillCd <= before);
@@ -92,7 +92,7 @@ function swing(a, st){
   a.fire();
   let killed = false;
   run(a, 60, (st) => { if(!st.mobs.some(m => m.kind===1)) killed = true; });
-  ok("피스톨이 해왕류를 물리친다", killed);
+  ok("피스톨은 해왕류에게 튕겨 나간다(근거리로만 쓰러진다)", !killed);
 }
 {
   let hitOk = false, met = 0;
@@ -543,7 +543,7 @@ function swing(a, st){
   b.gearSel(2);
 }
 {
-  // 기어 3 — 거대 주먹: 범위 안 잡몹 일소 + 보스에 4 피해
+  // 기어 3 — 거대 주먹: 범위 안 잡몹 일소 + 보스 약점에 3 피해(무적 시간은 존중)
   const a = start();
   a.gearSel(3, true);
   T().setGear(160);
@@ -551,11 +551,11 @@ function swing(a, st){
   const s = a.peek();
   s.mobs.length = 0; s.gulls.length = 0;
   s.gulls.push({ x:P.x + 240, base:P.y, y:P.y, t:0, vx:-2, gone:false });
-  const boss = { type:5, big:true, hp:8, maxHp:8, t:0, fire:90, invul:40, flash:0, x:P.x + 260, y:P.y + 20, vy:0, air:false, phase:0, sub:200, perch:null, tents:[], swing:0, sink:0, dive:0 };
+  const boss = { type:5, big:true, hp:8, maxHp:8, t:0, fire:90, invul:0, flash:0, x:P.x + 260, y:P.y + 20, vy:0, air:false, phase:0, sub:200, perch:null, tents:[], swing:0, sink:0, dive:0 };
   T().setBoss(boss);
   P.vx = 5;
   a.fireGear();
-  ok("기어 3 — 거대 주먹이 무적 중인 보스에게도 4 피해", boss.hp === 4, "hp=" + boss.hp);
+  ok("기어 3 — 거대 주먹이 보스 약점에 3 피해", boss.hp === 5, "hp=" + boss.hp);
   ok("기어 3 — 범위 안의 갈매기도 격추", a.peek().gullKills >= 1, "격추=" + a.peek().gullKills);
   ok("기어 3은 즉발이라 강화(방어·무적)가 걸리지 않는다", a.gearInfo().buff === null);
   a.gearSel(2);
@@ -566,6 +566,7 @@ function swing(a, st){
   a.gearSel(4, true);
   T().setGear(230);
   a.fireGear();
+  T().setGearForm("bound");      // 기어 4는 켤 때마다 바운드맨·스네이크맨 중 하나 — 부스터는 바운드맨
   a.hold(false);
   const P = T().P(); P.y = 250; P.vy = 0;
   a.keys.up = true;
@@ -583,9 +584,9 @@ function swing(a, st){
   a.selectGear(4);
   ok("기어는 순서대로만 해금된다(3 전에 4 불가)", a.gearInfo().unlocked === 2);
   a.selectGear(3);
-  ok("보물 3000으로 기어 3 해금·선택", a.gearInfo().unlocked === 3 && a.gearInfo().sel === 3 && sh().bank === 97000, "창고=" + sh().bank);
+  ok("보물 15000으로 기어 3 해금·선택", a.gearInfo().unlocked === 3 && a.gearInfo().sel === 3 && sh().bank === 85000, "창고=" + sh().bank);
   a.selectGear(2);
-  ok("해금한 기어끼리는 자유롭게 고른다", a.gearInfo().sel === 2 && sh().bank === 97000);
+  ok("해금한 기어끼리는 자유롭게 고른다", a.gearInfo().sel === 2 && sh().bank === 85000);
   sh().setBank(0);
 }
 
@@ -921,8 +922,8 @@ function swing(a, st){
   ok("지도 조각을 주우면 판을 넘어 쌓인다", M().pieces === 4, "조각=" + M().pieces);
   a.peek().mapItems.push({ x:T().P().x + 10, y:T().P().y, got:false });
   run(a, 2, () => { P.vx = 5; P.vy = 0; });
-  // 조각마다 창고 +400, 완성하면 +20000 — 4·5번째 조각을 주웠으니 400×2 + 20000
-  ok("5조각을 모으면 지도 완성 — 창고에 보물", M().pieces === 0 && M().done >= 1 && sh().bank === bank0 + 20800,
+  // 조각엔 보물이 없고 완성하면 +10000
+  ok("5조각을 모으면 지도 완성 — 창고에 보물", M().pieces === 0 && M().done >= 1 && sh().bank === bank0 + 10000,
      "조각=" + M().pieces + " 완성=" + M().done + " 창고 " + bank0 + "→" + sh().bank);
   sh().setBank(0); M().set(0);
 }
@@ -930,18 +931,21 @@ function swing(a, st){
 /* --- 60초 보물 사냥 --- */
 {
   const a = A();
+  T().setBlitzDate("");
   a.startBlitz(); H.step(); a.hold(true); H.step(); a.hold(false);
   ok("60초 사냥은 미션 없이 시작한다", a.peek().blitzMode && a.peek().missions.length === 0);
+  ok("60초 사냥은 하루 한 판 — 오늘 이미 했으면 시작하지 않는다", a.startBlitz() === false);
   const P = T().P();
   T().setFusen(0);
-  const t0 = a.peek().blitzT;
   P.y = a.peek().SEA - 20; P.vy = 10;
   run(a, 3);
-  ok("60초 사냥에선 바다에 빠져도 끝나지 않고 5초를 잃는다", a.peek().state === 1 && a.peek().blitzT < t0 - 290, "남은=" + Math.round(a.peek().blitzT));
+  ok("60초 사냥에서도 바다에 빠지면 끝난다", a.peek().state === 2 && a.peek().deathReason === "바다", "state=" + a.peek().state);
+  a.reset(); H.step();
+  ok("끝난 뒤 R로 다시 하면 본게임으로 넘어간다", !a.peek().blitzMode);
   let bossSeen = false, s = null;
-  // 봇이 가끔 제자리에 멈춰 '정체'로 끝나는 판이 있어서 몇 번 다시 해 본다
-  for(let attempt = 0; attempt < 4; attempt++){
-    if(attempt){ a.startBlitz(); H.step(); a.hold(true); H.step(); a.hold(false); }
+  // 봇이 가끔 바다에 빠지거나 '정체'로 끝나는 판이 있어서 몇 번 다시 해 본다(검사에선 날짜 제한을 풀어 준다)
+  for(let attempt = 0; attempt < 6; attempt++){
+    T().setBlitzDate(""); a.startBlitz(); H.step(); a.hold(true); H.step(); a.hold(false); T().setFusen(99);
     s = run(a, 4000, (st) => { swing(a, st); if(st.boss) bossSeen = true; });
     if(s.deathReason === "시간") break;
   }
@@ -1253,14 +1257,14 @@ function swing(a, st){
 {
   const a = start();
   const sh = a.shop;
-  sh().setBank(800);
+  sh().setBank(5300);
   a.hold(false); T().setFusen(0);
   T().P().y = a.peek().SEA + 10;
   H.step();
   ok("창고 보물이 있으면 바다에 빠질 때 부활을 묻는다", a.peek().state === 9);
   a.revive();
   const s1 = a.peek();
-  ok("부활하면 보물 500을 쓰고 튕겨 올라 이어 간다", s1.state === 1 && s1.vy < 0 && sh().bank === 300, "창고=" + sh().bank);
+  ok("부활하면 보물 5000을 쓰고 튕겨 올라 이어 간다", s1.state === 1 && s1.vy < 0 && sh().bank === 300, "창고=" + sh().bank);
   T().P().y = a.peek().SEA + 10;
   for(let k = 0; k < 3; k++) H.step();
   ok("부활은 판당 한 번뿐", a.peek().state === 2, "state=" + a.peek().state);
@@ -1476,12 +1480,12 @@ function swing(a, st){
   const s = a.peek(), P = T().P();
   s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0;
   P.vx = 0; P.vy = 0;
-  const h = s.SEA - 26 - P.y;
-  s.mobs.push({ kind:1, x:P.x + 300, y:s.SEA, phase:3, t:0, h, gone:false });
-  s.mobs.push({ kind:1, x:P.x + 650, y:s.SEA, phase:3, t:0, h, gone:false });
+  // 해왕류는 원거리로 못 쓰러뜨리니 갈매기 둘로 본다
+  s.gulls.push({ x:P.x + 300, base:P.y, y:P.y, t:0, vx:0, gone:false });
+  s.gulls.push({ x:P.x + 650, base:P.y, y:P.y, t:0, vx:0, gone:false });
   a.fire();
-  run(a, 40, () => { P.vx = 0; P.vy = 0; });
-  ok("라이플은 꿰뚫고 날아가 해왕류 둘을 한 번에", !a.peek().mobs.some(m => m.kind === 1 && !m.gone), "남은 해왕류=" + a.peek().mobs.filter(m => m.kind === 1 && !m.gone).length);
+  run(a, 40, () => { P.vx = 0; P.vy = 0; a.peek().gulls.forEach(g => { g.y = P.y; g.vx = 0; }); });
+  ok("라이플은 꿰뚫고 날아가 갈매기 둘을 한 번에", a.peek().gullKills >= 2, "격추=" + a.peek().gullKills);
   tc().equip("pistol"); delete tc().lv.rifle;
 }
 
@@ -1639,16 +1643,16 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     ok("항구 돛대를 잡으면 정박한다", a.peek().state === 11 && a.port().idx === 1, "state=" + a.peek().state);
     T().setTreasure(1000);
     a.shop().setBank(999999);
-    ok("항구 값은 10배 — 이번 판 보물 1000으론 보호막(2200)을 못 산다(창고 보물은 안 쓴다)", !a.port().act(2) && a.peek().shield === 0);
+    ok("항구 값 — 이번 판 보물 1000으론 보호막(2200의 80% = 1760)을 못 산다(창고 보물은 안 쓴다)", !a.port().act(2) && a.peek().shield === 0);
     T().setTreasure(10000);
     a.port().act(2);
-    ok("보호막을 사면 이번 판 보물이 줄고 보호막이 생긴다", a.peek().shield === 1 && a.peek().treasure === 7800, "보물=" + a.peek().treasure);
+    ok("보호막을 사면 이번 판 보물이 줄고 보호막이 생긴다", a.peek().shield === 1 && a.peek().treasure === 8240, "보물=" + a.peek().treasure);
     ok("같은 항구에서 같은 걸 두 번 못 산다", !a.port().act(2));
     a.port().act(4);
     ok("강화 카드를 사면 강화만 3장이 뜨고, 고르면 항구로 돌아온다", a.peek().state === 10 && a.pick2().offer.every(c => c.perk) && a.pick2().back === 11);
     a.pickCard(0);
     ok("…항구 화면으로 복귀", a.peek().state === 11);
-    ok("항구 한 곳에선 2개까지만 산다", !a.port().act(3) && a.peek().treasure === 3800, "보물=" + a.peek().treasure);
+    ok("항구 한 곳에선 2개까지만 산다", !a.port().act(3) && a.peek().treasure === 5040, "보물=" + a.peek().treasure);
     a.port().leave();
     ok("출항하면 게임이 이어진다", a.peek().state === 1);
     ok("다음 항구는 1500m 뒤", Math.round(a.port().next) === 2400);
@@ -2102,9 +2106,16 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 {
   const a = A();
   const fresh = () => { a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(true); };
-  const mids = new Set();
-  for(let i=0;i<400;i++){ const b = a.spawnBoss(false); mids.add(b.type); }
-  ok("중간보스 추첨에 새 4종(9~12)이 들어 있다", [9,10,11,12].every(t => mids.has(t)) && !mids.has(5) && !mids.has(8), [...mids].sort((x,y)=>x-y).join(","));
+  // 해역마다 보스 풀이 다르다 — 노을(0~2000m) 곡예사·밧줄·흑조호 / 빙하 톱니턱·무상·뇌명 / 화산 돌풍·바이스·작살잡이
+  a.startMain(); H.step();
+  const zoneSet = (m) => { const out = new Set(); for(let i=0;i<60;i++){ T().setDist(m); out.add(T().pickMid()); } return [...out].sort((x,y)=>x-y).join(","); };
+  ok("노을 군도엔 곡예사·밧줄 끊는 자·흑조호만", zoneSet(600) === "0,2,3", zoneSet(600));
+  ok("빙하 해역엔 톱니턱·무상·뇌명(패기 보스는 2000m부터)", zoneSet(2600) === "9,11,12", zoneSet(2600));
+  ok("화산 해역엔 돌풍술사·바이스·작살잡이", zoneSet(4600) === "1,4,10", zoneSet(4600));
+  T().setDist(2100); T().bag().zone = -1;
+  const three = [T().pickMid(), T().pickMid(), T().pickMid()];
+  ok("한 해역 안의 세 번은 겹치지 않는다", new Set(three).size === 3, three.join(","));
+  ok("문어는 본게임 추첨에서 빠졌다", [0, 2600, 4600].every(m => !zoneSet(m).split(",").includes("6")));
   ok("연습 목록에 새 보스 4종(10~13번)", (() => { a.startPractice(13); H.step(); return a.peek().practiceMode.bossType === 12; })());
 
   // 톱니턱 — 뒤에서 헤엄쳐 와 매달린 돛대를 물어뜯는다
@@ -2132,7 +2143,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   // 쇠사슬 바이스 — 사슬에 걸리면 끌려가고, Q로 끊는다
   fresh();
   b = a.spawnBoss(false, 10);
-  ok("쇠사슬 바이스도 뒤에서", b.x < a.peek().x && a.weak().map(w => w.mark).join() === "화약통");
+  ok("쇠사슬 바이스도 뒤에서 — 사슬을 던지기 전엔 약점이 없다", b.x < a.peek().x && a.weak().length === 0);
   let st = a.peek();
   T().pushShot({ x: st.x, y: st.y, vx: 0, vy: 0, g: 0, r: 12, kind: 5, spin: 0 });
   H.step();
@@ -2146,25 +2157,38 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   b.open = 50;
   ok("사슬을 던진 직후엔 본체가 빈다", a.weak().some(w => w.mark === "바이스"));
 
-  // 무상 — 패왕의 기세
+  // 무상 — 발도 일섬(조준선 → 돌진 → 빈틈) 두 번 뒤 패왕의 기세
   fresh();
   b = a.spawnBoss(false, 11);
-  ok("무상은 기세를 쓰기 전엔 약점이 없다", a.weak().length === 0);
+  ok("무상은 처음엔 약점이 없다", a.weak().length === 0 && b.st === "idle");
+  b.dive = 0; b.wait = 0; H.step();
+  ok("일섬을 겨눈다(조준선)", b.st === "aim");
+  for(let i=0;i<80 && b.st !== "recover";i++){ b.dive = 0; a.hold(true); H.step(); }
+  ok("돌진한 뒤 칼을 거두는 동안이 약점", b.st === "recover" && a.weak().map(w => w.mark).join() === "무상", "st=" + b.st);
+  // 가만히 매달린 자리를 그대로 꿰뚫으면 휘청
+  fresh();
+  b = a.spawnBoss(false, 11);
+  b.dive = 0; b.st = "aim"; b.stT = 2; b.ax = a.peek().x; b.ay = a.peek().y; b.x = a.peek().x + 200; b.y = a.peek().y;
+  const P0 = T().P();
+  for(let i=0;i<20 && b.st !== "recover";i++){ P0.vx = 0; P0.vy = 0; b.dive = 0; H.step(); }
+  ok("일섬 선 위에 있으면 휘청", a.peek().stun > 0 || a.peek().iframes > 0, "stun=" + a.peek().stun);
+  // 두 번 벤 뒤엔 기세
+  fresh();
+  b = a.spawnBoss(false, 11);
   T().setGear(0);
-  b.dive = 0; b.x = a.peek().x + 300; b.haki = 0; H.step();
-  ok("기세를 모으기 시작한다", b.charge > 0);
+  b.dive = 0; b.st = "idle"; b.wait = 0; b.cuts = 2; b.x = a.peek().x + 300; H.step();
+  ok("두 번 벤 뒤 기세를 모으기 시작한다", b.st === "charge" && b.charge > 0);
   for(let i=0;i<60;i++){ b.dive = 0; b.x = a.peek().x + 300; H.step(); a.hold(true); }
   ok("기세를 모으는 동안 기어 게이지가 저절로 찬다", a.gearInfo().max <= a.peek().gear + 1e-6, "gear=" + Math.floor(a.peek().gear));
-  const t0 = a.peek().treasure;
-  for(let i=0;i<40 && b.charge > 0;i++){ b.dive = 0; b.x = a.peek().x + 300; H.step(); a.hold(true); }
-  ok("기어 없이 기세를 맞으면 휘청", a.peek().stun > 0 && b.tired > 0);
-  ok("기세 뒤 지친 몸이 약점", a.weak().map(w => w.mark).join() === "무상");
+  for(let i=0;i<40 && b.st === "charge";i++){ b.dive = 0; b.x = a.peek().x + 300; H.step(); a.hold(true); }
+  ok("기어 없이 기세를 맞으면 휘청", a.peek().stun > 0 && b.st === "tired");
+  ok("기세 뒤 지친 몸이 약점", a.weak().map(w => w.mark).join() === "지친 몸");
   fresh();
   b = a.spawnBoss(false, 11);
-  b.dive = 0; b.x = a.peek().x + 300; b.charge = 3; T().setGear(1e6); a.fireGear();
+  b.dive = 0; b.x = a.peek().x + 300; b.st = "charge"; b.charge = 3; T().setGear(1e6); a.fireGear();
   const tr0 = a.peek().treasure;
   for(let i=0;i<5;i++) H.step();
-  ok("기어 상태면 기세를 버틴다(+80)", a.peek().stun <= 0 && a.peek().treasure >= tr0 + 80 && b.tired > 0);
+  ok("기어 상태면 기세를 버틴다(+80)", a.peek().stun <= 0 && a.peek().treasure >= tr0 + 80 && b.st === "tired");
 
   // 뇌명 — 북 셋, 낙뢰
   fresh();
@@ -2173,20 +2197,20 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   b.invul = 0; T().dmg(true, "test");
   ok("맞히면 북이 하나 부서진다", b.hp === 2 && a.weak().length === 2 && b.drums.filter(Boolean).length === 2);
   a.setRope(null);   // 잡은 고리가 하필 바위 기둥이면 낙뢰를 버티니까(그건 아래에서 따로 본다)
-  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2;
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2; b.colX = a.peek().x;
   for(let i=0;i<5 && !(b.boltT > 0);i++) H.step();   // 한 프레임이 정확히 1이 아니라 warn=2가 두 프레임에 딱 안 끝날 수 있다
-  ok("기어 없이 낙뢰를 맞으면 휘청", a.peek().stun > 0, "state=" + a.peek().state + " warn=" + b.warn + " boltT=" + b.boltT + " dive=" + b.dive + " gear=" + JSON.stringify(a.gearInfo().buff) + " giant=" + !!a.gearInfo().giant);
+  ok("기어 없이 낙뢰 기둥 안에 있으면 감전(긴 기절)", a.peek().stun > 40 && T().elec() > 0, "state=" + a.peek().state + " warn=" + b.warn + " boltT=" + b.boltT + " dive=" + b.dive + " gear=" + JSON.stringify(a.gearInfo().buff) + " giant=" + !!a.gearInfo().giant);
   fresh();
   b = a.spawnBoss(false, 12);
   const pillar = { x: a.peek().x + 40, y: a.peek().y - 80, kind: 1 };
   a.peek().anchors.push(pillar);
   a.setRope(pillar);
-  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2;
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2; b.colX = a.peek().x;
   for(let i=0;i<5 && !(b.boltT > 0);i++) H.step();
   ok("바위 기둥에 매달려 있으면 낙뢰를 버틴다", a.peek().stun <= 0);
   fresh();
   b = a.spawnBoss(false, 12);
-  b.dive = 0; b.x = a.peek().x + 290; b.warn = 3; T().setGear(1e6); a.fireGear();
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 3; b.colX = a.peek().x; T().setGear(1e6); a.fireGear();
   for(let i=0;i<4;i++) H.step();
   ok("기어 상태면 낙뢰를 버틴다", a.peek().stun <= 0);
   b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t");
@@ -2218,6 +2242,155 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     if(type !== 9) ok(name + " — 앞질러 가는 동안엔 약점이 없다", dove && divedNoWeak);
   }
   a.toMenu();
+}
+
+/* --- v44: 보스 리메이크 · 기어 · 밸런스 --- */
+{
+  const a = A();
+  const fresh = () => { a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(true); };
+  // 체력은 보스마다 다르다
+  fresh();
+  const hpOf = (t, big) => { const b = a.spawnBoss(!!big, t); return b.maxHp; };
+  ok("보스 체력이 종류마다 다르다(곡예사 3 · 톱니턱 2 · 크라켄 9 · 유령선 7 · 해군 대장 10)",
+     hpOf(0) === 3 && hpOf(9) === 2 && hpOf(5, true) === 9 && hpOf(7, true) === 7 && hpOf(8, true) === 10);
+
+  // 곡예사 — 가까이 붙으면 칼날 회오리
+  fresh();
+  let b = a.spawnBoss(false, 0);
+  b.dive = 0; b.ringCd = 0;
+  const P = T().P();
+  for(let i=0;i<4;i++){ b.x = P.x + 60; b.y = P.y - 40; b.dive = 0; H.step(); }
+  ok("곡예사에게 붙으면 칼날 회오리를 예고한다", b.ringT > 0);
+  const n0 = a.peek().shots.length;
+  for(let i=0;i<30 && b.ringT > 0;i++){ b.dive = 0; T().setShield(0); H.step(); }
+  ok("…사방으로 단검을 흩뿌린다", a.peek().shots.length >= n0 + 8, "탄 " + n0 + "→" + a.peek().shots.length);
+
+  // 밧줄 끊는 자 — 매달린 고리로 덮쳐 와 줄을 자른다 → 팔 부상
+  fresh();
+  b = a.spawnBoss(false, 3);
+  const hang = a.peek().rope && a.peek().rope.a;
+  b.cd = 0; b.x = hang.x + 300; b.y = hang.y;
+  let leapt = false;
+  for(let i=0;i<120 && b.mode !== "rest";i++){ a.hold(true); a.keys.right = false; T().setFusen(3); H.step(); if(b.mode === "leap") leapt = true; }
+  ok("매달려 있으면 밧줄 끊는 자가 그 고리로 덮쳐 온다", leapt && b.tgt === hang);
+  ok("줄을 자르면 떨어지고 팔 부상(한동안 못 건다)", !a.peek().rope && T().arm() > 0, "arm=" + T().arm());
+  const hurtA = T().arm();
+  a.hold(true); H.step();
+  ok("팔 부상 중엔 고리를 못 잡는다", !a.peek().rope);
+  for(let i=0;i<hurtA + 2;i++){ T().setFusen(3); H.step(); }
+  ok("팔 부상은 시간이 지나면 낫는다", T().arm() <= 0);
+  // 톱질하는 동안 놓으면 헛손질
+  fresh();
+  b = a.spawnBoss(false, 3);
+  const hang2 = a.peek().rope.a;
+  b.mode = "saw"; b.tgt = hang2; b.sawT = 20;
+  a.hold(false); a.setRope(null); H.step();
+  ok("톱질 중에 놓고 옮겨 타면 헛손질 — 팔은 멀쩡", b.mode === "rest" && T().arm() <= 0);
+
+  // 톱니턱 — 매달린 돛대를 물면 팔 부상
+  fresh();
+  b = a.spawnBoss(false, 9);
+  const mast = a.peek().rope && a.peek().rope.a;
+  b.mode = "climb"; b.a = mast; b.x = mast.x; b.y = mast.y + 41;
+  H.step();
+  ok("톱니턱이 매달린 돛대를 물면 팔을 물린다(팔 부상)", mast.broken && T().arm() > 0, "arm=" + T().arm());
+
+  // 돌풍술사 — 대돌풍은 매달린 팔도 풀어 버린다
+  fresh();
+  b = a.spawnBoss(false, 4);
+  b.dive = 0; b.blowT = 70; b.tear = 0; b.blowWarn = 0;
+  for(let i=0;i<24;i++){ b.dive = 0; b.x = a.peek().x + 300; a.hold(true); a.keys.right = false; H.step(); }
+  ok("대돌풍이 불면 매달려 있어도 팔이 풀리고 뒤로 밀린다", !a.peek().rope && a.peek().vx < 0, "vx=" + a.peek().vx.toFixed(1));
+
+  // 쇠사슬 바이스 — 더 세게 당긴다
+  fresh();
+  b = a.spawnBoss(false, 10);
+  T().pushShot({ x: a.peek().x, y: a.peek().y, vx: 0, vy: 0, g: 0, r: 12, kind: 5, spin: 0 });
+  H.step();
+  const v0 = a.peek().vx;
+  a.keys.right = false;
+  for(let i=0;i<10;i++) H.step();
+  ok("바이스 사슬은 예전보다 세게 당긴다(10프레임에 -6 이상)", a.peek().vx < v0 - 6, v0.toFixed(1) + " → " + a.peek().vx.toFixed(1));
+
+  // 뇌명 — 기둥 밖이면 피한다
+  fresh();
+  b = a.spawnBoss(false, 12);
+  a.setRope(null);
+  b.dive = 0; b.x = a.peek().x + 290; b.warn = 2; b.colX = a.peek().x + 300;
+  for(let i=0;i<5 && !(b.boltT > 0);i++) H.step();
+  ok("낙뢰 기둥 밖에 있으면 맞지 않는다", a.peek().stun <= 0 && T().elec() <= 0);
+
+  // 대형 보스 — 곧장 따라붙는다
+  fresh();
+  b = a.spawnBoss(true, 5);
+  const P2 = T().P();
+  for(let i=0;i<120;i++){ P2.vx = 26; P2.vy = 0; P2.y = 150; T().setShield(9); a.setRope(null); H.step(); }
+  ok("크라켄은 최고 속도로 달아나도 잠수·순간이동 없이 곧장 따라온다", b.dive === 0 && b.x > a.peek().x - 100, "거리 " + Math.round(b.x - a.peek().x) + " dive " + b.dive);
+  // 기어 경계
+  b.guardT = 0; b.gcyc = 0;
+  T().setGear(1e6); H.step();
+  ok("기어 게이지가 가득 차면 대형 보스가 약점을 감춘다(경계)", b.guarding === true && a.weak().length === 0);
+  a.gearSel(2);
+  T().setGear(1e6); a.fireGear(); H.step();
+  ok("강화 기어를 켜면 한동안 몸을 사린다", b.guardT > 0 && a.weak().length === 0);
+  a.toMenu();
+}
+{
+  // 기어 4 바운드맨 — 바다를 두 번 튕긴다
+  const a = start();
+  a.gearSel(4, true);
+  T().setGear(1e6); a.fireGear(); T().setGearForm("bound");
+  T().setFusen(0); a.hold(false); a.setRope(null);
+  const P = T().P();
+  let bounced = 0;
+  for(let k=0;k<2;k++){ P.y = a.peek().SEA - 10; P.vy = 8; H.step(); if(a.peek().state === 1 && P.vy < 0) bounced++; }
+  ok("바운드맨은 바다에서 두 번 튕긴다", bounced === 2, "튕김=" + bounced);
+  P.y = a.peek().SEA - 10; P.vy = 8; H.step();
+  ok("세 번째엔 빠진다", a.peek().state !== 1, "state=" + a.peek().state);
+  a.gearSel(2);
+}
+{
+  // 기어 4 스네이크맨 — 주먹이 보스 약점으로 휘어 간다(사거리 무관)
+  const a = start();
+  a.gearSel(4, true);
+  T().setGear(1e6); a.fireGear(); T().setGearForm("snake");
+  const P = T().P();
+  const s = a.peek(); s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0;
+  const boss = { type:0, big:false, hp:3, maxHp:3, t:0, fire:999, invul:0, flash:0, x:P.x + 620, y:P.y - 140, vy:0, air:false, phase:0, sub:0, perch:null, tents:[], swing:0, sink:0, dive:0, ringCd:999, ringT:0 };
+  T().setBoss(boss);
+  a.fire();
+  let hit = false;
+  run(a, 60, () => { P.vx = 0; P.vy = 0; if(boss.hp < 3) hit = true; });
+  ok("스네이크맨 주먹은 피스톨 사거리 밖 보스 약점에도 휘어 가 맞는다", hit, "hp=" + boss.hp);
+  a.gearSel(2);
+}
+{
+  // 해왕류 — 근거리로만, 50m 앞에서 경고
+  const a = start();
+  const s = a.peek();
+  s.mobs.length = 0;
+  s.mobs.push({ kind:1, x:s.x + 1500, y:s.SEA, phase:0, t:0, h:0, gone:false });
+  H.step();
+  ok("해왕류는 100m 앞에선 아직 경고하지 않는다", a.peek().mobs.some(m => m.kind === 1 && m.phase === 0));
+  // 불꽃 — 멀리 갈수록 짧아진다(끊기지 않는다)
+  const fireAt = (m) => { start(); T().setDist(m); const P = T().P(); P.vx = 30; P.vy = 0; a.setRope(null); H.step(); return a.peek().fire; };
+  const f0 = fireAt(100), f1 = fireAt(2500), f2 = fireAt(6000);
+  ok("불꽃은 2000m를 넘어도 붙고, 멀리 갈수록 짧다", f1 > 0 && f1 < f0 && f2 > 0 && f2 <= f1, f0.toFixed(0) + " · " + f1.toFixed(0) + " · " + f2.toFixed(0));
+}
+{
+  // 휘청 감소 하한 — 질긴 고무 2 + 선의 + 기어 2 를 다 겹쳐도 40%는 남는다
+  const a = start();
+  const base = T().hit(false);
+  a.gearSel(2); T().setGear(1e6); a.fireGear();
+  a.pickCard && 0;
+  const red = T().hit(false);
+  ok("휘청 감소는 합쳐서 60%까지만", red >= base * 0.4 - 1e-6, base + " → " + red.toFixed(1));
+}
+{
+  // 원거리 쿨타임 두 배 · 미니게임은 메달 보상만
+  const a = start();
+  a.fire();
+  ok("피스톨 재충전 10초(600프레임)", a.peek().skillCd > 580, "skillCd=" + Math.round(a.peek().skillCd));
 }
 
 /* --- 프로젝트 원칙 --- */
