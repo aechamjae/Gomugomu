@@ -1677,7 +1677,8 @@ function genRouteColumn(){
   if(genRand() < ROUTE_GOLD * (wk("gold") ? 2 : 1)) up.gold = true;
   anchors.push(up, low);
   // 바닷길 — 낮은 그네 바닥을 따라 금화 2배짜리가 늘어선다
-  for(let i=0;i<3;i++) coins.push({ x: lastAX + gap*(0.3 + i*0.2), y: SEA - 96 - genRand()*24, got:false, dbl:true });
+  const first = routeLeft === ROUTE_N;     // 첫 칸엔 이정표가 서 있으니 금화는 비워 둔다
+  for(let i=0;i<3;i++){ const cy = SEA - 96 - genRand()*24; if(!first) coins.push({ x: lastAX + gap*(0.3 + i*0.2), y: cy, got:false, dbl:true }); }
   // 하늘길 — 갈매기가 높이 떠 있다
   if(x/22 > GULL_FROM && genRand() < 0.45 * (wk("gull") ? 2 : 1)){
     const gy = 120 + genRand()*50;
@@ -6357,10 +6358,13 @@ function drawMissionFlash(){
   const y = 100 - Math.min(20, (150 - missionFlash.t)*0.6) + 20;
   ctx.save();
   ctx.globalAlpha = a;
+  // 긴 문구(갈림길 안내 등)는 상자를 글자에 맞춰 넓힌다
+  ctx.font = "700 18px 'Pretendard', system-ui, sans-serif";
+  const hw = Math.min(W/2 - 10, Math.max(170, ctx.measureText(missionFlash.text).width / 2 + 34));
   ctx.fillStyle = "rgba(13,27,38,0.78)";
-  ctx.fillRect(W/2 - 170, y - 20, 340, 40);
+  ctx.fillRect(W/2 - hw, y - 20, hw*2, 40);
   ctx.strokeStyle = missionFlash.bonus ? "#ffd76a" : missionFlash.gear ? "#ff8fa0" : missionFlash.weather ? "#8fd6d8" : missionFlash.record ? "#ffd76a" : "#9fe0a0"; ctx.lineWidth = 2;
-  ctx.strokeRect(W/2 - 170, y - 20, 340, 40);
+  ctx.strokeRect(W/2 - hw, y - 20, hw*2, 40);
   ctx.restore();
   if(missionFlash.bonus) centerText(missionFlash.text, y, "700 16px 'Pretendard', system-ui, sans-serif", "#ffd76a", a);
   else if(missionFlash.gear) centerText(missionFlash.text, y, "700 19px 'Pretendard', system-ui, sans-serif", "#ff8fa0", a);
