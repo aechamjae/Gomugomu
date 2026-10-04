@@ -1813,7 +1813,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   R().r.finish = a.peek().x - 1;
   H.step();
   ok("먼저 결승에 닿으면 이기고 현상금", R().wins === w0 + 1 && R().r.over === "win" && a.peek().treasure >= 400, "보물 " + Math.floor(a.peek().treasure));
-  for(let i=0;i<130;i++){ H.step(); a.hold(true); }
+  for(let i=0;i<130;i++){ if(a.peek().state === 10) a.pickCard(0); H.step(); a.hold(true); }   // v45부터 이기면 보상 카드가 뜬다
   ok("경주가 끝나면 라이벌은 떠난다", !R().r);
   // 지기
   a.startMain(); H.step(); a.hold(true); H.step();
@@ -1821,7 +1821,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   T().setTreasure(0);
   R().r.x = R().r.finish + 1;
   H.step();
-  ok("라이벌이 먼저 닿으면 지고 보상 없음", R().r.over === "lose" && R().wins === 0 && a.peek().treasure < 400);
+  ok("라이벌이 먼저 닿으면 진다(보상 없음)", R().r.over === "lose" && R().wins === 0 && a.peek().treasure < 400);
   // 경주 중엔 보스가 안 나온다 — 끝나면 나온다
   a.startMain(); H.step(); a.hold(true); H.step();
   R().start();
@@ -1829,7 +1829,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   for(let i=0;i<5;i++) H.step();
   const noBoss = !a.boss();
   R().r.finish = a.peek().x - 1;
-  for(let i=0;i<3;i++) H.step();
+  for(let i=0;i<3;i++){ if(a.peek().state === 10) a.pickCard(0); H.step(); }
   ok("경주 중엔 보스가 끼어들지 않고, 끝나면 나온다", noBoss && !!a.boss());
   a.startPractice(0); H.step();
   a.rival().setNext(0);
@@ -2497,6 +2497,49 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     const gap = Math.abs(b.x - a.peek().x);
     ok({ 6:"문어", 13:"대장장이" }[type] + " — 최고 속도로 달아나도 다시 따라붙는다", gap < 650 && b.dive === 0, "거리 " + Math.round(gap) + "px · dive " + b.dive);
   }
+  a.toMenu();
+}
+
+{
+  // v45: 라이벌 — 속도 2/3 · 예고 · 이기면 현상금+카드 · 지면 풍선 하나(없으면 보물)
+  const a = A();
+  const R = () => a.rival();
+  a.startMain(); H.step(); a.hold(true); H.step();
+  R().start(); R().r.t = 0;
+  ok("라이벌 기본 속도는 예전(20.5)의 2/3", Math.abs(R().speed() - 20.5 * 2/3) < 0.05, R().speed().toFixed(2));
+  a.startMain(); H.step(); a.hold(true); H.step();
+  R().setNext(a.peek().dist + 60);
+  H.step();
+  ok("경주 100m 전부터 예고한다", R().warn() > 0 && R().warn() <= 100 && !R().r, "남은 " + Math.round(R().warn()) + "m");
+  R().setNext(a.peek().dist + 300);
+  ok("그보다 멀면 예고하지 않는다", R().warn() < 0);
+  // 이기면 현상금 + 보상 카드
+  a.startMain(); H.step(); a.hold(true); H.step();
+  R().start(); T().setTreasure(0);
+  const stake = R().r.stake;
+  R().r.finish = a.peek().x - 1;
+  H.step();
+  ok("이기면 걸린 현상금(800)과 보상 카드", stake === 800 && a.peek().treasure >= 800 && a.pick2().pending, "보물 " + Math.floor(a.peek().treasure));
+  a.pickCard(0);
+  for(let i=0;i<40;i++){ H.step(); if(a.peek().state === 10) a.pickCard(0); }
+  ok("다음 경주엔 판돈이 오른다(+200)", R().stake() === 1000);
+  // 지면 풍선 하나
+  a.startMain(); H.step(); a.hold(true); H.step();
+  T().setFusen(2); T().setTreasure(5000);
+  R().start(); R().r.x = R().r.finish + 1;
+  H.step();
+  ok("지면 풍선 하나가 터진다(보물은 그대로)", a.peek().fusen === 1 && a.peek().treasure >= 5000 && R().r.over === "lose");
+  // 풍선이 없으면 보물을 빼앗긴다
+  a.startMain(); H.step(); a.hold(true); H.step();
+  T().setFusen(0); T().setTreasure(5000);
+  R().start(); R().r.x = R().r.finish + 1;
+  H.step();
+  ok("풍선이 없으면 걸린 현상금만큼 보물을 빼앗긴다", Math.abs(a.peek().treasure - 4200) < 50, "보물 " + Math.floor(a.peek().treasure));
+  a.startMain(); H.step(); a.hold(true); H.step();
+  T().setFusen(0); T().setTreasure(300);
+  R().start(); R().r.x = R().r.finish + 1;
+  H.step();
+  ok("가진 것보다 많이는 못 가져간다", a.peek().treasure >= 0 && a.peek().treasure < 50, "보물 " + Math.floor(a.peek().treasure));
   a.toMenu();
 }
 

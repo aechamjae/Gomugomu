@@ -580,8 +580,9 @@ const NAVY_REWARD = 300;
 const RIVAL_FIRST = 800;
 const RIVAL_EVERY = [1600, 2400];
 const RIVAL_LEN   = 250;              // 경주 거리(m)
-const RIVAL_SPD   = 20.5;             // 기본 속도(px/프레임) — 스윙 중 봇 속도가 약 23, 봇 승률 약 70%
-const RIVAL_REWARD = 400;             // 이기면(경주마다 +100)
+const RIVAL_SPD   = 13.7;             // 기본 속도(px/프레임) — v45에서 2/3로(예전 20.5는 스윙 중 봇 속도 23에 너무 붙어서 말이 안 됐다)
+const RIVAL_REWARD = 800;             // 걸린 현상금(경주마다 +200) — 이기면 받고 보상 카드까지, 지면 풍선 하나(없으면 이만큼 보물을 빼앗긴다)
+const RIVAL_WARN  = 100;              // 경주 시작 100m 전부터 예고 배너
 const RIVALS = [
   { name:"갈고리 잭",   coat:"#2f6a3a", band:"#1b1218" },
   { name:"쌍칼 메이",   coat:"#6a2f5a", band:"#e0b040" },
@@ -4307,16 +4308,19 @@ function rivalPath(x){
   const sag = Math.min(150, SEA - 70 - Math.max(A.y, B.y));
   return { y: A.y + (B.y - A.y) * t + sag * Math.sin(Math.PI * t), A, t };
 }
+const rivalStake = () => RIVAL_REWARD + 200 * rivalWins;
+// 라이벌이 끼어들 수 있는 때 — 보스·해군·포격·보물섬이 없을 때만(그동안은 경주가 미뤄지고, 예고도 멈춘다)
+const rivalFree = () => !practiceMode && !rushMode && !blitzMode && !boss && !navy && !barrage && !bonusOn && state === STATE.PLAY;
 function startRival(){
   const who = RIVALS[rivalRaces % RIVALS.length];
   rivalRaces++;
-  rival = { x: p.x - 70, y: p.y, t: 0, spd: RIVAL_SPD * diffK("rival"), finish: p.x + RIVAL_LEN*22, who, over: null, overT: 0, A: null, armT: 0 };
-  missionFlash = { text: "라이벌 해적 '" + who.name + "'의 도전! " + RIVAL_LEN + "m 앞 결승 부표까지 경주", reward:0, t:170, bonus:true };
+  rival = { x: p.x - 70, y: p.y, t: 0, spd: RIVAL_SPD * diffK("rival"), finish: p.x + RIVAL_LEN*22, who, over: null, overT: 0, A: null, armT: 0, stake: rivalStake() };
+  missionFlash = { text: "라이벌 해적 '" + who.name + "'의 도전! " + RIVAL_LEN + "m 앞 결승 부표까지 — 걸린 현상금 " + rival.stake, reward:0, t:170, bonus:true };
   dexSee("rival");
 }
 function updateRival(dt){
   if(!rival){
-    if(!practiceMode && !rushMode && !blitzMode && !boss && !navy && !barrage && !bonusOn && state === STATE.PLAY && dist >= nextRivalAt){
+    if(rivalFree() && dist >= nextRivalAt){
       startRival();
       nextRivalAt = dist + RIVAL_EVERY[0] + rivalRand()*(RIVAL_EVERY[1] - RIVAL_EVERY[0]);
     }
@@ -4339,16 +4343,33 @@ function updateRival(dt){
     const won = p.x >= r.finish;
     r.over = won ? "win" : "lose";
     if(won){
-      const gain = RIVAL_REWARD + 100 * rivalWins;
+      // 이기면 걸린 현상금 + 기어 게이지 + 보스처럼 보상 카드 3장 중 하나
+      const gain = r.stake;
       rivalWins++;
       treasure += gain;
       addGear("near");
       happyT = 60;
-      missionFlash = { text: "'" + r.who.name + "'을(를) 이겼다! 현상금 +" + gain, reward:0, t:150, record:true };
+      missionFlash = { text: "'" + r.who.name + "'을(를) 이겼다! 현상금 +" + gain + " · 보상 카드", reward:0, t:150, record:true };
+      pops.push({ x:p.x, y:p.y - 50, t:100, text:"경주 승리 +" + gain, color:"#ffd76a" });
       for(let i=0;i<30;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#9fe0a0");
-    } else {
-      missionFlash = { text: "'" + r.who.name + "'에게 졌다… 다음엔 꼭!", reward:0, t:130, weather:"storm" };
+      pickOffer = rollCards(false); pickPending = true;
+    } else if(fusen > 0){
+      // 지면 라이벌이 풍선 하나를 쏘아 터뜨린다
+      fusen--;
+      fusenAnim = 0;
+      addShake(5, 12);
+      missionFlash = { text: "'" + r.who.name + "'에게 졌다… 풍선 하나가 터졌다 (남은 풍선 " + fusen + ")", reward:0, t:150, weather:"storm" };
       pops.push({ x:r.x, y:r.y - 40, t:90, text:"하하! 느려 터졌군!", color:"#f7a8a0" });
+      pops.push({ x:p.x, y:p.y - 50, t:90, text:"펑! 풍선 -1", color:"#f7a8a0" });
+      for(let i=0;i<18;i++) spark(p.x, p.y - 20, "#8fd6d8");
+    } else {
+      // 풍선이 없으면 걸린 현상금만큼 보물을 빼앗아 간다(가진 것보다 많이는 못 가져간다)
+      const lost = Math.min(Math.floor(treasure), r.stake);
+      treasure -= lost;
+      addShake(5, 12);
+      missionFlash = { text: "'" + r.who.name + "'에게 졌다… 보물 " + lost + "을(를) 빼앗겼다", reward:0, t:150, weather:"storm" };
+      pops.push({ x:r.x, y:r.y - 40, t:90, text:"이건 내가 가져간다!", color:"#f7a8a0" });
+      pops.push({ x:p.x, y:p.y - 50, t:90, text:"보물 -" + lost, color:"#f7a8a0" });
     }
   }
 }
@@ -8156,6 +8177,34 @@ function drawKingWarning(){
   ctx.restore();
 }
 
+// 라이벌 경주 예고 — 시작 RIVAL_WARN m 전부터 화면 위에 배너(걸린 판돈도 같이)
+const rivalWarnLeft = () => {
+  if(rival || !rivalFree()) return -1;
+  const left = nextRivalAt - dist;
+  return left > RIVAL_WARN || left < 0 ? -1 : left;
+};
+function drawRivalWarning(){
+  const left = rivalWarnLeft();
+  if(left < 0) return;
+  const who = RIVALS[rivalRaces % RIVALS.length];
+  const bw = 380, bx = (W-bw)/2, by = warnY; warnY += 50;
+  const pulse = 0.55 + Math.sin(time*0.22)*0.35;
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,0.82)";
+  ctx.fillRect(bx-14, by-18, bw+28, 42);
+  ctx.strokeStyle = "rgba(247,168,160," + pulse.toFixed(2) + ")";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(bx-14, by-18, bw+28, 42);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "700 18px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "#ffd7d2";
+  ctx.fillText("⚑ 라이벌 '" + who.name + "' 접근 — " + Math.ceil(left) + "m 뒤 경주", W/2, by - 3);
+  ctx.font = "400 12px 'Pretendard', system-ui, sans-serif";
+  ctx.fillStyle = "rgba(244,236,217,.75)";
+  ctx.fillText("이기면 현상금 " + rivalStake() + " + 보상 카드 · 지면 풍선 1개" + (fusen > 0 ? "" : "(없으면 보물 " + rivalStake() + ")"), W/2, by + 15);
+  ctx.restore();
+}
+
 function drawStallWarning(){
   if(stallT <= STALL_WARN_T) return;
   const bw = 380, bx = (W-bw)/2, by = warnY; warnY += 50;
@@ -8621,6 +8670,7 @@ function draw(){
   if(state === STATE.PLAY) drawMissionFlash();
   warnY = boss ? 68 : 22;
   if(state === STATE.PLAY) drawKingWarning();
+  if(state === STATE.PLAY) drawRivalWarning();
   if(state === STATE.PLAY) drawStallWarning();
 
   if(fire > 0 && state === STATE.PLAY){
@@ -9751,7 +9801,7 @@ window.__swing = {
                      gearAdd: (kind) => { const g0 = gear; addGear(kind); return gear - g0; },
                      portPrice: (i) => portPrice(PORT_ITEMS[i]), setPortIdx: (n) => { portIdx = n; }, shield: () => shield,
                      grabRot: () => { const a = { x: p.x + 40, y: p.y - 60, kind: 0, rot: true }; anchors.push(a); rope = null; grabCd = 0; stun = 0; holding = false; grab(); return a; } }),
-  rival: () => ({ r: rival, next: nextRivalAt, wins: rivalWins, races: rivalRaces, setNext: (v) => { nextRivalAt = v; }, start: startRival, speed: () => rival ? rivalSpeed() : 0 }),
+  rival: () => ({ r: rival, next: nextRivalAt, wins: rivalWins, races: rivalRaces, setNext: (v) => { nextRivalAt = v; }, start: startRival, speed: () => rival ? rivalSpeed() : 0, warn: rivalWarnLeft, stake: rivalStake }),
   route: () => ({ list: routes, done: routesDone, next: nextRouteAt, port: nextPortAt,
                   scan: (x) => { cam.x = x; p.x = x + W*0.32; generate(); return anchors; } }),
   spawnBoss: (big, type) => { boss = null; bossIntro = null; spawnBoss(big, type); return boss; },
