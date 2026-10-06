@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>고무팔 · 보관됨</title>
+<meta name="theme-color" content="#0d1b26">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<style>
+  html,body{margin:0;height:100%;}
+  body{
+    background:#0d1b26;color:#f4ecd9;
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    display:flex;align-items:center;justify-content:center;padding:0 16px;text-align:center;
+  }
+  h1{font-size:1.6rem;margin:0 0 .6rem;color:#f0a24e;}
+  p{margin:.3rem 0;color:rgba(244,236,217,.75);line-height:1.6;}
+</style>
+</head>
+<body>
+<main>
+  <h1>⚓ 항해 종료</h1>
+  <p>고무팔은 보관 처리되었습니다.</p>
+  <p>오늘 하루도 잘 보내세요.</p>
+</main>
+<script>
+  // 이전에 설치된 서비스 워커와 오프라인 캐시를 정리한다.
+  try{
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(()=>{});
+    }
+    if(window.caches){
+      caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(()=>{});
+    }
+  }catch(e){}
+</script>
+</body>
+</html>
