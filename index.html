@@ -76,10 +76,16 @@
   .acct .msg{min-height:18px;font-size:13px;text-align:center;color:#f7a8a0;}
   .acct .msg.good{color:#9fe0a0;}
   .acct .note{font-size:11px;color:var(--cream-dim);text-align:center;line-height:1.5;}
+  .acct .code{display:flex;flex-direction:column;gap:6px;border-top:1px solid rgba(217,184,119,.3);padding-top:10px;}
+  .acct .code .sub{font-size:12px;color:var(--rope);text-align:center;}
+  .acct textarea{font:12px/1.4 monospace;padding:6px 8px;border-radius:5px;border:1px solid rgba(217,184,119,.45);resize:vertical;
+                 background:#0a1620;color:var(--cream);word-break:break-all;-webkit-user-select:text;user-select:text;}
   /* 가로 폰은 높이가 낮아서 — 아이디·비번을 한 줄에, 버튼 넷도 한 줄에 */
   @media (pointer:coarse) and (max-height:500px){
     .acct .box{width:min(560px,94%);padding:10px 14px;gap:6px;display:grid;grid-template-columns:1fr 1fr;}
-    .acct h2,.acct .who,.acct .chk,.acct .btns,.acct .msg,.acct .note{grid-column:1 / -1;}
+    .acct h2,.acct .who,.acct .chk,.acct .btns,.acct .msg,.acct .note,.acct .code{grid-column:1 / -1;}
+    .acct .code{padding-top:6px;gap:4px;}
+    .acct textarea{height:34px;}
     .acct h2{font-size:16px;}
     .acct .btns{gap:6px;}
     .acct .btns + .btns{margin-top:-2px;}
@@ -221,6 +227,15 @@
           <button type="button" id="acctLogout">로그아웃</button>
           <button type="button" id="acctClose">닫기</button>
         </div>
+        <div class="code">
+          <div class="sub">저장 코드 — 다른 기기로 진행 상황 옮기기</div>
+          <textarea id="acctCode" rows="3" spellcheck="false" autocapitalize="none" autocorrect="off" placeholder="[코드 만들기]를 누르거나, 받은 코드를 여기에 붙여 넣기"></textarea>
+          <div class="btns">
+            <button type="button" id="acctMake">코드 만들기</button>
+            <button type="button" id="acctMail">메일 보내기</button>
+            <button type="button" id="acctLoad">불러오기</button>
+          </div>
+        </div>
         <div class="msg" id="acctMsg"></div>
         <div class="note">새 계정은 [중복 확인] 후 만들 수 있다 · 계정은 이 기기(브라우저)에 저장된다 — 홈 화면 앱과 브라우저, 카톡 안 브라우저는 저장소가 서로 달라 계정이 따로 보인다</div>
       </form>
@@ -291,7 +306,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v45";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v46";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -4990,6 +5005,87 @@ function logout(){
   return switchAccount(null).then(() => ({ ok:true, msg:"'" + was + "' 로그아웃 — 게스트로 돌아왔다" }));
 }
 
+/* 저장 코드 — 서버 없이 다른 기기(또는 다른 브라우저)로 진행 상황을 옮긴다
+   지금 계정(게스트면 게스트)의 저장분 6가지를 한 줄 글자로 묶고, 받는 쪽은 지금 계정에 덮어쓴다.
+   설정·힌트는 기기 단위라 넣지 않고, 일일 도전 유령(움직임 기록)은 길어서 뺀다 */
+const SAVE_KEYS = ["swing:best", "swing:bestChain", "swing:titles", "swing:shop", "swing:log", "swing:daily"];
+const CODE_HEAD = "GOMU1-";
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+function b64enc(s){
+  const u = unescape(encodeURIComponent(s));   // UTF-8 바이트를 한 글자씩
+  let out = "";
+  for(let i = 0; i < u.length; i += 3){
+    const a = u.charCodeAt(i), b = u.charCodeAt(i + 1), c = u.charCodeAt(i + 2);
+    const n = (a << 16) | ((b || 0) << 8) | (c || 0);
+    out += B64[n >> 18 & 63] + B64[n >> 12 & 63] + (i + 1 < u.length ? B64[n >> 6 & 63] : "") + (i + 2 < u.length ? B64[n & 63] : "");
+  }
+  return out;
+}
+function b64dec(t){
+  let u = "";
+  for(let i = 0; i < t.length; i += 4){
+    const q = [0, 1, 2, 3].map(j => i + j < t.length ? B64.indexOf(t[i + j]) : 0);
+    if(q.some(v => v < 0)) throw new Error("bad");
+    const n = (q[0] << 18) | (q[1] << 12) | (q[2] << 6) | q[3];
+    u += String.fromCharCode(n >> 16 & 255);
+    if(i + 2 < t.length) u += String.fromCharCode(n >> 8 & 255);
+    if(i + 3 < t.length) u += String.fromCharCode(n & 255);
+  }
+  return decodeURIComponent(escape(u));
+}
+async function readSave(k){
+  try{ if(window.storage){ const r = await window.storage.get(K(k)); if(r && r.value) return r.value; } }catch(e){}
+  try{ if(window.localStorage) return localStorage.getItem(K(k)); }catch(e){}
+  return null;
+}
+async function writeSave(k, v){
+  try{ if(window.storage){ await window.storage.set(K(k), v); return; } }catch(e){}
+  try{ if(window.localStorage) localStorage.setItem(K(k), v); }catch(e){}
+}
+// 결과는 { ok, msg, code }
+async function makeSaveCode(){
+  await saveProfile();                          // 메모리의 최신 상태를 먼저 저장분에 맞춘다
+  const d = {};
+  for(const k of SAVE_KEYS){
+    let v = await readSave(k);
+    if(v == null) continue;
+    if(k === "swing:daily"){ try{ const r = JSON.parse(v); r.ghost = []; v = JSON.stringify(r); }catch(e){} }
+    d[k] = v;
+  }
+  const body = b64enc(JSON.stringify({ v:1, ver:GAME_VER, at:todayKey(), from:account || "", d }));
+  const code = CODE_HEAD + body + "." + sha256(body).slice(0, 8);
+  return { ok:true, code, msg:"저장 코드를 만들었다 — 다른 기기의 [불러오기]에 붙여 넣으면 된다" };
+}
+function readSaveCode(code){
+  const t = String(code || "").replace(/\s+/g, "");
+  if(t.indexOf(CODE_HEAD) !== 0) return null;
+  const dot = t.lastIndexOf(".");
+  if(dot < 0) return null;
+  const body = t.slice(CODE_HEAD.length, dot);
+  if(sha256(body).slice(0, 8) !== t.slice(dot + 1)) return null;   // 복사하다 잘리거나 바뀐 코드
+  try{
+    const r = JSON.parse(b64dec(body));
+    if(!r || r.v !== 1 || !r.d || typeof r.d !== "object") return null;
+    for(const k in r.d){
+      if(SAVE_KEYS.indexOf(k) < 0 || typeof r.d[k] !== "string") return null;
+      if(k !== "swing:best" && k !== "swing:bestChain") JSON.parse(r.d[k]);
+    }
+    return r;
+  }catch(e){ return null; }
+}
+async function applySaveCode(code){
+  const r = readSaveCode(code);
+  if(!r) return { ok:false, msg:"코드가 올바르지 않다 — 앞뒤가 잘리지 않게 통째로 붙여 넣어 주세요" };
+  // 지금 계정의 저장분을 처음 상태로 덮은 다음 코드 내용을 쓴다(코드에 없는 항목이 앞 값으로 남지 않게)
+  resetProfile();
+  await saveProfile();
+  for(const k in r.d) await writeSave(k, r.d[k]);
+  resetProfile();
+  if(state !== STATE.MENU) reset();
+  await loadProfile();
+  return { ok:true, msg:"불러왔다" + (r.from ? " ('" + r.from + "' 계정, " : " (") + r.at + "에 만든 코드) — " + (account ? "'" + account + "'" : "게스트") + "에 저장됨" };
+}
+
 /* 계정 창 */
 const acctEl = document.getElementById("acct");
 let acctOpen = false;
@@ -5036,6 +5132,49 @@ function acctSignup(){
   acctChecked = null;
   acctAct((i, pw) => signup(i, pw, document.getElementById("acctCarry").checked));
 }
+// 저장 코드 버튼들
+function acctMakeCode(){
+  return makeSaveCode().then((r) => {
+    const box = document.getElementById("acctCode");
+    box.value = r.code;
+    acctLoadArmed = false;
+    let copied = false;
+    try{ box.select(); }catch(e){}
+    const done = () => acctRefresh(r.msg + (copied ? " (복사됨)" : ""), true);
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        return navigator.clipboard.writeText(r.code).then(() => { copied = true; done(); }, done).then(() => r);
+      }
+    }catch(e){}
+    done();
+    return r;
+  });
+}
+function acctMailCode(){
+  const box = document.getElementById("acctCode");
+  const ready = readSaveCode(box.value) ? Promise.resolve() : acctMakeCode();
+  return ready.then(() => {
+    const code = box.value, subject = "고무팔 저장 코드 " + todayKey();
+    const text = "고무팔 저장 코드 (" + (account || "게스트") + ", " + todayKey() + ")\n" +
+                 "다른 기기에서 메뉴 9번 계정 창 → [불러오기] 칸에 아래 줄을 통째로 붙여 넣기\n\n" + code;
+    try{
+      if(navigator.share){ navigator.share({ title:subject, text }).catch(() => {}); return; }
+    }catch(e){}
+    location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(text);
+  });
+}
+let acctLoadArmed = false;   // 덮어쓰기 전에 한 번 더 누르게 한다
+function acctLoadCode(){
+  const code = document.getElementById("acctCode").value;
+  if(!readSaveCode(code)){ acctLoadArmed = false; acctRefresh("코드가 올바르지 않다 — 앞뒤가 잘리지 않게 통째로 붙여 넣어 주세요", false); return Promise.resolve(); }
+  if(!acctLoadArmed){
+    acctLoadArmed = true;
+    acctRefresh("지금 " + (account ? "'" + account + "'" : "게스트") + " 진행 상황을 코드 내용으로 덮어쓴다 — 맞으면 한 번 더 누르기", false);
+    return Promise.resolve();
+  }
+  acctLoadArmed = false;
+  return applySaveCode(code).then((r) => acctRefresh(r.msg, r.ok));
+}
 (() => {
   const on = (id, f) => { const el = document.getElementById(id); if(el) el.addEventListener("click", (e) => { e.preventDefault(); f(); }); };
   on("acctLogin",  () => acctAct(login));
@@ -5045,10 +5184,15 @@ function acctSignup(){
   if(idIn) idIn.addEventListener("input", () => { acctChecked = null; });
   on("acctLogout", () => logout().then((r) => acctRefresh(r.msg, r.ok)));
   on("acctClose",  closeAccount);
+  on("acctMake",   acctMakeCode);
+  on("acctMail",   acctMailCode);
+  on("acctLoad",   acctLoadCode);
+  const codeIn = document.getElementById("acctCode");
+  if(codeIn) codeIn.addEventListener("input", () => { acctLoadArmed = false; });
   if(acctEl) acctEl.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if(e.key === "Escape") closeAccount();
-    else if(e.key === "Enter"){ e.preventDefault(); acctAct(login); }
+    else if(e.key === "Enter" && !(e.target && e.target.id === "acctCode")){ e.preventDefault(); acctAct(login); }
   });
   // 계정 창 위의 터치·클릭이 뒤쪽 캔버스로 새지 않게
   if(acctEl) acctEl.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -9778,7 +9922,8 @@ window.__swing = {
   rows: () => menuRows(),
   shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
   acct: () => ({ cur: account, signup, login, logout, open: openAccount, close: closeAccount, isOpen: acctOpen, list: acctList, hash: sha256,
-                 checkId, dedupe: dedupeAccounts, uiCheck: acctCheck, uiSignup: acctSignup }),
+                 checkId, dedupe: dedupeAccounts, uiCheck: acctCheck, uiSignup: acctSignup,
+                 makeCode: makeSaveCode, applyCode: applySaveCode, readCode: readSaveCode, uiMake: acctMakeCode, uiLoad: acctLoadCode }),
   pickCard: (i) => choosePick(i || 0),
   pick2: () => ({ offer: pickOffer, pending: pickPending, perks, back: pickReturn }),
   slingStart: startSling, slingFire: fireSling, sling: () => ({ s: sling, cd: slingCd, n: slings, target: slingTarget() }),
