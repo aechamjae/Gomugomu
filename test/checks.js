@@ -1379,12 +1379,25 @@ function swing(a, st){
   sh().setBank(0);
 }
 {
-  // 창고 → 기술 뽑기 → 기술 목록, 숫자 키와 같은 줄 배열
-  const a = A();
-  a.shopPage(2);
-  ok("기술 뽑기 화면에 팩 세 개가 있다", a.rows().filter(r => /팩 — 보물/.test(r.label)).length === 3);
-  a.shopPage(3);
-  ok("기술 목록 화면에 장착 3줄·강화 3줄", a.rows().filter(r => /^[1-3]\) /.test(r.label)).length === 3 && a.rows().filter(r => /^[4-6]\) 강화/.test(r.label)).length === 3);
+  // 창고 탭 — 기술 탭마다 팩 버튼 하나(7) + 카드 셋(1~3 장착, 4~6 강화), 숫자 키와 같은 줄 배열
+  const a = A(), U = () => a.shopUi();
+  a.shopPage(0);
+  ok("창고 위에 탭 여섯 개와 메뉴 버튼", a.rows().filter(r => r.tab).length === 6 && a.rows().some(r => r.key === 0));
+  const packs = [];
+  for(const i of [1, 2, 3]){
+    U().tab(i);
+    const rs = a.rows();
+    packs.push(rs.filter(r => r.key === 7 && /팩 열기/.test(r.label)).length);
+    if(i === 1) ok("근거리 탭에 장착 3개·강화 3개 버튼", [1,2,3].every(k => rs.some(r => r.key === k)) && [4,5,6].every(k => rs.some(r => r.key === k && /강화|최고/.test(r.label))));
+  }
+  ok("기술 탭 셋 모두 팩 버튼이 하나씩", packs.join() === "1,1,1", packs.join());
+  ok("예전 '기술 뽑기' 쪽(2)은 기술 탭으로", (a.shopPage(2), a.rows().some(r => r.key === 7)) && U().page() === 3);
+  U().tab(0); U().key("ArrowRight");
+  ok("→ 키로 다음 탭", U().page() === 3 && U().cat() === "melee");
+  U().key("ArrowLeft"); U().key("ArrowLeft");
+  ok("← 키로 앞 탭 (처음에서 누르면 끝 탭)", U().page() === 1);
+  U().tab(0);
+  ok("단련 카드는 숫자 1~4, 모두 사각형 버튼", [1,2,3,4].every(k => a.rows().some(r => r.key === k && r.w > 100 && r.h > 50)));
   a.toMenu();
 }
 
@@ -1622,11 +1635,6 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   let topV = 0;
   for(let i=0;i<10;i++){ H.step(); topV = Math.min(topV, m.p.vy); }
   ok("착지 직전에 누르면 슈퍼 점프", m.supers >= 1 && topV < -13, "supers=" + m.supers + " vy=" + topV.toFixed(1));
-  // 전기 해파리 — 감전되면 조작 불능 잠깐
-  m.js.push({ x: m.p.x, y: m.p.y + 40, r: 32, type: 2, vx: 0, t: 0, sq: 0 });
-  m.p.vy = 4;
-  for(let i=0;i<12;i++) H.step();
-  ok("전기 해파리를 밟으면 감전(조작 불능)", m.stunT > 0);
   // 화면 아래로 떨어지면 끝 + 보물 창고 적립
   const bank0 = a.shop().bank;
   m.js.length = 0; m.nextY = -1e9; m.cy = -2000; m.p.y = -1900; m.p.vy = 5; m.top = -1900;
@@ -1636,6 +1644,19 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
      "점수=" + m.score + " 보상=" + m.reward);
   ok("메달을 처음 따면 덤 보물(115m → 동메달)", m.medalBonus === 300 && a.mini().medals.jelly === 1, "덤=" + m.medalBonus);
   ok("한 판 보상은 " + 500 + "까지", m.reward <= 500);
+  // 전기 해파리 — 닿으면 바로 끝(밟아도, 옆에서 부딪쳐도)
+  const zap = (dx, dy, vx, vy) => {
+    M.start("jelly"); M.down(); H.step(); M.up();
+    const q = a.mini().m;
+    q.js.push({ x: q.p.x + dx, y: q.p.y + dy, r: 32, type: 2, vx: 0, t: 0, sq: 0 });
+    q.p.vx = vx; q.p.vy = vy;
+    for(let i=0;i<20 && q.phase === "play";i++) H.step();
+    return q;
+  };
+  let z = zap(0, 40, 0, 4);
+  ok("전기 해파리를 밟으면 바로 끝", z.phase === "over" && /감전/.test(z.reason), z.phase + " " + z.reason);
+  z = zap(60, 0, 6, -3);
+  ok("올라가다 옆에서 부딪쳐도 끝", z.phase === "over" && /감전/.test(z.reason), z.phase + " " + z.reason);
 
   // 2) 고무고무 대포
   M.start("cannon");
@@ -1889,16 +1910,64 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v47: 이야기 선원 — 보스를 격침해야 합류, 나머지는 보물로 고용 --- */
+{
+  const a = A(), U = () => a.shopUi(), CT = () => a.crewTest(), cr = a.crew, sh = a.shop();
+  const list = CT().list, story = list.filter(c => c.boss !== undefined);
+  ok("이야기 선원 5명 · 고용 선원 4명", story.length === 5 && list.length - story.length === 4 && ["cook","nav","doctor","helm"].every(id => !("boss" in list.find(c => c.id === id))));
+  ok("이야기 선원마다 이야기 문단·예고 문구가 있다", story.every(c => c.story.length >= 2 && c.tease));
+  ok("이야기 선원 보스는 서로 다르고 실제 보스다", new Set(story.map(c => c.boss)).size === 5 && story.every(c => c.boss >= 0 && c.boss < 15));
+  // 깨끗한 상태에서 시작
+  const owned0 = cr().owned.slice(), sel0 = cr().sel;
+  cr().owned.length = 0;
+  story.forEach(c => U().dex("boss" + c.boss));
+  sh.setBank(10000000);
+  const iSword = list.findIndex(c => c.id === "sword");
+  ok("보스를 못 잡았으면 보물이 많아도 이야기 선원은 못 데려온다", !cr().hire(iSword) && cr().owned.indexOf("sword") < 0 && a.shop().bank === 10000000 && !U().story());
+  ok("소식이 없으면 메뉴에 배지가 없다", U().news() === 0);
+  U().dex("boss11", 1);                    // 무상을 한 번 격침했다
+  ok("무상을 격침하면 검객의 이야기가 열린다", U().ready(list[iSword]) && U().news() === 1);
+  a.toMenu();
+  ok("메뉴 '보물 창고' 줄에 새 동료 소식", a.rows().some(r => /새 동료 소식 1/.test(r.label)));
+  a.rows().find(r => /보물 창고/.test(r.label)).action();
+  ok("소식이 있으면 창고가 선원 탭으로 열린다", U().page() === 4);
+  ok("선원 탭 머리에 ✉ 배지", a.rows().some(r => r.tab && /✉1/.test(r.label)));
+  cr().hire(iSword);
+  ok("검객 카드를 누르면 이야기 창이 뜬다(아직 합류 전)", U().story() && U().story().id === "sword" && cr().owned.indexOf("sword") < 0);
+  ok("이야기 창이 떠 있으면 그 창 버튼 둘만 누를 수 있다", a.rows().length === 2 && a.rows().some(r => r.key === 1) && a.rows().some(r => r.key === 9));
+  let err = null; try{ U().draw(); }catch(e){ err = e.message; }
+  ok("이야기 창을 그려도 오류가 없다", !err, err);
+  a.rows().find(r => r.key === 1).action();
+  ok("[동료로 맞이하기] — 공짜로 합류하고 바로 동행", cr().owned.indexOf("sword") >= 0 && cr().sel === "sword" && a.shop().bank === 10000000 && !U().story());
+  ok("합류한 뒤엔 소식이 사라진다", U().news() === 0);
+  ok("합류한 이야기 선원은 다시 누르면 내린다(고용 선원과 같다)", cr().hire(iSword) && cr().sel === null);
+  // 판 중에 처음 격침하면 알림
+  U().dex("boss6");
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);   // 연습 모드가 남아 있으면 도감이 안 센다
+  const P = T().P();
+  T().setBoss({ type:6, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon:70, fishSkill:200,
+                invul:0, flash:0, x:P.x+50, y:P.y, vy:0, air:false, phase:0, sub:0,
+                perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 });
+  T().dmg(true, "test");
+  ok("판 중에 문어를 처음 격침하면 음악가 소식", U().runNews() && U().runNews().id === "music" && U().news() === 1, U().runNews() && U().runNews().id);
+  // 모든 탭을 그려도 오류가 없다
+  err = null;
+  try{ for(let i = 0; i < 6; i++){ U().tab(i); U().draw(); } }catch(e){ err = e.message; }
+  ok("창고 탭 여섯 개를 모두 그려도 오류가 없다", !err, err);
+  // 되돌리기
+  cr().owned.length = 0; owned0.forEach(id => cr().owned.push(id)); cr().set(sel0);
+  story.forEach(c => U().dex("boss" + c.boss));
+  sh.setBank(0);
+  a.toMenu();
+}
+
 /* --- v39: 신규 선원 5명 --- */
 {
   const a = A(), CT = () => a.crewTest(), C = a.crew();
   ok("선원은 9명 — 선의·고고학자·조선공·음악가·조타수 추가", CT().list.length === 9 && ["doctor","arch","wright","music","helm"].every(id => CT().list.some(c => c.id === id)));
-  a.shopPage(4); CT().setPage(0);
-  const rows1 = a.rows().filter(r => /\d\) /.test(r.label) && r.swatch).length;
-  CT().setPage(1);
-  const rows2 = a.rows().filter(r => /\d\) /.test(r.label) && r.swatch).length;
-  ok("창고 선원 쪽은 5명 + 4명 두 쪽", rows1 === 5 && rows2 === 4, rows1 + "/" + rows2);
-  CT().setPage(0);
+  a.shopPage(4);
+  const crewRows = a.rows().filter(r => r.key >= 1 && r.key <= 9 && r.w).length;
+  ok("창고 선원 탭은 9명이 한 화면(1~9)", crewRows === 9, crewRows);
   const stunWith = (id) => { C.set(id); a.startMain(); H.step(); a.hold(true); H.step(); return T().hit(false); };
   const s0 = stunWith(null), s1 = stunWith("doctor");
   ok("선의 — 휘청 시간 -30%", Math.abs(s1 - s0 * 0.7) < 0.01, s0.toFixed(1) + " → " + s1.toFixed(1));

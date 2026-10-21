@@ -129,37 +129,39 @@
     }
     .tb{border-radius:50%;}
     .tb:active,.tpause:active{background:rgba(217,184,119,.38);}
-    .tleft{position:absolute;left:3.5vw;bottom:4vh;display:flex;gap:3vw;}
-    .tleft .tb{width:16vw;height:16vw;max-width:78px;max-height:78px;font-size:5vw;}
+    /* 방향 버튼은 크게(◀ ▶ 104px, ▲ ▼ 80px) — 왼쪽 기술 버튼 셋(피스톨·채찍·기어)은 ◀ ▶ 바로 위에 한 줄로 */
+    .touch{--dir:min(21vw, 104px);--sk:min(15vw, 72px);}
+    .tleft{position:absolute;left:3vw;bottom:4vh;display:flex;gap:2.5vw;}
+    .tleft .tb{width:var(--dir);height:var(--dir);font-size:min(7vw, 40px);}
     .tright{position:absolute;right:3.5vw;bottom:3vh;display:flex;flex-direction:column;
             align-items:center;gap:2vh;}
-    .tright .tb.small{width:13vw;height:13vw;max-width:62px;max-height:62px;font-size:4vw;}
+    .tright .tb.small{width:min(17vw, 80px);height:min(17vw, 80px);font-size:min(6vw, 32px);}
     .tright .tb.big{
       width:22vw;height:22vw;max-width:108px;max-height:108px;font-size:5vw;
       background:rgba(217,184,119,.22);border-color:rgba(217,184,119,.8);
     }
     .tskill{
-      position:absolute;left:3.5vw;bottom:23vh;
-      width:15vw;height:15vw;max-width:72px;max-height:72px;font-size:2.9vw;
+      position:absolute;left:3.5vw;bottom:calc(4vh + var(--dir) + 12px);
+      width:var(--sk);height:var(--sk);font-size:2.9vw;
       background:rgba(240,162,78,.24);border-color:rgba(240,162,78,.85);
     }
     .tskill.cool{opacity:.4;border-color:rgba(217,184,119,.3);background:rgba(244,236,217,.06);}
     .tskill2{
-      position:absolute;left:3.5vw;bottom:41vh;
-      width:15vw;height:15vw;max-width:72px;max-height:72px;font-size:2.9vw;
+      position:absolute;left:calc(3.5vw + var(--sk) + 12px);bottom:calc(4vh + var(--dir) + 12px);
+      width:var(--sk);height:var(--sk);font-size:2.9vw;
       background:rgba(143,79,208,.24);border-color:rgba(143,79,208,.85);
     }
     .tskill2.cool{opacity:.4;border-color:rgba(217,184,119,.3);background:rgba(244,236,217,.06);}
     .tsling{
       /* 큰 '팔' 버튼 왼쪽 — 팔을 누른 채 다른 엄지로 누른다 */
-      position:absolute;right:calc(3.5vw + 128px);bottom:calc(3vh + 84px);
+      position:absolute;right:calc(3.5vw + 128px);bottom:calc(3vh + min(17vw, 80px) + 2vh + 26px);
       width:58px;height:58px;font-size:13px;
       background:rgba(127,208,255,.22);border-color:rgba(127,208,255,.85);
     }
     .tsling.cool{opacity:.35;}
     .tskill3{
-      /* 왼쪽 열 근거리 기술(채찍) 버튼 바로 위 */
-      position:absolute;left:calc(3.5vw + (min(15vw, 72px) - 58px) / 2);bottom:calc(41vh + min(15vw, 72px) + 10px);
+      /* 기술 줄 셋째 칸 — 채찍 버튼 오른쪽 */
+      position:absolute;left:calc(3.5vw + 2*(var(--sk) + 12px));bottom:calc(4vh + var(--dir) + 12px + (var(--sk) - 58px) / 2);
       width:58px;height:58px;font-size:13px;
       background:rgba(255,143,160,.26);border-color:rgba(255,143,160,.9);
     }
@@ -306,7 +308,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v46";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v47";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -534,19 +536,46 @@ const pk = (id) => perks[id] || 0;
 const fusenMax = () => FUSEN_MAX + pk("pouch");
 
 /* 선원 — 창고에서 고용하고 출항 화면에서 한 명을 데려간다(C 키·버튼). 플레이어 곁을 따라다닌다 */
+// boss가 있는 선원은 '이야기 선원' — 보물로는 못 사고, 그 보스를 (연습 말고) 한 번 격침하면 이야기가 열려 합류한다.
+// boss는 BOSSES 번호(여기선 아직 상수가 없어서 숫자로): 6 문어 · 7 유령선 · 8 해군 대장 · 11 무상 · 13 풀무
 const CREW = [
   { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1" },
   { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 바람 절반 · 순풍 강화 · 해군이 느려진다" },
-  { id:"sword",  name:"검객",   cost:250000, col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다" },
-  { id:"sniper", name:"저격수", cost:350000, col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다" },
+  { id:"sword",  name:"검객",   cost:0, boss:11, col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다",
+    tease:"빙하 해역의 검호 무상과 겨룬 자에게만 칼을 맡긴다",
+    story:["무상의 기세가 꺾이자, 얼음 위에서 결투를 지켜보던 젊은 검객이 칼집을 들고 다가왔다.",
+           "\"스승님이 무릎 꿇는 건 처음 봅니다. 그 고무팔이 어디까지 닿는지 곁에서 보고 싶습니다.\"",
+           "그날부터 검객은 곁으로 날아드는 물고기와 갈매기를 대신 베어 주었다."] },
+  { id:"sniper", name:"저격수", cost:0, boss:8, col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다",
+    tease:"해군 대장 군함의 망루에서 누군가 총을 겨누고 있다",
+    story:["군함이 기울자 망루에서 백기가 올라왔다. 해군 제복을 벗어 던진 저격수였다.",
+           "\"명령대로만 쏘는 건 지겨웠어. 네 배에선 내가 고른 걸 쏘겠다.\"",
+           "저격수는 앞쪽의 적과 보물 통을 먼저 노려 준다."] },
   { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -30% · 출발할 때 보호막 1" },
-  { id:"arch",   name:"고고학자", cost:200000, col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50%" },
-  { id:"wright", name:"조선공", cost:160000, col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20%" },
-  { id:"music",  name:"음악가", cost:220000, col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25%" },
+  { id:"arch",   name:"고고학자", cost:0, boss:7, col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50%",
+    tease:"망령의 유령선 선창에서 누군가 해도를 붙들고 있다",
+    story:["유령선이 가라앉기 직전, 선창에서 낡은 해도 더미를 끌어안은 학자가 기어 나왔다.",
+           "\"백 년 동안 이 배의 지도만 읽었지. 이제 진짜 바다에서 맞춰 보고 싶군.\"",
+           "고고학자가 고른 보물 통은 더 무겁고, 지도 조각도 더 자주 눈에 띈다."] },
+  { id:"wright", name:"조선공", cost:0, boss:13, col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20%",
+    tease:"용암 대장장이 풀무의 대장간에 사슬에 묶인 일꾼이 있다",
+    story:["풀무의 망치가 식자, 대장간 구석에서 사슬에 묶인 채 배를 고치던 조선공이 고개를 들었다.",
+           "\"삭은 돛대도 내 손을 거치면 한참 버티지. 풀어 주면 네 배를 맡아 주마.\"",
+           "항구 상인들도 조선공의 얼굴을 보면 값을 깎아 준다."] },
+  { id:"music",  name:"음악가", cost:0, boss:6, col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25%",
+    tease:"먹물 장군 문어의 먹물 속에서 바이올린 소리가 들린다",
+    story:["문어가 먹물을 거두자, 촉수에 감겨 춤 반주를 하던 악사가 바이올린을 든 채 떨어졌다.",
+           "\"장군님 춤 반주는 이제 그만! 당신 스윙에 맞춰 켜게 해 줘요.\"",
+           "음악가의 박자에 맞추면 콤보가 길게 이어지고 기어 게이지도 빨리 찬다."] },
   { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 보상 2배 · 라이벌이 느려진다" }
 ];
-const CREW_PER = 5;          // 창고 선원 쪽 한 쪽에 5명씩
-let crewPage = 0;
+let crewPage = 0;            // (예전 두 쪽 나누기 — 이제 한 화면에 9명. 하네스 훅 호환으로만 남김)
+let crewStory = null;        // 창고에서 펼친 이야기 선원 — 합류 창
+let crewNews = null;         // 이번 판에 이야기가 열린 선원(결과 화면 문구)
+const isStoryCrew = (c) => c && c.boss !== undefined;
+const storyKills = (c) => (lifeLog.dex && lifeLog.dex["boss" + c.boss]) || 0;
+const storyReady = (c) => isStoryCrew(c) && crewOwned.indexOf(c.id) < 0 && storyKills(c) > 0;
+const crewNewsCount = () => CREW.filter(storyReady).length;
 // 새 선원 5명의 효과 — 레벨이 오를수록 조금씩 세진다(Lv.1 기준값에서 단계마다 더한다)
 const crewK = (id, base, per) => crewOn(id) ? base + per * (crewLv(id) - 1) : 0;
 const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 240, CREW_SNIPE_R = 520;
@@ -706,7 +735,7 @@ let techLv = { pistol:1, whip:1 }, mats = { melee:0, ranged:0, gear:0 }, eqRange
 const techOf = (id) => TECHS.find(t => t.id === id);
 const tlv = (id) => techLv[id] || 0;
 const techCdMult = (id) => 1 - 0.06 * Math.max(0, tlv(id) - 1);   // 레벨당 재충전 6% 단축
-const rangedCd = () => techOf(eqRanged).cd * (1 - 0.12 * upLv("pistol")) * techCdMult(eqRanged);   // 창고의 피스톨 수련은 원거리 기술 전부에 듣는다
+const rangedCd = () => techOf(eqRanged).cd * (1 - 0.12 * upLv("pistol")) * techCdMult(eqRanged);   // 창고의 사격 수련(id pistol)은 원거리 기술 전부에 듣는다
 const meleeCd = () => techOf(eqMelee).cd * techCdMult(eqMelee);
 function openPack(cat, rnd){
   const c = TECH_CATS[cat], R = rnd || Math.random;
@@ -789,7 +818,7 @@ function saveSettings(){
 /* 보물 창고 — 본게임에서 모은 보물이 쌓이고, 영구 업그레이드를 산다 */
 const UPGRADES = [
   { id:"reach",  name:"고무 단련",  desc:"팔 길이 +6%",             cost:[800, 2000, 4500] },
-  { id:"pistol", name:"피스톨 수련", desc:"피스톨 쿨타임 -12%",      cost:[600, 1500, 3500] },
+  { id:"pistol", name:"사격 수련", desc:"원거리 기술(Q) 재충전 -12%", cost:[600, 1500, 3500] },
   { id:"magnet", name:"금화 자석",  desc:"가까운 금화를 끌어당긴다", cost:[500, 1200, 3000] },
   { id:"fusen",  name:"비상식량",   desc:"출발할 때 풍선 1개",        cost:[2500] }
 ];
@@ -1042,10 +1071,11 @@ function menuRows(){
   if(state === STATE.MENU){
     const top = H/2 - 108, rh = 33;
     const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
-    return [
+    return btnRows([
       { y: top,        label: "1) 본게임" + (diffSel !== "normal" ? " — " + DIFFS[diffSel].name : ""), action: startMainGame },
       { y: top + rh,   label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
-      { y: top + rh*2, label: "3) 보물 창고", action: () => { state = STATE.SHOP; shopMsg = null; shopPage = 0; } },
+      { y: top + rh*2, label: "3) 보물 창고" + (crewNewsCount() ? "  ✉ 새 동료 소식 " + crewNewsCount() : ""), glow: crewNewsCount() > 0,
+        action: () => { state = STATE.SHOP; shopMsg = null; shopPage = crewNewsCount() ? 4 : 0; crewStory = null; } },
       { y: top + rh*3, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
       { y: top + rh*4, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; dexPage = false; } },
       { y: top + rh*5, label: "6) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝 (내일 다시)" : "") + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
@@ -1053,7 +1083,7 @@ function menuRows(){
       { y: top + rh*7, label: "8) 설정", action: () => { state = STATE.SETTINGS; } },
       { y: top + rh*8, label: "9) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount },
       { key: 0, y: top + rh*9, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
-    ];
+    ], 440, 29);
   }
   if(state === STATE.MINI_SELECT){
     const top = H/2 - 70, rh = 64;
@@ -1063,11 +1093,12 @@ function menuRows(){
                sub: q.desc, col: q.col, action: () => startMini(q.id) };
     });
     rows.push({ key: 9, y: top + 3*rh + 20, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } });
-    return rows;
+    rows.forEach(r => { if(r.sub){ r.x = W/2 - 260; r.w = 520; r.h = 56; r.cy = r.y; r.y = r.y - 19; } });
+    return btnRows(rows, 260, 34);
   }
   if(state === STATE.SETTINGS){
     const onoff = (v) => v ? "켜짐" : "꺼짐";
-    return [
+    return btnRows([
       { y: H/2 - 70, label: "1) 화면 흔들림 — " + onoff(settings.shake), action: () => { settings.shake = !settings.shake; saveSettings(); } },
       { y: H/2 - 26, label: "2) 번쩍임(번개·섬광) — " + onoff(settings.flash), action: () => { settings.flash = !settings.flash; saveSettings(); } },
       { y: H/2 + 18, label: "3) 속도선·잔상 — " + onoff(settings.lines), action: () => { settings.lines = !settings.lines; saveSettings(); } },
@@ -1077,7 +1108,7 @@ function menuRows(){
           shopMsg = { text: "힌트를 다시 보여 준다", t: 90, good: true };
         } },
       { y: H/2 + 116, label: "5) ← 뒤로가기", action: () => { state = STATE.MENU; } }
-    ];
+    ], 460, 36);
   }
   if(state === STATE.LOG && dexPage){
     return [{ key: 9, y: H - 30, label: "9) ← 항해 일지", action: () => { dexPage = false; } }];
@@ -1105,83 +1136,7 @@ function menuRows(){
     rows.push({ key: 4, y: 260, label: "4) 바다 도감 (" + dexFound() + "/" + DEX.length + ") →", action: () => { dexPage = true; } });
     return rows;
   }
-  if(state === STATE.SHOP){
-    // 1쪽: 업그레이드, 2쪽: 두건 스킨 — 숫자 키 1~9 안에 들어가게 나눴다
-    const top = H/2 - 92, rowH = 32;
-    if(shopPage === 0){
-      const rows = UPGRADES.map((u, i) => {
-        const lv = upLv(u.id), max = u.cost.length;
-        const price = lv >= max ? "최고 단계" : "보물 " + u.cost[lv];
-        return { y: top + i*rowH, label: (i+1) + ") " + u.name + " " + lv + "/" + max + " — " + u.desc + " · " + price,
-                 action: () => buyUpgrade(u), dim: lv >= max || bank < u.cost[lv] };
-      });
-      rows.push({ y: top + UPGRADES.length*rowH + 16, label: (UPGRADES.length + 1) + ") 두건 스킨 보기 →", action: () => { shopPage = 1; skinPage = 0; shopMsg = null; } });
-      rows.push({ y: top + UPGRADES.length*rowH + 50, label: (UPGRADES.length + 2) + ") 기술 뽑기 · 강화 →", action: () => { shopPage = 2; shopMsg = null; }, hot: true });
-      rows.push({ y: top + UPGRADES.length*rowH + 84, label: (UPGRADES.length + 3) + ") 선원 고용 · 동행 →", action: () => { shopPage = 4; shopMsg = null; } });
-      rows.push({ y: top + UPGRADES.length*rowH + 118, label: (UPGRADES.length + 4) + ") ← 메뉴로", action: () => { state = STATE.MENU; } });
-      return rows;
-    }
-    if(shopPage === 4){
-      // 선원 — 한 쪽에 5명씩. 1~5 고용·데려가기(데려가는 선원을 다시 누르면 혼자 출항), 8 다음 쪽, 9 창고로
-      const pages = Math.ceil(CREW.length / CREW_PER), pg = Math.min(crewPage, pages - 1);
-      const rows = CREW.slice(pg*CREW_PER, pg*CREW_PER + CREW_PER).map((c, i) => {
-        const own = crewOwned.indexOf(c.id) >= 0, on = crewSel === c.id;
-        const status = on ? "동행 중 (누르면 내린다)" : own ? "데려가기" : "고용 " + c.cost;
-        const lvTxt = own ? " Lv." + crewLv(c.id) + (crewNext(c.id) ? " (" + (crewXp[c.id] || 0) + "/" + crewNext(c.id) + "m)" : " 최고") : "";
-        return { y: top - 6 + i*(rowH + 8), label: (i+1) + ") " + c.name + lvTxt + " — " + c.desc + " · " + status,
-                 action: () => hireCrew(c), dim: !own && bank < c.cost, on, swatch: c.col };
-      });
-      rows.push({ key: 8, y: top + CREW_PER*(rowH + 8) + 6, label: "8) " + (pg < pages - 1 ? "다음 쪽 →" : "← 첫 쪽") + "  (" + (pg+1) + "/" + pages + ")",
-                  action: () => { crewPage = (pg + 1) % pages; } });
-      rows.push({ key: 9, y: top + CREW_PER*(rowH + 8) + 38, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
-      return rows;
-    }
-    if(shopPage === 2){
-      // 기술 뽑기 — 1~3 팩 구매, 4~6 분류별 기술 보기, 9 창고로
-      const rows = TECH_ORDER.map((c, i) => {
-        const C = TECH_CATS[c];
-        return { y: top - 6 + i*rowH, label: (i+1) + ") " + C.name + " 팩 — 보물 " + C.price + "  (" + (c === "gear" ? "특성 " : "기술 ") + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + ")",
-                 action: () => openPack(c), dim: bank < C.price, col: C.col };
-      });
-      TECH_ORDER.forEach((c, i) => rows.push({ y: top + 3*rowH + 14 + i*rowH, label: (i+4) + ") " + TECH_CATS[c].unit + " 보기 · 강화 →",
-                                                 action: () => { techCat = c; shopPage = 3; shopMsg = null; } }));
-      rows.push({ key: 9, y: top + 6*rowH + 30, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
-      return rows;
-    }
-    if(shopPage === 3){
-      // 분류 하나의 기술 3개 — 1~3 장착, 4~6 강화, 7 다음 분류, 8 뽑기로, 9 창고로
-      const list = TECHS.filter(t => t.cat === techCat), C = TECH_CATS[techCat];
-      const rows = list.map((t, i) => {
-        const lv = tlv(t.id), on = t.id === eqRanged || t.id === eqMelee;
-        const status = !lv ? "🔒 팩에서 뽑아야 한다" : t.cat === "gear" ? "Lv." + lv + " · 늘 적용" : on ? "Lv." + lv + " · 장착 중" : "Lv." + lv + " · 장착하기";
-        return { y: top - 14 + i*rowH, label: (i+1) + ") " + t.name + " — " + t.desc + " · " + status,
-                 action: () => equipTech(t.id), dim: !lv, on: on || (lv > 0 && t.cat === "gear") };
-      });
-      list.forEach((t, i) => {
-        const lv = tlv(t.id), need = TECH_UP[lv];
-        const label = (i+4) + ") 강화 " + t.name + " — " + (!lv ? "아직 없음" : lv >= TECH_MAX ? "최고 Lv." + TECH_MAX : "Lv." + lv + "→" + (lv+1) + " · " + C.mat + " " + need + "개");
-        rows.push({ y: top + 3*rowH + 6 + i*rowH, label, action: () => upgradeTech(t.id), dim: !lv || lv >= TECH_MAX || mats[t.cat] < need });
-      });
-      const next = TECH_ORDER[(TECH_ORDER.indexOf(techCat) + 1) % TECH_ORDER.length];
-      rows.push({ key: 7, y: top + 6*rowH + 20, label: "7) " + TECH_CATS[next].unit + " 보기 →", action: () => { techCat = next; shopMsg = null; } });
-      rows.push({ key: 8, y: top + 7*rowH + 20, label: "8) ← 기술 뽑기", action: () => { shopPage = 2; shopMsg = null; } });
-      rows.push({ key: 9, y: top + 8*rowH + 20, label: "9) ← 창고로", action: () => { shopPage = 0; shopMsg = null; } });
-      return rows;
-    }
-    // 두건은 한 쪽에 8개씩 — 1~8 두건, 9) 다음 쪽, 0) 메뉴로, '← 업그레이드'는 클릭 전용
-    const pages = Math.ceil(SKINS.length / SKIN_PER), pg = Math.min(skinPage, pages - 1);
-    const rows = SKINS.slice(pg*SKIN_PER, pg*SKIN_PER + SKIN_PER).map((k, i) => {
-      const own = ownedSkins.indexOf(k.id) >= 0 || (k.title && !skinLocked(k));
-      const status = skin === k.id ? "장착 중" : own ? "장착하기" : k.port ? "🔒 항구 한정" : k.mini ? "🔒 미니게임 금메달 3개" : k.title === "naturalist" ? "🔒 바다 도감 완성" : k.title ? "🔒 칭호 보상" : "보물 " + k.cost;
-      return { y: top - 24 + i*30, label: (i+1) + ") " + k.name + " — " + status,
-               action: () => pickSkin(k), dim: !own && (k.title || k.mini || k.port ? true : bank < k.cost), swatch: k.band, on: skin === k.id };
-    });
-    rows.push({ key: 9, y: top - 24 + SKIN_PER*30 + 4, label: "9) " + (pg < pages - 1 ? "다음 쪽 →" : "← 첫 쪽") + "  (" + (pg+1) + "/" + pages + ")",
-                action: () => { skinPage = (pg + 1) % pages; } });
-    rows.push({ key: -1, y: top - 24 + SKIN_PER*30 + 34, label: "← 업그레이드", action: () => { shopPage = 0; shopMsg = null; } });
-    rows.push({ key: 0, y: top - 24 + SKIN_PER*30 + 64, label: "0) ← 메뉴로", action: () => { state = STATE.MENU; shopPage = 0; } });
-    return rows;
-  }
+  if(state === STATE.SHOP) return shopUI().rows;
   if(state === STATE.PRACTICE_SELECT){
     // 숫자 키는 1~9뿐이라 한 페이지에 7개씩 — 8) 다음/이전 페이지, 9) 뒤로가기
     const PER = 7, pages = Math.ceil(PRACTICE_OPTIONS.length / PER);
@@ -1193,7 +1148,7 @@ function menuRows(){
     rows.push({ key: 8, y: top + PER*rowH + 10, label: "8) " + (practicePage < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (practicePage+1) + "/" + pages + ")",
                 action: () => { practicePage = (practicePage + 1) % pages; } });
     rows.push({ key: 9, y: top + PER*rowH + 44, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; practicePage = 0; } });
-    return rows;
+    return btnRows(rows, 480, 30);
   }
   return [];
 }
@@ -1267,7 +1222,7 @@ function reset(){
   routes = []; routeLeft = 0; routeSeq = 0; routesDone = { up:0, low:0 };
   nextRouteAt = ROUTE_FIRST + genRand()*200;
   nextPortAt = PORT_FIRST; portIdx = 0; portAt = null; portPending = null; portBought = {}; portMsg = null;
-  crewMate = { x:150 - 50, y:120, cd:90 }; crewFx = []; crewKills = 0; crewLvUp = null;
+  crewMate = { x:150 - 50, y:120, cd:90 }; crewFx = []; crewKills = 0; crewLvUp = null; crewNews = null;
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null; gearForm = null; boundLeft = 0;
@@ -2391,9 +2346,14 @@ window.addEventListener("keydown", (e)=>{
       e.preventDefault();
       if(state === STATE.LOG && dexPage) dexPage = false;          // 도감 → 일지
       else if(state === STATE.LOG && titlePage) titlePage = 0;     // 칭호 고르기 → 일지
-      else if(state === STATE.SHOP && shopPage >= 2) shopPage = shopPage === 3 ? 2 : 0;   // 기술 → 뽑기 → 창고
-      else if(state === STATE.SHOP && shopPage === 1) shopPage = 0;   // 두건 → 창고
+      else if(state === STATE.SHOP && crewStory) crewStory = null;   // 이야기 창 → 선원 탭
+      else if(state === STATE.SHOP){ state = STATE.MENU; shopPage = 0; }   // 창고는 탭이라 한 번에 메뉴로
       else if(state !== STATE.MENU) state = STATE.MENU;
+      return;
+    }
+    if(state === STATE.SHOP && !crewStory && (k === "ArrowLeft" || k === "ArrowRight")){
+      e.preventDefault();
+      shopTab(shopTabIdx() + (k === "ArrowRight" ? 1 : -1));
       return;
     }
     const m = /^Digit([0-9])$/.exec(k);
@@ -2402,7 +2362,7 @@ window.addEventListener("keydown", (e)=>{
       // 줄에 key가 있으면 그 번호, 없으면 순서대로 1부터 — 페이지를 나눈 연습 목록은 8·9가 고정 번호다(0도 쓴다, -1은 클릭 전용)
       const n = parseInt(m[1], 10), rows = menuRows();
       const row = rows.find((r, i) => (r.key !== undefined ? r.key : i + 1) === n);
-      if(row) row.action();
+      if(row && row.action) row.action();
     }
     return;
   }
@@ -2495,7 +2455,10 @@ canvas.addEventListener("pointerdown", (e)=>{
   if(inMenu()){
     const pos = canvasPos(e);
     for(const row of menuRows()){
-      if(pos.y > row.y - 16 && pos.y < row.y + (row.sub ? 34 : 20)){ row.action(); break; }
+      if(!row.action) continue;
+      // 사각형이 있는 버튼은 그 안만, 예전 글자 줄은 줄 높이로
+      const hit = row.w !== undefined ? inRect(pos, row) : pos.y > row.y - 16 && pos.y < row.y + (row.sub ? 34 : 20);
+      if(hit){ row.action(); break; }
     }
     return;
   }
@@ -2505,6 +2468,9 @@ canvas.addEventListener("pointerdown", (e)=>{
 window.addEventListener("pointerup", ()=>{ if(canvasHold){ canvasHold = false; if(state === STATE.MINI) miniUp(); else release(false); } });
 window.addEventListener("pointercancel", ()=>{ if(canvasHold){ canvasHold = false; if(state === STATE.MINI) miniUp(); else release(false); } });
 canvas.addEventListener("contextmenu", e => e.preventDefault());
+// 마우스를 올린 버튼을 밝게 — 터치에선 손을 떼면 지운다
+canvas.addEventListener("pointermove", (e) => { hoverPos = e.pointerType === "touch" ? null : canvasPos(e); });
+canvas.addEventListener("pointerleave", () => { hoverPos = null; });
 
 // ---- 화면 조작 버튼 (폰·태블릿) ----
 document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
@@ -3274,6 +3240,10 @@ function damageBoss(ranged, mark, power){
       if(b.type === 7) lifeGhostKills++;
       if(b.type === ADMIRAL) lifeAdmiralKills++;
       dexSee("boss" + b.type);
+      {
+        const news = CREW.find(c => c.boss === b.type && crewOwned.indexOf(c.id) < 0 && storyKills(c) === 1);
+        if(news){ crewNews = news; pops.push({ x:p.x, y:p.y - 124, t:200, text:"✉ " + news.name + "이(가) 배에 오르고 싶어 한다 — 창고 → 선원", color:"#e6a8f0" }); }
+      }
       const unlocked = checkTitles();
       if(unlocked){
         newTitle = unlocked.name;
@@ -4241,6 +4211,10 @@ function hireCrew(c){
   if(crewOwned.indexOf(c.id) >= 0){
     crewSel = crewSel === c.id ? null : c.id;
     shopMsg = { text: crewSel ? c.name + "을(를) 데려간다" : "선원 없이 출항한다", t:90, good:true };
+  } else if(isStoryCrew(c)){
+    if(storyReady(c)){ crewStory = c; return true; }
+    shopMsg = { text:"🔒 " + BOSSES[c.boss].name + "을(를) 격침하면 " + c.name + "의 이야기가 열린다", t:130 };
+    return false;
   } else if(bank < c.cost){
     shopMsg = { text:"보물이 " + (c.cost - bank) + " 모자라다", t:90 };
     return false;
@@ -4250,6 +4224,16 @@ function hireCrew(c){
     crewSel = c.id;
     shopMsg = { text: c.name + " 고용! 다음 항해부터 함께한다", t:110, good:true };
   }
+  saveShop();
+  return true;
+}
+
+// 이야기 창에서 [동료로 맞이하기]
+function acceptCrew(c){
+  if(!storyReady(c) && crewOwned.indexOf(c.id) < 0) return false;
+  if(crewOwned.indexOf(c.id) < 0) crewOwned.push(c.id);
+  crewSel = c.id; crewStory = null;
+  shopMsg = { text:"⚓ " + c.name + " 합류! 다음 항해부터 함께한다", t:160, good:true, rare:true };
   saveShop();
   return true;
 }
@@ -8681,6 +8665,269 @@ function centerText(t, y, font, color, alpha){
   ctx.globalAlpha = 1;
 }
 
+/* ---------- 버튼·카드 UI ----------
+   메뉴 줄(menuRows)에 x·y·w·h가 있으면 그 사각형이 버튼이다 — 그리기·클릭·마우스 올림이 같은 사각형을 본다.
+   숫자 키는 예전처럼 key(없으면 순서)로 고른다. */
+const UIF = (w, s) => w + " " + s + "px 'Pretendard', system-ui, sans-serif";
+let hoverPos = null;
+const inRect = (pos, r) => !!pos && r.w !== undefined && pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h;
+function rrPath(x, y, w, h, r){
+  r = Math.max(0, Math.min(r, w/2, h/2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function uiText(t, x, y, font, color, align){
+  ctx.textAlign = align || "left"; ctx.textBaseline = "middle";
+  ctx.font = font; ctx.fillStyle = color;
+  ctx.fillText(t, x, y);
+}
+// 띄어쓰기 단위로 줄을 나눈다 — 넘치면 마지막 줄 끝을 …로
+function wrapLines(text, maxW, font, maxLines){
+  ctx.font = font;
+  const out = [];
+  let line = "";
+  for(const word of String(text).split(" ")){
+    const t = line ? line + " " + word : word;
+    if(!line || ctx.measureText(t).width <= maxW) line = t;
+    else { out.push(line); line = word; }
+  }
+  if(line) out.push(line);
+  if(maxLines && out.length > maxLines){ out.length = maxLines; out[maxLines - 1] += "…"; }
+  return out;
+}
+function drawWrapped(text, x, y, maxW, lh, font, color, maxLines, align){
+  wrapLines(text, maxW, font, maxLines).forEach((ln, i) => uiText(ln, x, y + i*lh, font, color, align));
+}
+// 레벨 점 — 오른쪽 끝(x)에서 왼쪽으로
+function drawPips(x, y, lv, max, col){
+  for(let i = 0; i < max; i++){
+    const cx = x - (max - 1 - i) * 13;
+    ctx.beginPath(); ctx.arc(cx, y, 4.5, 0, Math.PI*2);
+    ctx.fillStyle = i < lv ? col : "rgba(244,236,217,.14)"; ctx.fill();
+  }
+}
+// 버튼·카드 바탕. r.on 초록(장착·동행·완료) · r.dim 흐리게(못 씀) · r.glow 금빛으로 깜빡(새 소식) · 마우스를 올리면 밝게
+function drawPanel(r, rad){
+  const hot = r.action && inRect(hoverPos, r);
+  const col = r.on ? "#9fe0a0" : r.glow ? "#e6a8f0" : r.dim ? "rgba(217,184,119,.32)" : r.col || "rgba(217,184,119,.7)";
+  ctx.save();
+  rrPath(r.x, r.y, r.w, r.h, rad === undefined ? 8 : rad);
+  ctx.fillStyle = r.fill || (r.on ? "rgba(46,92,60,.45)" : hot ? "rgba(70,60,40,.75)" : "rgba(13,27,38,.82)");
+  ctx.fill();
+  if(r.glow){ ctx.shadowColor = "#e6a8f0"; ctx.shadowBlur = 10 + 6*Math.sin(performance.now()/260); }
+  ctx.strokeStyle = col; ctx.lineWidth = r.on || hot || r.sel ? 2.2 : 1.3;
+  ctx.stroke();
+  ctx.restore();
+}
+// 기본 버튼 — 글자 한 줄(+작은 줄). 키 번호가 있으면 왼쪽 위에 작게
+function drawBtn(r, font){
+  drawPanel(r, r.rad);
+  if(r.draw){ r.draw(r); return; }
+  const col = r.on ? "#9fe0a0" : r.dim ? "rgba(217,184,119,.45)" : r.col || "#d9b877";
+  const f = font || UIF(700, 15);
+  if(r.sub){
+    uiText(r.label, r.x + r.w/2, r.y + r.h/2 - 8, f, col, "center");
+    uiText(r.sub, r.x + r.w/2, r.y + r.h/2 + 11, UIF(500, 11), r.dim ? "rgba(244,236,217,.35)" : "rgba(244,236,217,.65)", "center");
+  } else uiText(r.label, r.x + r.w/2, r.y + r.h/2 + 1, f, col, "center");
+}
+// 가운데 줄 메뉴(본 메뉴·설정·연습·미니게임) — y는 줄 가운데, 폭 w짜리 버튼으로 만든다
+function btnRows(rows, w, h){
+  rows.forEach(r => { if(r.w === undefined){ r.x = W/2 - w/2; r.w = w; r.h = h; r.cy = r.y; r.y = r.y - h/2; } });
+  return rows;
+}
+
+/* ---------- 보물 창고 — 탭 + 카드 ---------- */
+const SHOP_TABS = [
+  { name:"단련",       page:0 },
+  { name:"근거리 기술", page:3, cat:"melee" },
+  { name:"원거리 기술", page:3, cat:"ranged" },
+  { name:"특성",       page:3, cat:"gear" },
+  { name:"선원",       page:4 },
+  { name:"두건",       page:1 }
+];
+const SHOP_X = 16, SHOP_W = W - 32, SHOP_TOP = 114, SHOP_BOT = H - 62;
+function shopTabIdx(){
+  const i = SHOP_TABS.findIndex(t => t.page === shopPage && (!t.cat || t.cat === techCat));
+  return i < 0 ? 0 : i;
+}
+function shopTab(i){
+  const t = SHOP_TABS[(i + SHOP_TABS.length) % SHOP_TABS.length];
+  shopPage = t.page; if(t.cat) techCat = t.cat;
+  shopMsg = null; crewStory = null;
+}
+// { cards: 그림만 있는 칸, rows: 누를 수 있는 버튼, modal: 이야기 창 버튼 }
+function shopUI(){
+  if(shopPage === 2) shopPage = 3;              // 예전 '기술 뽑기' 쪽은 기술 탭에 합쳤다
+  const cards = [], rows = [];
+  rows.push({ key:0, x:16, y:16, w:96, h:34, label:"← 메뉴", action: () => { state = STATE.MENU; shopPage = 0; crewStory = null; } });
+  const tw = (SHOP_W - 5*8) / 6, cur = shopTabIdx();
+  SHOP_TABS.forEach((t, i) => {
+    const news = t.page === 4 && crewNewsCount();
+    rows.push({ key:-1, tab:true, x: SHOP_X + i*(tw + 8), y:62, w:tw, h:38, label: t.name + (news ? "  ✉" + news : ""),
+                sel: i === cur, glow: !!news && i !== cur, col: i === cur ? "#ffd76a" : "rgba(217,184,119,.75)",
+                fill: i === cur ? "rgba(90,70,30,.7)" : undefined, action: () => shopTab(i) });
+  });
+
+  if(shopPage === 0){
+    // 단련 — 보물로 바로 올리는 기본 능력. 2×2 카드
+    const cw = (SHOP_W - 12) / 2, ch = 118;
+    UPGRADES.forEach((u, i) => {
+      const x = SHOP_X + (i % 2)*(cw + 12), y = SHOP_TOP + 6 + Math.floor(i / 2)*(ch + 12);
+      const lv = upLv(u.id), max = u.cost.length, done = lv >= max;
+      rows.push({ key:i + 1, x, y, w:cw, h:ch, action: () => buyUpgrade(u), on: done, dim: !done && bank < u.cost[lv], label:u.name,
+        draw: (r) => {
+          uiText((i + 1) + "", x + 14, y + 18, UIF(600, 11), "rgba(244,236,217,.4)");
+          uiText(u.name, x + 30, y + 30, UIF(800, 19), "#f4ecd9");
+          drawPips(x + cw - 20, y + 30, lv, max, "#ffd76a");
+          uiText(u.desc, x + 30, y + 62, UIF(500, 14), "rgba(244,236,217,.78)");
+          const chip = { x: x + cw - 190, y: y + ch - 44, w: 172, h: 32, col: done ? "#9fe0a0" : r.dim ? "rgba(217,184,119,.4)" : "#ffd76a",
+                         fill: done ? "rgba(46,92,60,.5)" : "rgba(90,70,30,.55)" };
+          drawPanel(chip, 16);
+          uiText(done ? "✓ 최고 단계" : "💰 " + commas(u.cost[lv]), chip.x + chip.w/2, chip.y + chip.h/2 + 1, UIF(800, 15), chip.col, "center");
+          uiText(done ? "" : (lv + 1) + "단계로", x + 30, y + ch - 28, UIF(500, 12), "rgba(244,236,217,.5)");
+        } });
+    });
+    cards.push({ draw: () => {
+      const y = SHOP_TOP + 6 + 2*(ch + 12) + 14;
+      centerText("단련은 보물로 바로 오르는 기본 능력 · 기술과 특성은 팩에서 뽑고 비급으로 강화한다", y, UIF(500, 13), "rgba(244,236,217,.6)");
+      centerText("특성은 기어(E)에 붙는 능력 — 갖고만 있으면 늘 적용된다", y + 22, UIF(500, 13), "rgba(255,143,160,.7)");
+    } });
+  } else if(shopPage === 3){
+    // 기술·특성 — 위에 비급 수와 팩 버튼, 아래 카드 셋(각각 장착·강화 버튼)
+    const C = TECH_CATS[techCat], list = TECHS.filter(t => t.cat === techCat), gearCat = techCat === "gear";
+    cards.push({ draw: () => {
+      uiText("📜 " + C.mat + " " + mats[techCat] + "개", SHOP_X + 4, SHOP_TOP + 14, UIF(800, 16), C.col);
+      uiText(gearCat ? "특성은 기어(E)에 붙는다 — 가지고만 있으면 늘 적용" : "장착 중 — " + (techCat === "ranged" ? "Q " + techOf(eqRanged).name : "W " + techOf(eqMelee).name),
+             SHOP_X + 4, SHOP_TOP + 38, UIF(500, 13), "rgba(244,236,217,.72)");
+    } });
+    rows.push({ key:7, x: W - 16 - 320, y: SHOP_TOP - 2, w:320, h:52, col:C.col, dim: bank < C.price,
+                label:"📦 " + C.name + " 팩 열기 · 💰 " + commas(C.price), sub:(gearCat ? "특성 " : "기술 ") + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + " 2~6개  (7)",
+                action: () => openPack(techCat) });
+    const cw = (SHOP_W - 24) / 3, cy = SHOP_TOP + 62, ch = SHOP_BOT - cy;
+    list.forEach((t, i) => {
+      const x = SHOP_X + i*(cw + 12), lv = tlv(t.id), on = t.id === eqRanged || t.id === eqMelee;
+      cards.push({ x, y:cy, w:cw, h:ch, on: lv > 0 && (on || gearCat), dim: !lv, col: C.col, draw: () => {
+        uiText(t.name, x + 16, cy + 26, UIF(800, 17), lv ? "#f4ecd9" : "rgba(244,236,217,.45)");
+        drawPips(x + cw - 18, cy + 52, lv, TECH_MAX, C.col);
+        uiText(lv ? "Lv." + lv : "🔒 아직 없음", x + 16, cy + 52, UIF(700, 13), lv ? C.col : "rgba(244,236,217,.4)");
+        drawWrapped(t.desc, x + 16, cy + 82, cw - 32, 19, UIF(500, 13), lv ? "rgba(244,236,217,.78)" : "rgba(244,236,217,.4)", 4);
+        if(t.base) uiText("기본 기술", x + cw - 16, cy + 26, UIF(600, 11), "rgba(244,236,217,.45)", "right");
+      } });
+      rows.push({ key:i + 1, x: x + 12, y: cy + ch - 88, w: cw - 24, h:34, dim: !lv, on: lv > 0 && (on || gearCat),
+                  label: !lv ? "🔒 팩에서 뽑아야 한다" : gearCat ? "✓ 늘 적용 중" : on ? "✓ 장착 중 (" + (t.cat === "ranged" ? "Q" : "W") + ")" : (i + 1) + ") 장착하기",
+                  action: () => equipTech(t.id) });
+      const need = TECH_UP[lv], maxed = lv >= TECH_MAX;
+      rows.push({ key:i + 4, x: x + 12, y: cy + ch - 46, w: cw - 24, h:34, col: C.col, dim: !lv || maxed || mats[t.cat] < need,
+                  label: !lv ? "강화 — 뽑은 뒤에" : maxed ? "최고 Lv." + TECH_MAX : (i + 4) + ") 강화 Lv." + lv + "→" + (lv + 1) + " · 비급 " + need,
+                  action: () => upgradeTech(t.id) });
+    });
+  } else if(shopPage === 4){
+    // 선원 — 3×3 카드. 이야기 선원은 보스를 격침하면 열리고, 고용 선원은 보물로
+    const cw = (SHOP_W - 24) / 3, ch = (SHOP_BOT - SHOP_TOP - 4 - 20) / 3;
+    CREW.forEach((c, i) => {
+      const x = SHOP_X + (i % 3)*(cw + 12), y = SHOP_TOP + 4 + Math.floor(i / 3)*(ch + 10);
+      const own = crewOwned.indexOf(c.id) >= 0, on = crewSel === c.id, story = isStoryCrew(c), ready = storyReady(c), locked = story && !own && !ready;
+      rows.push({ key:i + 1, x, y, w:cw, h:ch, on, glow: ready, dim: locked || (!story && !own && bank < c.cost), col: own ? c.col : undefined, label:c.name,
+        action: () => hireCrew(c),
+        draw: () => {
+          ctx.beginPath(); ctx.arc(x + 30, y + 30, 17, 0, Math.PI*2);
+          ctx.fillStyle = locked ? "rgba(244,236,217,.12)" : c.col; ctx.fill();
+          uiText(locked ? "?" : c.name[0], x + 30, y + 31, UIF(800, 15), locked ? "rgba(244,236,217,.5)" : "#14222e", "center");
+          uiText(c.name, x + 56, y + 23, UIF(800, 16), locked ? "rgba(244,236,217,.55)" : "#f4ecd9");
+          ctx.font = UIF(800, 16);
+          const bx = x + 62 + ctx.measureText(c.name).width;
+          const badge = { x: bx, y: y + 14, w: story ? 44 : 34, h: 18, col: story ? "#e6a8f0" : "#ffd76a", fill: story ? "rgba(90,50,100,.6)" : "rgba(90,70,30,.6)" };
+          drawPanel(badge, 9);
+          uiText(story ? "이야기" : "고용", badge.x + badge.w/2, badge.y + 10, UIF(700, 10), badge.col, "center");
+          if(own) uiText("Lv." + crewLv(c.id) + (crewNext(c.id) ? " · " + (crewXp[c.id] || 0) + "/" + crewNext(c.id) + "m" : " · 최고"), x + 56, y + 42, UIF(600, 11), c.col);
+          else if(story) uiText("조건: " + BOSSES[c.boss].name + " 격침" + (ready ? " ✓" : ""), x + 56, y + 42, UIF(600, 11), ready ? "#9fe0a0" : "rgba(230,168,240,.7)");
+          drawWrapped(locked ? c.tease : c.desc, x + 14, y + 64, cw - 28, 16, UIF(500, 12), locked ? "rgba(244,236,217,.45)" : "rgba(244,236,217,.75)", 2);
+          const st = on ? "⚓ 동행 중" : own ? "데려가기" : ready ? "✉ 이야기 보기" : locked ? "🔒 잠김" : "💰 " + commas(c.cost);
+          uiText(st, x + cw - 14, y + ch - 14, UIF(800, 13), on ? "#9fe0a0" : ready ? "#e6a8f0" : locked ? "rgba(244,236,217,.4)" : own ? c.col : bank < c.cost ? "rgba(217,184,119,.5)" : "#ffd76a", "right");
+          uiText((i + 1) + "", x + cw - 12, y + 12, UIF(600, 10), "rgba(244,236,217,.35)", "right");
+        } });
+    });
+  } else {
+    // 두건 — 5×3 칸
+    const cw = (SHOP_W - 4*10) / 5, ch = (SHOP_BOT - SHOP_TOP - 4 - 16) / 3;
+    SKINS.forEach((k, i) => {
+      const x = SHOP_X + (i % 5)*(cw + 10), y = SHOP_TOP + 4 + Math.floor(i / 5)*(ch + 8);
+      const own = ownedSkins.indexOf(k.id) >= 0 || (k.title && !skinLocked(k)), on = skin === k.id;
+      const status = on ? "✓ 장착 중" : own ? "장착하기" : k.port ? "🔒 항구 한정" : k.mini ? "🔒 미니게임 금 3" : k.title === "naturalist" ? "🔒 도감 완성" : k.title ? "🔒 칭호 보상" : "💰 " + commas(k.cost);
+      rows.push({ key: i < 9 ? i + 1 : -1, x, y, w:cw, h:ch, on, dim: !own && (k.title || k.mini || k.port ? true : bank < k.cost), label:k.name,
+        action: () => pickSkin(k),
+        draw: () => {
+          const cx = x + cw/2, cy = y + 38;
+          ctx.beginPath(); ctx.arc(cx, cy + 30, 22, Math.PI, 0); ctx.fillStyle = k.coat; ctx.fill();
+          ctx.beginPath(); ctx.arc(cx, cy, 17, 0, Math.PI*2); ctx.fillStyle = "#f0c9a0"; ctx.fill();
+          rrPath(cx - 19, cy - 15, 38, 12, 6); ctx.fillStyle = k.band; ctx.fill();
+          ctx.fillRect(cx + 14, cy - 8, 10, 4);
+          uiText(k.name, cx, y + ch - 34, UIF(700, 13), own ? "#f4ecd9" : "rgba(244,236,217,.55)", "center");
+          uiText(status, cx, y + ch - 15, UIF(700, 12), on ? "#9fe0a0" : own ? "#d9b877" : /^💰/.test(status) && bank >= k.cost ? "#ffd76a" : "rgba(244,236,217,.4)", "center");
+          if(i < 9) uiText((i + 1) + "", x + 10, y + 12, UIF(600, 10), "rgba(244,236,217,.35)");
+        } });
+    });
+  }
+
+  // 이야기 창 — 열려 있으면 그 버튼만 누를 수 있다
+  let modal = null;
+  if(crewStory){
+    const c = crewStory, bw = 220;
+    modal = [
+      { key:1, x: W/2 - bw - 8, y: H/2 + 104, w: bw, h: 42, col:"#9fe0a0", label:"1) 동료로 맞이하기", action: () => acceptCrew(c) },
+      { key:9, x: W/2 + 8, y: H/2 + 104, w: bw, h: 42, label:"9) 나중에", action: () => { crewStory = null; } }
+    ];
+  }
+  return { cards, rows: modal || rows, base: rows, modal };
+}
+function drawShop(){
+  ctx.fillStyle = "rgba(10,20,30,0.9)";
+  ctx.fillRect(0, 0, W, H);
+  const ui = shopUI();
+  centerText("보물 창고", 33, UIF(800, 24), "#f4ecd9");
+  uiText("💰 " + commas(bank), W - 20, 33, "700 18px ui-monospace, Menlo, monospace", "#ffd76a", "right");
+  const hv = hoverPos;
+  if(ui.modal) hoverPos = null;                // 이야기 창 뒤쪽 버튼은 밝아지지 않게
+  for(const c of ui.cards){ if(c.w !== undefined) drawPanel(c, 10); c.draw(c); }
+  for(const r of ui.base) drawBtn(r, r.tab ? UIF(800, 14) : UIF(700, 14));
+  hoverPos = hv;
+  if(ui.modal){
+    const c = crewStory;
+    ctx.fillStyle = "rgba(5,10,16,.7)"; ctx.fillRect(0, 0, W, H);
+    const box = { x: W/2 - 300, y: H/2 - 170, w: 600, h: 334, col: c.col, fill: "rgba(20,32,44,.97)" };
+    drawPanel(box, 14);
+    ctx.beginPath(); ctx.arc(box.x + 50, box.y + 50, 24, 0, Math.PI*2); ctx.fillStyle = c.col; ctx.fill();
+    uiText(c.name[0], box.x + 50, box.y + 51, UIF(800, 20), "#14222e", "center");
+    uiText("✉ " + c.name + "의 이야기", box.x + 88, box.y + 40, UIF(800, 21), "#f4ecd9");
+    uiText(BOSSES[c.boss].name + "을(를) 격침한 뒤", box.x + 88, box.y + 64, UIF(500, 13), "rgba(230,168,240,.85)");
+    let y = box.y + 104;
+    for(const para of c.story){
+      const lines = wrapLines(para, box.w - 64, UIF(500, 15));
+      lines.forEach((ln, i) => uiText(ln, box.x + 32, y + i*22, UIF(500, 15), /^"/.test(para) ? "#ffd76a" : "rgba(244,236,217,.88)"));
+      y += lines.length * 22 + 10;
+    }
+    uiText("합류하면: " + c.desc, box.x + 32, box.y + box.h - 86, UIF(600, 13), c.col);
+    for(const r of ui.modal) drawBtn(r, UIF(800, 15));
+  }
+  if(shopMsg){
+    shopMsg.t -= 1;
+    const al = Math.min(1, shopMsg.t/20);
+    if(shopMsg.rare){
+      ctx.save(); ctx.globalAlpha = al * 0.85; ctx.fillStyle = "rgba(255,215,106,.18)"; ctx.fillRect(0, H - 60, W, 34); ctx.restore();
+      centerText(shopMsg.text, H - 43, UIF(800, 16), "#ffd76a", al);
+    } else centerText(shopMsg.text, H - 43, UIF(700, 14), shopMsg.good ? "#9fe0a0" : "#f7a8a0", al);
+    if(shopMsg.t <= 0) shopMsg = null;
+  }
+  const foot = shopPage === 4 ? "이야기 선원은 그 보스를 격침하면 합류 · 고용 선원은 보물로 · 함께 항해한 거리만큼 레벨이 오른다(최고 Lv.5)"
+             : "본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키·클릭 · ← → 탭 바꾸기 · Esc 메뉴로";
+  centerText(foot, H - 16, UIF(400, 12), "rgba(244,236,217,.55)");
+}
+
 let uiState = -1;
 function draw(){
   if(state !== uiState){
@@ -8967,6 +9214,7 @@ function draw(){
            newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
     if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Pretendard', system-ui, sans-serif", "#ffd76a", 26);
+    if(crewNews) line("✉ 새 동료 소식: " + crewNews.name + " — 창고 → 선원 칸에서 맞이하기", "700 15px 'Pretendard', system-ui, sans-serif", "#e6a8f0", 24);
     if(crewLvUp) line("⚓ 선원 " + crewLvUp.name + " Lv." + crewLvUp.lv + " 승급!", "700 15px 'Pretendard', system-ui, sans-serif", "#9fe0a0", 24);
     if(runXp > 0) drawXpBar(lx, H - 112);
     drawScreenButtons();
@@ -8975,8 +9223,11 @@ function draw(){
     ctx.fillStyle = "rgba(13,27,38,0.72)";
     ctx.fillRect(0,0,W,H);
     centerText("고무팔 · 대항해", H/2 - 214, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    for(const row of menuRows()) centerText(row.label, row.y, "600 19px 'Pretendard', system-ui, sans-serif", row.mini ? "#e6a8f0" : /^9\)/.test(row.label) ? "#8fd6d8" : "#f0a24e");
-    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + Math.floor(bank), H/2 - 182, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    for(const row of menuRows()){
+      row.col = row.mini ? "#e6a8f0" : /^9\)/.test(row.label) ? "#8fd6d8" : row.glow ? "#e6a8f0" : "#f0a24e";
+      drawBtn(row, UIF(700, 17));
+    }
+    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + commas(bank), H/2 - 182, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
     const wkNow = weeklyNow();
     centerText("🌊 이번 주 해류: " + wkNow.name + " — " + wkNow.desc, H/2 - 150, "600 13px 'Pretendard', system-ui, sans-serif", wkNow.col);
     centerText("숫자 키 또는 클릭으로 선택", H/2 + 236, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
@@ -8986,7 +9237,10 @@ function draw(){
     ctx.fillRect(0,0,W,H);
     centerText("설정", H/2 - 140, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("멀미나 번쩍임이 불편하면 연출을 끌 수 있다 — 게임 규칙은 그대로", H/2 - 110, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
-    for(const row of menuRows()) centerText(row.label, row.y, "600 17px 'Pretendard', system-ui, sans-serif", /꺼짐/.test(row.label) ? "rgba(217,184,119,.55)" : "#d9b877");
+    for(const row of menuRows()){
+      row.dim = /꺼짐/.test(row.label);
+      drawBtn(row, UIF(700, 16));
+    }
     if(shopMsg){
       shopMsg.t -= 1;
       centerText(shopMsg.text, H/2 + 160, "700 14px 'Pretendard', system-ui, sans-serif", "#9fe0a0", Math.min(1, shopMsg.t/20));
@@ -9036,55 +9290,20 @@ function draw(){
     menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 || row.key === 3 ? "600 16px 'Pretendard', system-ui, sans-serif" : "500 14px 'Pretendard', system-ui, sans-serif",
                                               i === 0 ? "#d9b877" : row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
   } else if(state === STATE.SHOP){
-    ctx.fillStyle = "rgba(13,27,38,0.82)";
-    ctx.fillRect(0,0,W,H);
-    const shopTitle = shopPage === 2 ? "기술 뽑기" : shopPage === 3 ? TECH_CATS[techCat].unit : "보물 창고";
-    centerText(shopTitle, H/2 - 200, "700 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    centerText("가진 보물 " + Math.floor(bank), H/2 - 168, "700 18px ui-monospace, Menlo, monospace", "#ffd76a");
-    if(shopPage === 2 || shopPage === 3){      // 선원 쪽(4)엔 선원 레벨 안내가 같은 자리에 들어간다
-      centerText("비급 — " + TECH_ORDER.map(c => TECH_CATS[c].name + " " + mats[c]).join(" · ") + "   |   장착: Q " + techOf(eqRanged).name + " · W " + techOf(eqMelee).name,
-                 H/2 - 142, "600 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
-    }
-    if(shopPage === 4) centerText("선원 레벨 — 함께 항해한 거리만큼 오른다(최고 Lv.5) · 레벨이 오를 때마다 선원 효과가 조금씩 세진다",
-                                  H/2 - 136, "500 12px 'Pretendard', system-ui, sans-serif", "rgba(159,224,160,.85)");
-    for(const row of menuRows()){
-      const font = (shopPage === 3 && row.y < H/2 - 92 + 3*32) ? "500 13px 'Pretendard', system-ui, sans-serif" : "500 15px 'Pretendard', system-ui, sans-serif";
-      centerText(row.label, row.y, font, row.on ? "#9fe0a0" : row.dim ? "rgba(217,184,119,.45)" : row.col || (row.hot ? "#ffd76a" : "#d9b877"));
-      if(row.swatch){
-        ctx.font = "500 15px 'Pretendard', system-ui, sans-serif";
-        const w = ctx.measureText(row.label).width;
-        ctx.fillStyle = row.swatch;
-        ctx.beginPath(); ctx.arc(W/2 - w/2 - 16, row.y, 7, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = "rgba(244,236,217,.5)"; ctx.lineWidth = 1.5; ctx.stroke();
-      }
-    }
-    if(shopMsg){
-      shopMsg.t -= 1;
-      if(shopMsg.rare){         // 새 기술 — 금빛 띠로 크게
-        ctx.save(); ctx.globalAlpha = Math.min(1, shopMsg.t/20) * 0.85;
-        ctx.fillStyle = "rgba(255,215,106,.18)"; ctx.fillRect(0, H - 82, W, 40);
-        ctx.restore();
-        centerText(shopMsg.text, H - 62, "800 17px 'Pretendard', system-ui, sans-serif", "#ffd76a", Math.min(1, shopMsg.t/20));
-      } else centerText(shopMsg.text, shopPage ? H - 62 : H/2 - 140, "700 14px 'Pretendard', system-ui, sans-serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
-      if(shopMsg.t <= 0) shopMsg = null;
-    }
-    centerText("본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키 또는 클릭으로 구매/장착 · Esc 뒤로", H - 20, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+    drawShop();
   } else if(state === STATE.MINI_SELECT){
     ctx.fillStyle = "rgba(13,27,38,0.84)";
     ctx.fillRect(0,0,W,H);
     centerText("🪼 미니게임", H/2 - 180, "800 28px 'Pretendard', system-ui, sans-serif", "#e6a8f0");
     centerText("짧게 한 판 — 보물은 메달을 처음 딸 때만(동 " + MINI_MEDAL_BONUS[0] + " · 은 " + MINI_MEDAL_BONUS[1] + " · 금 " + MINI_MEDAL_BONUS[2] + ") · 셋 다 금메달이면 '해파리 두건'",
                H/2 - 146, "500 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.7)");
-    for(const row of menuRows()){
-      centerText(row.label, row.y, "700 19px 'Pretendard', system-ui, sans-serif", row.col || "#d9b877");
-      if(row.sub) centerText(row.sub, row.y + 22, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.6)");
-    }
+    for(const row of menuRows()) drawBtn(row, UIF(700, 18));
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.PRACTICE_SELECT){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
     centerText("연습 모드 — 연습할 항목을 고르세요", H/2 - 196, "700 21px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    for(const row of menuRows()) centerText(row.label, row.y, "500 16px 'Pretendard', system-ui, sans-serif", "#d9b877");
+    for(const row of menuRows()) drawBtn(row, UIF(600, 15));
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   }
 }
@@ -9123,7 +9342,7 @@ document.addEventListener("visibilitychange", ()=>{
 const MINIS = [
   { id:"jelly",  name:"해파리 트램펄린", unit:"m",  medals:[50, 150, 300],  col:"#e6a8f0",
     desc:"해파리를 밟고 하늘 높이 — 내려앉는 순간 누르면 슈퍼 점프",
-    how:"← → 이동 · 착지 직전에 Space/팔(클릭) = 슈퍼 점프 · 빨간 전기 해파리 조심" },
+    how:"← → 이동 · 착지 직전에 Space/팔(클릭) = 슈퍼 점프 · 빨간 전기 해파리에 닿으면 끝" },
   { id:"cannon", name:"고무고무 대포",   unit:"m",  medals:[400, 800, 1500], col:"#f0a24e",
     desc:"고무 새총으로 날아가 해파리·고래를 튕기며 최대한 멀리",
     how:"↑ ↓ 각도 · 누르고 있다 떼면 발사 · 날면서 누르면 고무 풍선(3번) · ↓ 급강하" },
@@ -9270,7 +9489,11 @@ function jellyGen(m){
     m.js.push({ x, y, r: 34, type, vx: mv ? (Math.random() < 0.5 ? -1 : 1) * (0.8 + Math.random()*Math.min(2.2, h/120)) : 0, t: Math.random()*100, sq: 0 });
     // 전기 해파리는 언제나 '덤'으로만 — 그 줄에 밟을 수 있는 해파리가 따로 있다
     if(h > 70 && Math.random() < Math.min(0.4, 0.12 + h/1500)){
-      m.js.push({ x: 60 + Math.random()*(W - 120), y: y - 20 - Math.random()*20, r: 32, type: 2, vx: 0, t: Math.random()*100, sq: 0 });
+      // 닿기만 해도 끝이라, 그 줄 디딤 해파리와는 140px 넘게 떨어뜨린다(겹치면 피할 수 없는 함정이 된다)
+      let ex = 60 + Math.random()*(W - 120);
+      if(Math.abs(ex - x) < 140) ex = x + (ex < x ? -140 : 140);
+      if(ex < 60 || ex > W - 60) ex = x + (ex < x ? 140 : -140);
+      m.js.push({ x: ex, y: y - 20 - Math.random()*20, r: 32, type: 2, vx: 0, t: Math.random()*100, sq: 0 });
     } else if(h < 120 && Math.random() < 0.18){
       m.js.push({ x: 60 + Math.random()*(W - 120), y: y - 10, r: 34, type: 0, vx: 0, t: Math.random()*100, sq: 0 });
     }
@@ -9299,6 +9522,11 @@ function jellySuper(m){
   for(let i=0;i<14;i++) miniSpark(m, m.p.x, m.p.y + 14, "#ffd76a");
   if(m.combo % 5 === 0){ m.coins += 3; miniPop(m, m.p.x, m.p.y - 64, "콤보 보너스 금화 +3", "#ffd76a"); }
 }
+function jellyZap(m, j){
+  miniPop(m, j.x, j.y - 30, "찌릿! 감전", "#ff8a80");
+  for(let i=0;i<20;i++) miniSpark(m, m.p.x, m.p.y, i % 2 ? "#fff3a0" : "#ff8a80");
+  miniOver("전기 해파리에 감전");
+}
 function jellyUpdate(m, dt){
   const p = m.p;
   if(m.phase === "ready"){ for(const j of m.js) j.t += dt; return; }
@@ -9315,18 +9543,15 @@ function jellyUpdate(m, dt){
   for(const j of m.js){
     j.t += dt; j.sq = Math.max(0, j.sq - 0.08*dt);
     if(j.vx){ j.x += j.vx*dt; if(j.x < 50 || j.x > W - 50) j.vx *= -1; }
+    // 전기 해파리는 어느 쪽으로든 닿기만 해도 끝 — 밟아도, 옆·아래에서 부딪쳐도
+    if(j.type === 2 && !j.gone && Math.hypot(p.x - j.x, p.y - j.y) < j.r + 12){ jellyZap(m, j); return; }
     if(j.gone || p.vy <= 0) continue;
     const top = j.y - 10;
     if(py0 + 14 <= top + 2 && p.y + 14 >= top && Math.abs(p.x - j.x) < j.r + 10){
       p.y = top - 14;
       j.sq = 1;
       m.lastBounce = m.t; m.lastType = j.type; m.lateUsed = false;
-      if(j.type === 2){
-        p.vy = -5; m.stunT = 50; m.combo = 0;
-        miniPop(m, j.x, j.y - 30, "찌릿! 감전", "#ff8a80");
-        for(let i=0;i<16;i++) miniSpark(m, p.x, p.y, i % 2 ? "#fff3a0" : "#ff8a80");
-        continue;
-      }
+      if(j.type === 2){ jellyZap(m, j); return; }
       if(j.type === 3){
         p.vy = -JT_GOLD; m.coins += 2;
         miniPop(m, j.x, j.y - 30, "황금 해파리! 금화 +2", "#ffd76a");
@@ -9921,6 +10146,11 @@ window.__swing = {
   title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage }),
   rows: () => menuRows(),
   shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
+  shopUi: () => ({ tab: (i) => { state = STATE.SHOP; shopTab(i); }, page: () => shopPage, cat: () => techCat, idx: shopTabIdx,
+                   key: (k) => { if(k === "ArrowLeft" || k === "ArrowRight") shopTab(shopTabIdx() + (k === "ArrowRight" ? 1 : -1)); },
+                   story: () => crewStory, accept: acceptCrew, ready: storyReady, news: crewNewsCount, runNews: () => crewNews,
+                   dex: (id, n) => { const d = lifeLog.dex || (lifeLog.dex = {}); if(n === undefined) delete d[id]; else d[id] = n; },
+                   draw: drawShop }),
   acct: () => ({ cur: account, signup, login, logout, open: openAccount, close: closeAccount, isOpen: acctOpen, list: acctList, hash: sha256,
                  checkId, dedupe: dedupeAccounts, uiCheck: acctCheck, uiSignup: acctSignup,
                  makeCode: makeSaveCode, applyCode: applySaveCode, readCode: readSaveCode, uiMake: acctMakeCode, uiLoad: acctLoadCode }),
