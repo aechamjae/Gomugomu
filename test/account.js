@@ -102,8 +102,8 @@ const ok = (name, cond, extra) => {
   sh().setBank(4321); sh().pickSkin(0);
   H.evalIn("window.__test").setBest(987);
   let mk = await ac().makeCode();
-  ok("저장 코드는 GOMU1- 로 시작하는 한 줄", mk.ok && /^GOMU1-[A-Za-z0-9_-]+\.[0-9a-f]{8}$/.test(mk.code), mk.code.slice(0, 30));
-  ok("코드 안에 비밀번호·해시는 없다", mk.code.indexOf("toad1234") < 0 && !!ac().readCode(mk.code) && !("swing:accounts" in ac().readCode(mk.code).d));
+  ok("저장 코드는 G2- 로 시작하는 한 줄", mk.ok && /^G2-[A-Za-z0-9_-]+$/.test(mk.code), mk.code.slice(0, 30));
+  ok("코드 안에 비밀번호·해시는 없다", mk.code.indexOf("cook1234") < 0 && !!ac().readCode(mk.code) && !("swing:accounts" in ac().readCode(mk.code).d));
   ok("일일 유령 기록은 코드에서 뺀다", !/"ghost":\[[0-9]/.test(ac().readCode(mk.code).d["swing:daily"] || ""));
   const code = mk.code;
   // 다른 기기 흉내: 저장소를 통째로 비우고 게스트로 시작
@@ -131,6 +131,67 @@ const ok = (name, cond, extra) => {
   el("acctCode").value = "";
   await ac().uiMake();
   ok("[코드 만들기]가 칸에 코드를 채운다", !!ac().readCode(el("acctCode").value), el("acctMsg").textContent);
+
+  // 짧은 저장 코드(G2) — 묶기는 무엇이든 그대로 되돌린다
+  const L = ac().pack;
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const rstr = () => { let t = ""; const n = rnd(12); for(let j = 0; j < n; j++) t += String.fromCharCode(rnd(5) ? 32 + rnd(90) : 0xac00 + rnd(500)); return t; };
+  const rval = (d) => {
+    const k = rnd(d > 3 ? 6 : 9);
+    if(k === 0) return null; if(k === 1) return rnd(2) === 0;
+    if(k === 2) return [0, 1, 199, 200, 201, 127, 128, 16383, 16384, 401234, 2 ** 40, -1, -300, 0.5, -2.25][rnd(15)];
+    if(k === 3) return rnd(1e9); if(k === 4) return ["red", "boss11", "2026-10-22", "2020-01-01", "2019-12-31", "2026-02-30", "", rstr()][rnd(8)];
+    if(k === 5) return rstr();
+    if(k === 6){ const a = []; for(let j = rnd(6); j > 0; j--) a.push(rval(d + 1)); return a; }
+    const o = {}; for(let j = rnd(6); j > 0; j--) o[["bank", "dex", "fish", "새키", rstr(), "x" + rnd(99)][rnd(6)]] = rval(d + 1); return o;
+  };
+  const vals = [{}, [], "", 0, { a: "2026-10-22" }];
+  for(let i = 0; i < 200; i++) vals.push(rval(0));
+  const bad = vals.filter(v => JSON.stringify(L.unpack(L.pack(v))) !== JSON.stringify(v));
+  ok("묶기 → 풀기가 무작위 값 205개 모두 그대로", bad.length === 0, bad.length ? JSON.stringify(bad[0]) : "");
+  let threw = 0;
+  for(const t of ["", "A", "AAAA", "____", "zzzzzzzz"]){ try{ L.unpack(t); }catch(e){ threw++; } }
+  ok("엉터리 코드는 풀다가 오류로 멈춘다(게임이 망가지지 않게)", threw === 5, threw + "/5");
+
+  // 오래 플레이한 계정 — 모든 저장분이 한 글자도 안 틀리고 옮겨진다
+  r = await ac().signup("부자", "rich1234", false);
+  const DEXIDS = ["fish","king","gull","jelly","gold","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","navy","rival","skyroute","searoute"].concat([...Array(15).keys()].map(i => "boss" + i));
+  const dex = {}; DEXIDS.forEach((id, i) => { dex[id] = 3 + i * 7; });
+  const rich = {
+    "swing:best": "12345", "swing:bestChain": "37",
+    "swing:titles": JSON.stringify({ boss: 88, kraken: 12, ghost: 4, admiral: 2, unlocked: ["novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10"], sel: "kraken10" }),
+    "swing:shop": JSON.stringify({ bank: 987654, up: { reach:3, pistol:3, magnet:2, fusen:1 }, bounty: 2345678, skins: ["red","navy","gold","black","anchor"], skin: "anchor", parrot: false,
+                                   mapPieces: 3, mapsDone: 5, blitz: 4567, blitzD: "2026-10-20", rush9: 61234, grade: "A", gearU: 4, gearS: 3,
+                                   tech: { pistol:3, whip:2, rifle:5, bazooka:1, gcharge:4, gtime:2 }, mats: { melee:7, ranged:0, gear:11 }, eqR: "rifle", eqM: "bazooka",
+                                   crew: ["cook","nav","sword","helm"], crewS: "sword", crewXp: { cook: 2200, nav: 900, sword: 16000, helm: 40 },
+                                   mini: { b: { jelly:312, cannon:1650, hop:151 }, m: { jelly:3, cannon:3, hop:3 }, n: 44 }, diff: "hard", bestDiff: { easy: 3000, hard: 9000 } }),
+    "swing:log": JSON.stringify({ runs: 912, dist: 401234, perfects: 3456, missions: 678, gulls: 999, barrels: 345, skims: 2345, gears: 456, golds: 789, xp: 123456,
+                                  recent: [1200, 900, 1500, 2100, 800, 1300, 1700, 950, 1100, 2500], dex }),
+    "swing:daily": JSON.stringify({ date: "2026-10-22", best: 1876, ghost: [1, 2, 3, 4], streakDate: "2026-10-22", streak: 9 })
+  };
+  for(const k in rich) LS().set("acct:부자:" + k, rich[k]);
+  await ac().logout(); await ac().login("부자", "rich1234");
+  const snap = (who) => { const o = {}; for(const k in rich) o[k] = LS().get("acct:" + who + ":" + k); return o; };
+  const norm = (v) => JSON.stringify(JSON.parse(v), (k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, q) => (o[q] = x[q], o), {}) : x);
+  mk = await ac().makeCode();
+  const richBefore = snap("부자");
+  r = await ac().signup("빈손", "none1234", false);
+  r = await ac().applyCode(mk.code);
+  const richAfter = snap("빈손");
+  const same = Object.keys(rich).filter(k => {
+    if(k !== "swing:daily") return norm(richBefore[k]) === norm(richAfter[k]);
+    const x = JSON.parse(richBefore[k]), y = JSON.parse(richAfter[k]); x.ghost = []; return norm(JSON.stringify(x)) === norm(JSON.stringify(y));
+  });
+  ok("오래 플레이한 계정도 저장분 6가지가 그대로 옮겨진다(유령 기록만 빼고)", same.length === 6, same.join(","));
+  ok("오래 플레이한 계정 코드도 짧다(예전 형식의 1/4 정도)", mk.code.length < 700, mk.code.length + "자");
+  console.log("     (참고: 오래 플레이한 계정 코드 " + mk.code.length + "자)");
+  ok("불러온 값이 게임에 반영된다", sh().bank === 987654 && a.crew().sel === "sword" && a.tech().eqR === "rifle", "창고=" + sh().bank);
+
+  // 예전 형식(GOMU1)도 계속 읽는다
+  const oldCode = { v:1, ver:"v46", at:"2026-10-21", from:"옛날", d:{ "swing:best": "555", "swing:shop": JSON.stringify({ bank: 31337 }) } };
+  const ob = Buffer.from(JSON.stringify(oldCode), "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  r = await ac().applyCode("GOMU1-" + ob + "." + ac().hash(ob).slice(0, 8));
+  ok("예전 GOMU1 코드도 불러온다", r.ok && sh().bank === 31337, r.msg);
 
   console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");
   process.exit(failed ? 1 : 0);
