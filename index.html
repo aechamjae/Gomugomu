@@ -119,7 +119,7 @@
     .touch{display:block;position:absolute;inset:0;pointer-events:none;}
     /* 실제로 조작하는 중이 아닐 땐(출항·일시정지·결과·메뉴) 조작 버튼을 숨겨 화면을 가리지 않게 */
     .touch.idle .tb, .touch.idle .mhud, .touch.idle .tpause{display:none;}
-    .touch.mini .tskill, .touch.mini .tskill2, .touch.mini .tskill3, .touch.mini .tsling, .touch.mini .mhud{display:none;}
+    .touch.mini .tskill, .touch.mini .tskill2, .touch.mini .tskill3, .touch.mini .tsling, .touch.mini .tart, .touch.mini .mhud{display:none;}
     .tb,.tpause{
       pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;
       background:rgba(244,236,217,.10);border:2px solid rgba(217,184,119,.45);
@@ -159,6 +159,14 @@
       background:rgba(127,208,255,.22);border-color:rgba(127,208,255,.85);
     }
     .tsling.cool{opacity:.35;}
+    .tart{
+      /* 비기 — 새총 바로 위 */
+      position:absolute;right:calc(3.5vw + 128px);bottom:calc(3vh + min(17vw, 80px) + 2vh + 26px + 68px);
+      width:58px;height:58px;font-size:11px;white-space:nowrap;letter-spacing:-.5px;
+      background:rgba(255,112,64,.22);border-color:rgba(255,143,112,.9);
+    }
+    .tart.cool{opacity:.35;}
+    .tart.none{display:none;}
     .tskill3{
       /* 기술 줄 셋째 칸 — 채찍 버튼 오른쪽 */
       position:absolute;left:calc(3.5vw + 2*(var(--sk) + 12px));bottom:calc(4vh + var(--dir) + 12px + (var(--sk) - 58px) / 2);
@@ -254,6 +262,7 @@
       <button class="tb tskill2" id="gunBtn" data-k="gun">채찍</button>
       <button class="tb tskill3" id="gearBtn" data-k="gear">기어</button>
       <button class="tb tsling" id="slingBtn" data-k="sling">새총</button>
+      <button class="tb tart" id="artBtn" data-k="art">비기</button>
       <div class="tright">
         <button class="tb small" data-k="up">▲</button>
         <button class="tb big" data-k="grab">팔</button>
@@ -279,6 +288,7 @@
       <span>매달린 채 <b>F</b> 누르고 있기 → 떼면 <b>양팔 새총</b>(앞쪽 고리가 닿을 때) · <b>C</b> 출항 전 선원 바꾸기</span>
       <span><b>금빛 링</b>일 때 놓으면 PERFECT · <b>수면 스치기</b> · 해왕류 <b>아슬아슬</b> 회피 보너스</span>
       <span><b>고기</b> 바다에서 한 번 튕김 · <b>보물 통</b> 쏘거나 들이받기 · <b>황금 고리</b> 보물 폭발 · 금 간 돛대는 곧 부러짐</span>
+      <span><b>G</b> 비기(스토리 장 보스를 깨면 하나씩 · 출항 화면에서 G로 고르기)</span>
       <span><b>P</b> 또는 <b>Esc</b> 일시정지 · <b>R</b> 다시 시작 · <b>M</b> 메뉴로</span>
     </div>
     <button id="pauseBtn">❚❚ 일시정지</button>
@@ -308,7 +318,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v48";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v49";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -541,40 +551,44 @@ const fusenMax = () => FUSEN_MAX + pk("pouch");
 const CREW = [
   { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1" },
   { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 바람 절반 · 순풍 강화 · 해군이 느려진다" },
-  { id:"sword",  name:"검객",   cost:0, boss:11, col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다",
+  { id:"sword",  name:"검객",   cost:0, boss:11, stage:"2-4", col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다",
     tease:"빙하 해역의 검호 무상과 겨룬 자에게만 칼을 맡긴다",
     story:["무상의 기세가 꺾이자, 얼음 위에서 결투를 지켜보던 젊은 검객이 칼집을 들고 다가왔다.",
            "\"스승님이 무릎 꿇는 건 처음 봅니다. 그 고무팔이 어디까지 닿는지 곁에서 보고 싶습니다.\"",
            "그날부터 검객은 곁으로 날아드는 물고기와 갈매기를 대신 베어 주었다."] },
-  { id:"sniper", name:"저격수", cost:0, boss:8, col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다",
+  { id:"sniper", name:"저격수", cost:0, boss:8, stage:"5-4", col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다",
     tease:"해군 대장 군함의 망루에서 누군가 총을 겨누고 있다",
     story:["군함이 기울자 망루에서 백기가 올라왔다. 해군 제복을 벗어 던진 저격수였다.",
            "\"명령대로만 쏘는 건 지겨웠어. 네 배에선 내가 고른 걸 쏘겠다.\"",
            "저격수는 앞쪽의 적과 보물 통을 먼저 노려 준다."] },
   { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -30% · 출발할 때 보호막 1" },
-  { id:"arch",   name:"고고학자", cost:0, boss:7, col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50%",
+  { id:"arch",   name:"고고학자", cost:0, boss:7, stage:"4-4", col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50%",
     tease:"망령의 유령선 선창에서 누군가 해도를 붙들고 있다",
     story:["유령선이 가라앉기 직전, 선창에서 낡은 해도 더미를 끌어안은 학자가 기어 나왔다.",
            "\"백 년 동안 이 배의 지도만 읽었지. 이제 진짜 바다에서 맞춰 보고 싶군.\"",
            "고고학자가 고른 보물 통은 더 무겁고, 지도 조각도 더 자주 눈에 띈다."] },
-  { id:"wright", name:"조선공", cost:0, boss:13, col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20%",
+  { id:"wright", name:"조선공", cost:0, boss:13, stage:"3-4", col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20%",
     tease:"용암 대장장이 풀무의 대장간에 사슬에 묶인 일꾼이 있다",
     story:["풀무의 망치가 식자, 대장간 구석에서 사슬에 묶인 채 배를 고치던 조선공이 고개를 들었다.",
            "\"삭은 돛대도 내 손을 거치면 한참 버티지. 풀어 주면 네 배를 맡아 주마.\"",
            "항구 상인들도 조선공의 얼굴을 보면 값을 깎아 준다."] },
-  { id:"music",  name:"음악가", cost:0, boss:6, col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25%",
+  { id:"music",  name:"음악가", cost:0, boss:6, stage:"1-4", col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25%",
     tease:"먹물 장군 문어의 먹물 속에서 바이올린 소리가 들린다",
     story:["문어가 먹물을 거두자, 촉수에 감겨 춤 반주를 하던 악사가 바이올린을 든 채 떨어졌다.",
            "\"장군님 춤 반주는 이제 그만! 당신 스윙에 맞춰 켜게 해 줘요.\"",
            "음악가의 박자에 맞추면 콤보가 길게 이어지고 기어 게이지도 빨리 찬다."] },
-  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 보상 2배 · 라이벌이 느려진다" }
+  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 보상 2배 · 라이벌이 느려진다" },
+  { id:"jack",   name:"갈고리 잭", cost:0, stage:"F-2", col:"#f0a24e", desc:"바다로 떨어지면 앞 고리에 갈고리를 걸어 건져 준다(40초마다) · 라이벌 판돈 +20%",
+    tease:"라이벌의 갈고리가 언젠가 널 구해 줄지도",
+    story:["외눈 바론과의 경주가 끝나자, 갈고리 잭이 뱃전에 갈고리를 걸고 올라탔다.",
+           "\"이번만은 같은 배다, 고무 꼬맹이. 떨어지면 갈고리로 건져 주지.\"",
+           "그날부터 잭은 바다로 떨어지는 고무팔을 몇 번이고 건져 올렸다."] }
 ];
 let crewPage = 0;            // (예전 두 쪽 나누기 — 이제 한 화면에 9명. 하네스 훅 호환으로만 남김)
 let crewStory = null;        // 창고에서 펼친 이야기 선원 — 합류 창
 let crewNews = null;         // 이번 판에 이야기가 열린 선원(결과 화면 문구)
-const isStoryCrew = (c) => c && c.boss !== undefined;
-const storyKills = (c) => (lifeLog.dex && lifeLog.dex["boss" + c.boss]) || 0;
-const storyReady = (c) => isStoryCrew(c) && crewOwned.indexOf(c.id) < 0 && storyKills(c) > 0;
+const isStoryCrew = (c) => c && c.stage !== undefined;   // 이야기 선원 — 스토리 장 보스를 깨면 합류(무한 모드에선 못 얻는다)
+const storyReady = (c) => isStoryCrew(c) && crewOwned.indexOf(c.id) < 0 && storyCleared(c.stage);
 const crewNewsCount = () => CREW.filter(storyReady).length;
 // 새 선원 5명의 효과 — 레벨이 오를수록 조금씩 세진다(Lv.1 기준값에서 단계마다 더한다)
 const crewK = (id, base, per) => crewOn(id) ? base + per * (crewLv(id) - 1) : 0;
@@ -642,7 +656,7 @@ const DIFFS = {
 };
 const DIFF_ORDER = ["easy", "normal", "hard"];
 let diffSel = "normal", bestDiff = { easy:0, hard:0 };
-const mainGame = () => !practiceMode && !dailyMode && !blitzMode && !rushMode;
+const mainGame = () => !practiceMode && !dailyMode && !blitzMode && !rushMode && !storyMode;
 const diffNow = () => mainGame() ? diffSel : "normal";
 const diffK = (key) => DIFFS[diffNow()][key];
 const curBest = () => diffNow() === "normal" ? best : (bestDiff[diffNow()] || 0);   // 최고 기록은 난이도별로 따로
@@ -803,8 +817,8 @@ function fit(){
 fit();
 window.addEventListener("resize", fit);
 
-const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8, REVIVE:9, PICK:10, PORT:11, MINI_SELECT:12, MINI:13 };
-const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG || state === STATE.SETTINGS || state === STATE.MINI_SELECT;
+const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8, REVIVE:9, PICK:10, PORT:11, MINI_SELECT:12, MINI:13, STORY_MAP:14, STORY_TALK:15, CHALLENGE:16 };
+const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG || state === STATE.SETTINGS || state === STATE.MINI_SELECT || state === STATE.STORY_MAP || state === STATE.CHALLENGE;
 
 /* 설정 — 멀미·광과민을 위한 연출 끄기. 기기에 저장 */
 const settings = { shake: true, flash: true, lines: true };
@@ -839,7 +853,10 @@ const SKINS = [
   // 항구 한정 — 창고에선 못 사고, 항구에서 가끔 들어온다(이번 판 보물로)
   { id:"anchor",  name:"닻 두건",         cost:0, port:2400, band:"#3a4a5a", coat:"#22303c" },
   { id:"coral",   name:"산호 두건",       cost:0, port:2800, band:"#f08070", coat:"#7a3a34" },
-  { id:"tide",    name:"밀물 두건",       cost:0, port:3200, band:"#4fb8c8", coat:"#1f4a56" }
+  { id:"tide",    name:"밀물 두건",       cost:0, port:3200, band:"#4fb8c8", coat:"#1f4a56" },
+  // 스토리 보상
+  { id:"captain", name:"선장의 두건",     cost:0, title:"voyage_end", band:"#c0302a", coat:"#5a2018" },
+  { id:"starlit", name:"별빛 두건",       cost:0, title:"star81",     band:"#2a2a5a", coat:"#14143a" }
 ];
 let shopPage = 0, skinPage = 0;
 const SKIN_PER = 8;
@@ -985,7 +1002,7 @@ function todayKey(){
 function todaySeed(){ return parseInt(todayKey().replace(/-/g, ""), 10); }
 function dailyBestToday(){ return dailyDate === todayKey() ? dailyBest : 0; }
 function startDaily(){
-  practiceMode = null;
+  practiceMode = null; storyMode = null;
   dailyMode = true;
   blitzMode = false;
   rushMode = false;
@@ -998,7 +1015,7 @@ let blitzMode = false, blitzBest = 0, blitzDate = "", blitzFresh = false;
 const blitzDoneToday = () => blitzDate === todayKey();
 function startBlitz(){
   if(blitzDoneToday()) return false;
-  practiceMode = null;
+  practiceMode = null; storyMode = null;
   dailyMode = false;
   blitzMode = true;
   blitzFresh = true;
@@ -1014,7 +1031,7 @@ function startBlitz(){
 const RUSH_ORDER = [0, 1, 3, 4, 2, 6, 5, 7, 8];
 let rushMode = false, rushBest = 0;
 function startRush(){
-  practiceMode = null;
+  practiceMode = null; storyMode = null;
   dailyMode = false;
   blitzMode = false;
   rushMode = true;
@@ -1039,7 +1056,8 @@ const PRACTICE_OPTIONS = [
   { type:"boss", bossType:11, label:"패기의 검호 무상 연습 (네임드 · 기어 필수)" },
   { type:"boss", bossType:12, label:"번개 신관 뇌명 연습" },
   { type:"boss", bossType:13, label:"용암 대장장이 풀무 연습 (네임드)" },
-  { type:"boss", bossType:14, label:"불새 염익 연습" }
+  { type:"boss", bossType:14, label:"불새 염익 연습" },
+  { type:"boss", bossType:15, label:"각성한 크라켄 연습 (최종 보스)", lock: () => !storyEnd, lockText:"스토리 최종장을 깨면 열린다" }
 ];
 
 function practiceLabel(){
@@ -1050,7 +1068,7 @@ function practiceLabel(){
 }
 
 function startMainGame(){
-  practiceMode = null;
+  practiceMode = null; storyMode = null;
   dailyMode = false;
   blitzMode = false;
   rushMode = false;
@@ -1059,11 +1077,668 @@ function startMainGame(){
 function startPractice(idx){
   const opt = PRACTICE_OPTIONS[idx];
   if(!opt) return;
+  if(opt.lock && opt.lock()){ shopMsg = { text: opt.lockText, t: 120 }; return; }
   dailyMode = false;
   blitzMode = false;
   rushMode = false;
+  storyMode = null;
   practiceMode = opt.type === "king" ? { type:"king" } : { type:"boss", bossType:opt.bossType };
   reset();
+}
+
+/* ---------- 스토리 모드 ----------
+   프롤로그 + 1~5장 + 최종장, 27스테이지. 스테이지마다 해역·시간·목표·별 조건이 정해져 있다.
+   장 보스를 깨면 이야기 선원이 합류하고 비기(G)가 풀린다. 진행은 swing:shop의 story에 저장(스테이지별 별 비트 1·2·4 — 1은 클리어).
+   storyMode는 practiceMode처럼 reset()이 지우지 않는다 — R로 같은 스테이지를 다시 한다 */
+const STORY_SKY = { dusk:0, night:1, dawn:2, day:3 };     // SKY_KEYS 순서
+const AWAKEN = 15;                                           // 최종 보스 — 각성한 크라켄
+const STORY_CH = [
+  { id:"P", name:"프롤로그", sub:"바람개비 섬", stages:[
+    { id:"P-1", name:"첫 고리", biome:0, sky:"day", goal:{ type:"dist", m:150 }, mods:{ mobs:0 }, reward:300,
+      stars:[{ k:"fusen", max:0, text:"풍선 안 씀" }, { k:"perfect", min:5, text:"PERFECT 놓기 5번" }],
+      pre:[["할아버지 메모", "조각은 다섯, 다섯이 모여야 길이 된다."],
+           ["고무팔", "할아버지 다락에서 찾은 건 빈 해도 껍데기랑 이 붉은 두건뿐…"],
+           ["할아버지 메모", "당길 땐 뒤로, 놓을 땐 앞으로. 돛대 줄부터 익혀라."]],
+      post:[["고무팔", "좋아, 팔이 제법 말을 듣는다!"]] },
+    { id:"P-2", name:"섬을 떠나며", biome:0, sky:"day", goal:{ type:"dist", m:400 }, mods:{}, reward:300,
+      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"coin", min:30, text:"금화 30개" }],
+      pre:[["고무팔", "섬을 떠나자. 수평선 너머에 조각이 있어."],
+           ["할아버지 메모", "물고기 떼가 길을 막거든 주먹(Q)을 날려라."]],
+      post:[["고무팔", "저 붉은 섬들… 노을 군도다!"]] }
+  ]},
+  { id:"1", name:"1장", sub:"노을 군도 — 먹물 속의 첫 조각", stages:[
+    { id:"1-1", name:"군도의 바람", biome:0, sky:"dusk", goal:{ type:"dist", m:600 }, mods:{ weather:"wind", route:1 }, reward:600,
+      stars:[{ k:"route", min:1, text:"갈림길 돌파" }, { k:"treasure", min:1500, text:"보물 1500" }],
+      pre:[["고무팔", "술집마다 먹물 장군이 반짝이는 종잇조각을 삼켰다는 소문이야."],
+           ["고무팔", "바람을 타고 군도를 건너자. 하늘길이 지름길이래. 새총(F)도 써 보자."]],
+      post:[["고무팔", "저 앞에서 누가 날 노려보는데?"]] },
+    { id:"1-2", name:"갈고리 잭", biome:0, sky:"dusk", goal:{ type:"race", rival:0 }, mods:{}, reward:600,
+      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"lead", min:60, text:"60m 넘게 앞서 결승" }],
+      pre:[["갈고리 잭", "그 조각은 내가 먼저 찜했다, 고무 꼬맹이."],
+           ["갈고리 잭", "결승 부표까지 먼저 닿는 쪽이 임자다. 지면 꺼져!"]],
+      post:[["갈고리 잭", "쳇… 문어 소굴은 저 섬 뒤다. 다음엔 안 진다."]] },
+    { id:"1-3", name:"밧줄을 끊는 자", biome:0, sky:"night", goal:{ type:"boss", boss:3 }, mods:{}, reward:600,
+      stars:[{ k:"arm", max:0, text:"팔 부상 0번" }, { k:"time", max:60, text:"60초 안에" }],
+      pre:[["고무팔", "소굴로 가는 돛대 줄이 다 끊겨 있어!"],
+           ["밧줄 끊는 자", "장군님 소굴엔 아무도 못 들어간다. 매달리면 썰어 주지!"],
+           ["고무팔", "톱질할 땐 놓으면 되겠군."]],
+      post:[["드레이크 대장", "(확성기) 그 해도는 바다를 깨운다. 해군 본부에 내놓아라."],
+            ["고무팔", "해군까지 이 조각을 노리는 거야?"]] },
+    { id:"1-4", name:"먹물 장군", biome:0, sky:"dusk", goal:{ type:"boss", boss:6 }, mods:{}, reward:1800, crew:"music", art:"grab",
+      stars:[{ k:"daze", min:3, text:"받아치기 3번" }, { k:"stun", max:2, text:"휘청 2번 이하" }],
+      pre:[["먹물 장군 문어", "내 먹물 속에서 춤추자꾸나! 악사, 반주해라!"],
+           ["음악가", "(촉수에 감긴 채) 살려 줘요… 던지는 걸 팔로 받아서 되던져요!"]],
+      post:[["음악가", "살았다! 장군님 춤 반주는 이제 그만이에요."],
+            ["고무팔", "던지는 걸 받아치다 보니 몸이 기억했어 — 고무고무 받아치기!"],
+            ["고무팔", "조각이다! 북쪽 빙하로 가는 길… 그리고 '칼을 든 자에게 물어라'?"]] }
+  ]},
+  { id:"2", name:"2장", sub:"빙하 해역 — 칼의 예법", stages:[
+    { id:"2-1", name:"유빙 지대", biome:1, sky:"day", goal:{ type:"dist", m:800 }, mods:{ floe:2, king:1 }, reward:900,
+      stars:[{ k:"king", min:1, text:"해왕류 처치" }, { k:"fusen", max:0, text:"풍선 안 씀" }],
+      pre:[["음악가", "조각이 가까울수록 바다 괴물이 설친다는 노래가 있어요."],
+           ["고무팔", "얼음 밑에서 뭔가 올라온다. 해왕류는 주먹이 튕겨 나가니 근거리(W)로!"]],
+      post:[["음악가", "노래가 맞았네요… 조심해요."]] },
+    { id:"2-2", name:"해군의 추격", biome:1, sky:"day", goal:{ type:"navy", n:1, m:500 }, mods:{}, reward:900,
+      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"time", max:120, text:"2분 안에" }],
+      pre:[["드레이크 대장", "도망칠 수 있을 것 같나? 군함, 전속력!"],
+           ["고무팔", "붙잡히면 끝이야. 12초만 버티자!"]],
+      post:[["고무팔", "얼음 협곡으로 따돌렸다!"]] },
+    { id:"2-3", name:"번개 신관", biome:1, sky:"night", goal:{ type:"boss", boss:12 }, mods:{}, reward:900,
+      stars:[{ k:"elec", max:0, text:"감전 0번" }, { k:"time", max:70, text:"70초 안에" }],
+      pre:[["번개 신관 뇌명", "내 낙뢰도 피하지 못하는 자는 검호님 앞에 설 수 없다."],
+           ["음악가", "바위 기둥에 매달리면 번개가 비껴가요!"]],
+      post:[["번개 신관 뇌명", "…통과다. 결투장으로 가라."]] },
+    { id:"2-4", name:"패기의 검호", biome:1, sky:"dawn", goal:{ type:"boss", boss:11 }, mods:{ gear:0.5 }, reward:2700, crew:"sword", art:"sense",
+      stars:[{ k:"guard", min:2, text:"기세 버티기 2번" }, { k:"stun", max:2, text:"휘청 2번 이하" }],
+      pre:[["패기의 검호 무상", "조각은 기세를 버티는 자에게만 내준다."],
+           ["고무팔", "기어(E)를 켠 채로 버티면 되는 거지?"],
+           ["패기의 검호 무상", "말로는 누구나 버틴다."]],
+      post:[["패기의 검호 무상", "삼십 년 전 그 붉은 두건도 내 기세를 버티고 웃었지."],
+            ["패기의 검호 무상", "가져가라. 그리고 이 눈을 가르쳐 주마 — 기척 읽기."],
+            ["검객", "스승님, 저도 이 사람을 따라가겠습니다."],
+            ["패기의 검호 무상", "세 번째 조각은 풀무 놈이 녹이려 하고 있다. 서둘러라."]] }
+  ]},
+  { id:"3", name:"3장", sub:"화산 해역 — 불의 대장간", stages:[
+    { id:"3-1", name:"용암 분수", biome:2, sky:"night", goal:{ type:"dist", m:800 }, mods:{ geyser:2 }, reward:1200,
+      stars:[{ k:"geyser", max:0, text:"분수에 0번 맞음" }, { k:"treasure", min:2500, text:"보물 2500" }],
+      pre:[["고무팔", "가라앉는 해군 보급선… 문서가 있어. '풀무 앞, 작살 하나, 대금은 조각 하나'?"],
+           ["검객", "분수가 솟기 전에 바다에 기포가 올라옵니다."]],
+      post:[["검객", "대장간 연기가 보입니다."]] },
+    { id:"3-2", name:"돌풍의 협곡", biome:2, sky:"dusk", goal:{ type:"boss", boss:4 }, mods:{ weather:"storm" }, reward:1200,
+      stars:[{ k:"tear", max:0, text:"대돌풍에 팔 놓침 0번" }, { k:"time", max:70, text:"70초 안에" }],
+      pre:[["돌풍술사", "대장간 풀무질 바람이 바로 나다! 돌아가라!"],
+           ["고무팔", "폭풍까지 겹쳤어… 버텨!"]],
+      post:[["돌풍술사", "바람이… 멎었다…"]] },
+    { id:"3-3", name:"불새의 둥지", biome:2, sky:"night", goal:{ type:"boss", boss:14 }, mods:{}, reward:1200,
+      stars:[{ k:"time", max:60, text:"60초 안에" }, { k:"stun", max:0, text:"휘청 0번" }],
+      pre:[["음악가", "대장간 불씨를 지키는 새래요. 방향을 틀 때 꼬리깃이 열려요!"]],
+      post:[["고무팔", "불씨가 약해졌다. 지금이야!"]] },
+    { id:"3-4", name:"불의 대장간", biome:2, sky:"night", goal:{ type:"boss", boss:13 }, mods:{}, reward:3600, crew:"wright", art:"redhawk",
+      stars:[{ k:"hot", max:0, text:"달군 고리 0번 잡음" }, { k:"stun", max:2, text:"휘청 2번 이하" }],
+      pre:[["용암 대장장이 풀무", "조각을 녹여 심연 봉쇄 작살을 만들면 해군이 금을 산더미로 준다지."],
+           ["조선공", "(사슬에 묶인 채) 녹이면 그 항로는 영영 사라져! 막아 줘!"]],
+      post:[["조선공", "풀어 줘서 고맙다. 반쯤 녹았지만 아직 읽힌다."],
+            ["조선공", "세 조각을 맞추면… '안개의 바다'. 배는 내가 맡으마."],
+            ["고무팔", "대장간 불길이 주먹에 옮겨붙었다 — 고무고무 레드호크!"]] }
+  ]},
+  { id:"4", name:"4장", sub:"안개의 바다 — 첫 항해자의 배", stages:[
+    { id:"4-1", name:"안개 항로", biome:0, sky:"night", goal:{ type:"dist", m:1000 }, mods:{ weather:"fog", rot:2 }, reward:1500,
+      stars:[{ k:"stun", max:1, text:"휘청 1번 이하" }, { k:"fusen", max:0, text:"풍선 안 씀" }],
+      pre:[["조선공", "이 삭은 돛대 이음매… 붉은 두건 선단 솜씨야. 네 할아버지가 이 길을 냈어."],
+           ["고무팔", "안개 때문에 앞이 안 보여…"]],
+      post:[["고무팔", "누가 따라온다!"]] },
+    { id:"4-2", name:"쌍칼 메이", biome:0, sky:"night", goal:{ type:"race", rival:1 }, mods:{ weather:"fog" }, reward:1500,
+      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"lead", min:80, text:"80m 넘게 앞서 결승" }],
+      pre:[["쌍칼 메이", "유령선 보물은 내 거야! 길 비켜!"]],
+      post:[["쌍칼 메이", "흥, 팁 하나 줄게. 유령 선원은 노래를 들으면 잠깐 실체가 돼."],
+            ["음악가", "제 차례가 오겠네요."]] },
+    { id:"4-3", name:"쇠사슬의 그림자", biome:0, sky:"night", goal:{ type:"boss", boss:10 }, mods:{ weather:"fog" }, reward:1500,
+      stars:[{ k:"hook", max:2, text:"사슬에 끌려간 횟수 2번 이하" }, { k:"time", max:80, text:"80초 안에" }],
+      pre:[["쇠사슬 바이스", "유령선에 다가오는 자는 안개 밖으로 끌어낸다!"],
+           ["검객", "사슬은 Q·W로 끊으십시오."]],
+      post:[["고고학자", "(멀리서) 거기… 살아 있는 사람이냐?"]] },
+    { id:"4-4", name:"망령의 유령선", biome:0, sky:"night", goal:{ type:"boss", boss:7 }, mods:{}, reward:4500, crew:"arch", art:"puff",
+      stars:[{ k:"time", max:150, text:"150초 안에" }, { k:"stun", max:3, text:"휘청 3번 이하" }],
+      pre:[["고무팔", "백 년 전 처음으로 심연을 연 배라고?"],
+           ["망령의 유령선", "…다섯을… 모으지… 마라…"],
+           ["음악가", "실체일 때 등불과 선장을 노려요!"]],
+      post:[["고고학자", "백 년 동안 이 배의 해도만 읽었지. 네 번째 조각을 읽어 주마."],
+            ["고고학자", "네 할아버지는 보물이 아니라, 깨어나려는 크라켄을 다시 봉인하러 심연에 내려갔다."],
+            ["고고학자", "해도를 다섯으로 찢어 흩은 것도 그 사람이다."],
+            ["고무팔", "가라앉는 배에서 몸을 부풀려 떠올랐다 — 고무고무 풍선 몸!"]] }
+  ]},
+  { id:"5", name:"5장", sub:"해군 본진 — 정의의 바다", stages:[
+    { id:"5-1", name:"포격 해역", biome:1, sky:"day", goal:{ type:"dist", m:1000 }, mods:{ barrage:2 }, reward:1800,
+      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"treasure", min:3000, text:"보물 3000" }],
+      pre:[["드레이크 대장", "조각을 들고 오면 항해를 허락하마. 아니면 포탄 세례다!"]],
+      post:[["저격수", "(망루에서) …저 녀석, 피하는 게 예사롭지 않군."]] },
+    { id:"5-2", name:"포위망", biome:1, sky:"day", goal:{ type:"navy", n:2, m:900 }, mods:{ navySpd:1.1 }, reward:1800,
+      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"fusen", max:0, text:"풍선 안 씀" }],
+      pre:[["드레이크 대장", "포위망을 좁혀라! 두 척으로 막는다!"]],
+      post:[["고무팔", "포위망을 뚫었다!"]] },
+    { id:"5-3", name:"해군 용병", biome:1, sky:"night", goal:{ type:"boss", boss:9 }, mods:{}, reward:1800,
+      stars:[{ k:"arm", max:0, text:"팔 부상 0번" }, { k:"time", max:70, text:"70초 안에" }],
+      pre:[["고고학자", "해군이 상어를 풀었어. 한 돛대에 오래 매달리지 마!"]],
+      post:[["드레이크 대장", "용병까지… 내가 직접 나간다."]] },
+    { id:"5-4", name:"정의의 군함", biome:1, sky:"dusk", goal:{ type:"boss", boss:8 }, mods:{}, reward:5400, crew:"sniper", art:"spin",
+      stars:[{ k:"time", max:180, text:"3분 안에" }, { k:"stun", max:3, text:"휘청 3번 이하" }],
+      pre:[["드레이크 대장", "조각을 전부 부수면 심연은 영원히 닫힌다. 그게 정의다!"],
+           ["고고학자", "아니야! 부수면 봉인이 풀린다고!"]],
+      post:[["저격수", "(백기를 올리며) 명령대로만 쏘는 건 지겨웠어. 네 배에선 내가 고른 걸 쏘겠다."],
+            ["드레이크 대장", "…다섯 번째 조각이다. 틀렸다면 네가 끝내라."],
+            ["고무팔", "돛대를 축으로 돌아 포위를 빠져나왔다 — 고무고무 회전목마!"]] }
+  ]},
+  { id:"F", name:"최종장", sub:"고요의 심연 — 할아버지의 마지막 항해", stages:[
+    { id:"F-1", name:"갈라진 바다", biome:3, sky:"night", goal:{ type:"dist", m:1200 }, mods:{ king:"rush", cycle:1 }, reward:2500,
+      stars:[{ k:"king", min:5, text:"해왕류 5마리 처치" }, { k:"fusen", max:0, text:"풍선 안 씀" }],
+      pre:[["고무팔", "다섯 조각을 맞췄다…!"], ["음악가", "바다가… 갈라져요!"]],
+      post:[["고무팔", "저 앞이 심연의 입구야."]] },
+    { id:"F-2", name:"외눈 바론", biome:3, sky:"night", goal:{ type:"race", rival:2 }, mods:{ rivalSpd:1.1 }, reward:2500, crew:"jack",
+      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"lead", min:100, text:"100m 넘게 앞서 결승" }],
+      pre:[["외눈 바론", "완성된 해도는 내가 가져간다. 경주로 정하자!"], ["갈고리 잭", "(멀리서) …"]],
+      post:[["갈고리 잭", "이번만은 같은 배다, 고무 꼬맹이. 떨어지면 갈고리로 건져 주지."],
+            ["외눈 바론", "잭, 배신이냐!"]] },
+    { id:"F-3", name:"심연의 망령들", biome:3, sky:"night", goal:{ type:"rush", list:[0, 12, 14] }, mods:{}, reward:2500,
+      stars:[{ k:"stun", max:3, text:"휘청 3번 이하" }, { k:"time", max:180, text:"3분 안에" }],
+      pre:[["고고학자", "심연이 쓰러진 자들의 망령을 불러냈어!"],
+           ["곡예사 선장", "삼십 년 전 붉은 두건에게 진 빚을 갚으마!"]],
+      post:[["고무팔", "망령들이 흩어진다…"]] },
+    { id:"F-4", name:"심연의 문", biome:3, sky:"night", goal:{ type:"boss", boss:5 }, mods:{}, reward:3000,
+      stars:[{ k:"time", max:150, text:"150초 안에" }, { k:"stun", max:3, text:"휘청 3번 이하" }],
+      pre:[["조선공", "심연의 문지기다!"]],
+      post:[["고무팔", "쓰러뜨렸… 아니, 문 너머에 훨씬 큰 눈이…!"], ["고고학자", "지금까지 건 촉수 하나였어."]] },
+    { id:"F-5", name:"각성한 크라켄", biome:3, sky:"night", goal:{ type:"boss", boss:AWAKEN }, mods:{}, reward:10000, end:true,
+      stars:[{ k:"assist", min:3, text:"동료 협공 때 3번 명중" }, { k:"stun", max:4, text:"휘청 4번 이하" }],
+      pre:[["각성한 크라켄", "백 년의 잠을 깨운 자가 누구냐."], ["고무팔", "모두, 같이 간다!"]],
+      post:[["고무팔", "할아버지의 배는… 없어. 항해일지만 남았다."],
+            ["할아버지 메모", "봉인은 단단히 했다. 난 다음 수평선을 보러 간다. 끝은 없다."],
+            ["고무팔", "그럼 나도 가야지. 끝없는 바다로!"]] }
+  ]}
+];
+const STORY_ALL = [].concat(...STORY_CH.map(c => c.stages));
+const STORY_STAR_MAX = STORY_ALL.length * 3;
+const SPEAKER_COL = { "고무팔":"#b03a34", "할아버지 메모":"#d9b877", "갈고리 잭":"#f0a24e", "드레이크 대장":"#7fa8e0",
+  "쌍칼 메이":"#ff8fa0", "외눈 바론":"#c9a27a", "패기의 검호 무상":"#bfe4ff", "번개 신관 뇌명":"#ffe27a", "망령의 유령선":"#9fe8d8" };
+const speakerCol = (who) => SPEAKER_COL[who] || (CREW.find(c => c.name === who) || {}).col || "#d9a8f0";
+
+let storyMode = null;                      // { ch, st } — 스토리 스테이지를 하는 중이면
+let storyStars = {}, storySeen = [], storyEnd = 0, storyCh = 0;   // 저장 — 별 비트, 본 대사, 엔딩 본 횟수 · 지도에서 보던 장
+let storyRun = null;                       // 이번 판 별 판정 카운터
+let storyTalk = null;                      // { lines, i, chars, after } — 대사창
+let storyResult = null;                    // 이번 판 결과 { win, bits, newBits, reward, crew, art }
+const storyStage = () => storyMode ? STORY_CH[storyMode.ch].stages[storyMode.st] : null;
+const storyIdx = (ch, st) => STORY_CH.slice(0, ch).reduce((a, c) => a + c.stages.length, 0) + st;
+const storyBits = (id) => storyStars[id] || 0;
+// 저장은 스테이지 순서대로 별 비트를 한 글자씩(0~7) — 저장 코드가 짧아진다. 스테이지는 끝에만 덧붙일 것
+const storyRec = () => STORY_ALL.map(s => storyBits(s.id)).join("").replace(/0+$/, "");
+function storyRead(v){
+  const out = {};
+  if(typeof v === "string") STORY_ALL.forEach((s, i) => { const b = parseInt(v[i], 10); if(b > 0) out[s.id] = b & 7; });
+  else if(v && typeof v === "object") for(const k in v) if(STORY_ALL.some(s => s.id === k)) out[k] = v[k] & 7;
+  return out;
+}
+const storyCleared = (id) => (storyBits(id) & 1) > 0;
+const starCount = (bits) => (bits & 1) + ((bits >> 1) & 1) + ((bits >> 2) & 1);
+const storyStarTotal = () => STORY_ALL.reduce((a, s) => a + starCount(storyBits(s.id)), 0);
+const chapterStars = (ci) => STORY_CH[ci].stages.reduce((a, s) => a + starCount(storyBits(s.id)), 0);
+// 앞 스테이지를 깨야 열린다(첫 스테이지는 늘 열려 있다)
+function storyOpen(ch, st){
+  const i = storyIdx(ch, st);
+  return i === 0 || storyCleared(STORY_ALL[i - 1].id);
+}
+const storyFixedSky = () => { const s = storyStage(); return s ? STORY_SKY[s.sky] : null; };
+const storyMods = () => (storyStage() || {}).mods || {};
+
+/* 비기 — 장 보스를 깨면 하나씩 풀린다. G(터치 '비기')에 하나를 장착한다. 그 장 별 8개면 Lv.2, 12개면 Lv.3 */
+const ARTS = [
+  { id:"grab",    ch:1, name:"고무고무 받아치기", short:"받아치기", cd:60*12, desc:"180px 안의 물고기·갈매기·통·날아오는 탄을 붙잡고(G), 다시 G로 가장 가까운 적·보스 약점에 던진다" },
+  { id:"sense",   ch:2, name:"기척 읽기",         short:"기척",     cd:60*25, t:180, desc:"3초 동안 세상이 느려진다 — 보스의 예고를 끝까지 읽어라" },
+  { id:"redhawk", ch:3, name:"고무고무 레드호크", short:"레드호크", cd:60*30, t:480, desc:"8초 동안 주먹에 불이 붙는다 — 보스 피해 +1 · 원거리로도 해왕류 처치 · 달군 고리도 잡는다" },
+  { id:"puff",    ch:4, name:"고무고무 풍선 몸",  short:"풍선몸",   cd:60*35, t:90,  desc:"공중에서 몸을 부풀려 1.5초 떠 있는다 — 날아오는 탄을 튕겨 낸다 · 바다 위 생명줄" },
+  { id:"spin",    ch:5, name:"고무고무 회전목마", short:"회전",     cd:60*20, desc:"매달린 채 누르고 있으면 고리를 축으로 돈다(바퀴마다 보물 50·기어 게이지) — 떼면 그 속도로 날아간다" }
+];
+const ART_STAGE = { grab:"1-4", sense:"2-4", redhawk:"3-4", puff:"4-4", spin:"5-4" };
+let artSel = null, artCd = 0, artMax = 1, artT = 0, artHeld = null, artThrow = null, artSpin = null, artNews = null;
+const artDef = (id) => ARTS.find(a => a.id === id);
+const artOwned = (id) => storyCleared(ART_STAGE[id]);
+const artLv = (id) => { const a = artDef(id); if(!a || !artOwned(id)) return 0; const s = chapterStars(a.ch); return s >= 12 ? 3 : s >= 8 ? 2 : 1; };
+const artCdOf = (id) => artDef(id).cd * (1 - 0.15 * (artLv(id) - 1));
+const artDurOf = (id) => (artDef(id).t || 0) * (1 + 0.2 * (artLv(id) - 1));
+const artOn = (id) => artSel === id && artT > 0 && state === STATE.PLAY;
+const ART_GRAB_R = 180, SENSE_K = 0.55;
+let jackCd = 0;
+function cycleArt(){
+  const own = ARTS.filter(a => artOwned(a.id)).map(a => a.id);
+  if(!own.length){ gearMsg = { text:"비기는 스토리 모드 장 보스를 깨면 하나씩 풀린다", t:120 }; return false; }
+  const order = [null].concat(own);
+  artSel = order[(order.indexOf(artSel) + 1) % order.length];
+  gearMsg = artSel ? { text:"비기 " + artDef(artSel).name + " Lv." + artLv(artSel) + " — " + artDef(artSel).desc, t:170, good:true } : { text:"비기 없이 출항한다", t:90, good:true };
+  saveShop();
+  return true;
+}
+function artPress(){
+  if(state !== STATE.PLAY || !artSel || !artOwned(artSel)) return false;
+  if(artSel === "grab" && artHeld){ artThrowNow(); return true; }
+  if(artCd > 0 || stun > 0) return false;
+  const lv = artLv(artSel);
+  if(artSel === "grab") return artGrabNow();
+  if(artSel === "spin"){
+    if(!rope || sling) return false;
+    const dx = p.x - rope.a.x, dy = p.y - rope.a.y;
+    const r = Math.max(60, Math.min(Math.hypot(dx, dy), SEA - 46 - rope.a.y, 170));
+    artSpin = { ang: Math.atan2(dy, dx), r, w: 0.16 + 0.015 * (lv - 1), laps: 0, acc: 0, a: rope.a };
+    pops.push({ x:p.x, y:p.y - 40, t:50, text:"고무고무 회전목마!", color:"#f0a24e" });
+    return true;
+  }
+  artCd = artMax = artCdOf(artSel);
+  artT = artDurOf(artSel);
+  if(artSel === "sense"){ pops.push({ x:p.x, y:p.y - 40, t:60, text:"기척 읽기 — 세상이 느려진다", color:"#bfe4ff" }); }
+  else if(artSel === "redhawk"){ pops.push({ x:p.x, y:p.y - 40, t:60, text:"고무고무 레드호크!", color:"#ff7040" }); for(let i=0;i<18;i++) spark(p.x, p.y, i % 2 ? "#ff7040" : "#ffd76a"); }
+  else if(artSel === "puff"){
+    rope = null; sling = null;
+    p.vy = Math.min(p.vy, p.y > SEA - 120 ? -7 : -2);
+    fusenAnim = 46;
+    pops.push({ x:p.x, y:p.y - 44, t:60, text:"고무고무 풍선 몸!", color:"#f7a8a0" });
+  }
+  return true;
+}
+function artLift(){
+  if(artSpin) artSpinRelease();
+}
+// 받아치기 — 가까운 것 하나를 붙잡는다(잡을 게 없으면 재충전을 쓰지 않는다)
+function artGrabNow(){
+  let best = null, bd = ART_GRAB_R;
+  const consider = (x, y, kind, o) => { const d = Math.hypot(x - p.x, y - p.y); if(d < bd){ bd = d; best = { kind, o, x, y }; } };
+  for(const m of mobs) if(!m.gone && m.kind === 0 && m.air) consider(m.x, m.y, "fish", m);
+  for(const g of gulls) if(!g.gone) consider(g.x, g.y, "gull", g);
+  for(const b of barrels) if(!b.gone) consider(b.x, barrelY(b), "barrel", b);
+  for(const s of shots) consider(s.x, s.y, "shot", s);
+  if(boss && boss.type === 6 && boss.thrown) for(const q of shots) if(q.kind === 8) consider(q.x, q.y, "shot", q);
+  if(!best){ pops.push({ x:p.x, y:p.y - 40, t:40, text:"잡을 게 없다", color:"rgba(244,236,217,.7)" }); return false; }
+  if(best.kind === "fish") best.o.gone = true;
+  else if(best.kind === "gull") best.o.gone = true;
+  else if(best.kind === "barrel") best.o.gone = true;
+  else { const i = shots.indexOf(best.o); if(i >= 0) shots.splice(i, 1); }
+  artHeld = { kind: best.kind, t: 150 };
+  artCd = artMax = artCdOf("grab");
+  pops.push({ x:p.x, y:p.y - 40, t:45, text:"붙잡았다! 다시 G로 던져라", color:"#e6a8f0" });
+  return true;
+}
+function artThrowNow(){
+  if(!artHeld) return;
+  // 가장 가까운 보스 약점 → 없으면 앞쪽 가장 가까운 적 → 없으면 앞으로
+  let tx = p.x + 400, ty = p.y, tgt = null;
+  if(boss){ let bd = 1e9; for(const w of weakPoints(boss)){ const d = Math.hypot(w.x - p.x, w.y - p.y); if(d < bd){ bd = d; tx = w.x; ty = w.y; tgt = "boss"; } } }
+  if(!tgt){
+    let bd = 900;
+    for(const m of mobs) if(!m.gone && m.kind === 0){ const d = Math.hypot(m.x - p.x, m.y - p.y); if(d < bd && m.x > p.x - 60){ bd = d; tx = m.x; ty = m.y; tgt = "mob"; } }
+    for(const g of gulls) if(!g.gone){ const d = Math.hypot(g.x - p.x, g.y - p.y); if(d < bd && g.x > p.x - 60){ bd = d; tx = g.x; ty = g.y; tgt = "mob"; } }
+  }
+  const a = Math.atan2(ty - p.y, tx - p.x), sp = 22;
+  artThrow = { x:p.x, y:p.y, px:p.x, py:p.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, kind: artHeld.kind, life: 50 };
+  artHeld = null;
+}
+function artSpinRelease(){
+  const s = artSpin;
+  artSpin = null;
+  if(!s) return;
+  // 돌던 방향(접선)으로 날아간다 — 불꽃이 공짜로 붙지 않게 최고 속도의 97%까지
+  const v = Math.min(MAXV * 0.97, s.w * s.r * 1.15);
+  let tx = -Math.sin(s.ang), ty = Math.cos(s.ang);
+  if(tx < 0){ tx = -tx; ty = -ty; }          // 앞으로 나가는 쪽
+  p.vx = tx * v; p.vy = ty * v - 2;
+  rope = null; grabCd = GRAB_CD; airTime = 0;
+  artCd = artMax = artCdOf("spin");
+  if(s.laps) pops.push({ x:p.x, y:p.y - 46, t:60, text:"회전목마 " + s.laps + "바퀴!", color:"#f0a24e" });
+}
+function updateArts(dt){
+  if(artCd > 0) artCd -= dt;
+  if(artT > 0){
+    artT -= artSel === "sense" ? dt / SENSE_K : dt;     // 기척 읽기는 느려진 시간이 아니라 실제 시간으로 3초
+    if(artSel === "puff"){
+      if(p.vy > 1) p.vy = 1;
+      p.vx *= Math.pow(0.995, dt);
+      for(let i=shots.length-1;i>=0;i--) if(Math.hypot(shots[i].x - p.x, shots[i].y - p.y) < 48){ for(let k=0;k<6;k++) spark(shots[i].x, shots[i].y, "#f7a8a0"); shots.splice(i, 1); }
+      if(rope) artT = 0;
+    }
+    if(artSel === "redhawk" && Math.random() < 0.6) bits.push({ x:p.x + (Math.random()-0.5)*16, y:p.y + (Math.random()-0.5)*16, vx:(Math.random()-0.5), vy:-1.5 - Math.random(), life:0.6, color: Math.random() < 0.5 ? "#ff7040" : "#ffd76a" });
+  }
+  if(artHeld){
+    artHeld.t -= dt;
+    if(stun > 0){ artHeld = null; pops.push({ x:p.x, y:p.y - 40, t:40, text:"놓쳤다!", color:"#f7a8a0" }); }
+    else if(artHeld.t <= 0) artThrowNow();
+  }
+  if(artThrow){
+    const q = artThrow;
+    q.px = q.x; q.py = q.y;
+    q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt;
+    const near = (tx, ty) => distOriginToSeg(q.px - tx, q.py - ty, q.x - tx, q.y - ty);
+    let hit = false;
+    for(const m of mobs) if(!m.gone && m.kind === 0 && near(m.x, m.y) < 30){ m.gone = true; treasure += 15; fishKills++; addGear("kill"); hit = true; for(let k=0;k<10;k++) spark(m.x, m.y, "#e6a8f0"); }
+    for(const g of gulls) if(!g.gone && near(g.x, g.y) < 30){ killGull(g, 20); hit = true; }
+    if(boss && boss.invul <= 0){
+      for(const w of weakPoints(boss)) if(near(w.x, w.y) < w.r + 14){ damageBoss(true, "받아치기"); hit = true; break; }
+    }
+    if(hit || q.life <= 0 || q.y > SEA){
+      if(q.kind === "barrel"){ const g = 60; treasure += g; pops.push({ x:q.x, y:q.y - 30, t:60, text:"보물 통 +" + g, color:"#d9b877" }); barrelsBroken++; }
+      for(let k=0;k<12;k++) spark(q.x, q.y, "#e6a8f0");
+      artThrow = null;
+    }
+  }
+  if(artSpin){
+    const s = artSpin;
+    if(!rope || rope.a !== s.a || stun > 0){ artSpin = null; artCd = artMax = artCdOf("spin"); return; }
+    s.ang += s.w * dt; s.acc += s.w * dt;
+    while(s.acc >= Math.PI * 2){
+      s.acc -= Math.PI * 2; s.laps++;
+      treasure += 50; gear = Math.min(gearMax(), gear + 15);
+      pops.push({ x:p.x, y:p.y - 34, t:40, text:"한 바퀴! +50", color:"#ffd76a" });
+    }
+    p.x = s.a.x + Math.cos(s.ang) * s.r; p.y = s.a.y + Math.sin(s.ang) * s.r;
+    p.vx = -Math.sin(s.ang) * s.w * s.r; p.vy = Math.cos(s.ang) * s.w * s.r;
+    if(p.y < -200) p.y = -200;
+    rope.len = s.r; airTime = 0;
+  }
+}
+function drawArts(){
+  const x = p.x - cam.x;
+  if(artHeld){
+    ctx.save(); ctx.strokeStyle = "#e6a8f0"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x + 18*p.face, p.y - 16, 11, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = artHeld.kind === "barrel" ? "#8a5a2c" : artHeld.kind === "gull" ? "#f4ecd9" : artHeld.kind === "fish" ? "#c95a5a" : "#5a5a5a";
+    ctx.beginPath(); ctx.arc(x + 18*p.face, p.y - 16, 8, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  if(artThrow){
+    ctx.fillStyle = "#e6a8f0";
+    ctx.beginPath(); ctx.arc(artThrow.x - cam.x, artThrow.y, 9, 0, Math.PI*2); ctx.fill();
+  }
+  if(artOn("puff")){
+    ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = "#f7a8a0";
+    ctx.beginPath(); ctx.arc(x, p.y, 30 + Math.sin(time*0.3)*2, 0, Math.PI*2); ctx.fill(); ctx.restore();
+  }
+  if(artOn("redhawk")){
+    ctx.save(); ctx.strokeStyle = "rgba(255,112,64,.8)"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, p.y, 24 + Math.sin(time*0.5)*3, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+  }
+  if(artSpin){
+    ctx.save(); ctx.strokeStyle = "rgba(240,162,78,.35)"; ctx.setLineDash([6, 8]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(artSpin.a.x - cam.x, artSpin.a.y, artSpin.r, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  }
+}
+// 화면 테두리 — 기척 읽기 동안은 푸르게
+function drawArtScreen(){
+  if(artOn("sense")){
+    const vg = ctx.createRadialGradient(W/2, H/2, H*0.3, W/2, H/2, H*0.8);
+    vg.addColorStop(0, "rgba(120,180,255,0)"); vg.addColorStop(1, "rgba(120,180,255,.28)");
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  }
+}
+
+/* --- 스토리 진행 --- */
+function storyCount(k, n){ if(storyRun) storyRun[k] = (storyRun[k] || 0) + (n === undefined ? 1 : n); }
+function startStory(ch, st){
+  if(!STORY_CH[ch] || !STORY_CH[ch].stages[st] || !storyOpen(ch, st)) return false;
+  practiceMode = null; dailyMode = false; blitzMode = false; rushMode = false;
+  storyMode = { ch, st }; storyCh = ch;
+  const s = storyStage();
+  reset();
+  if(storySeen.indexOf(s.id) < 0 && s.pre && s.pre.length) openTalk(s.pre, STATE.READY, s.id);
+  return true;
+}
+function openTalk(lines, after, seenId, then){
+  storyTalk = { lines, i: 0, chars: 0, after, seenId, then };
+  state = STATE.STORY_TALK;
+}
+function talkNext(skipAll){
+  const t = storyTalk;
+  if(!t) return;
+  const full = t.lines[t.i][1].length;
+  if(!skipAll && t.chars < full){ t.chars = full; return; }
+  if(!skipAll && t.i < t.lines.length - 1){ t.i++; t.chars = 0; return; }
+  if(t.seenId && storySeen.indexOf(t.seenId + (t.post ? "+" : "")) < 0){ storySeen.push(t.seenId + (t.post ? "+" : "")); saveShop(); }
+  storyTalk = null;
+  state = t.after;
+  if(t.then) t.then();
+}
+// 스테이지 시작 때(reset 안에서) — 이 스테이지만의 바다로 꾸린다
+function storySetup(){
+  const s = storyStage(), m = s.mods || {}, g = s.goal;
+  storyRun = { stuns:0, arm:0, elec:0, hook:0, daze:0, guard:0, tear:0, hot:0, assist:0, fusenUsed:0, lead:0, rushIdx:0, win:false, revived:false,
+               kingDone:false, prevStun:0, prevArm:0, prevElec:0, prevHook:null, prevDaze:0, barrages:0 };
+  storyResult = null;
+  nextBossAt = Infinity; nextBigAt = Infinity;
+  if(g.type === "boss"){ if(isBigType(g.boss)) nextBigAt = 120; else nextBossAt = 120; }
+  if(g.type === "rush") nextBossAt = 100;
+  nextNavyAt = g.type === "navy" ? 80 : Infinity;
+  nextRivalAt = g.type === "race" ? 50 : Infinity;
+  if(g.type === "race") rivalRaces = g.rival;              // RIVALS[rivalRaces]가 이번 상대
+  nextRouteAt = m.route ? 140 : Infinity;
+  nextPortAt = Infinity;
+  nextBarrageAt = m.barrage ? 150 : Infinity;
+  nextWeatherAt = Infinity;
+  if(m.weather) weather = { type: m.weather, from: 0, to: Infinity, story: true };
+  if(m.gear) gear = gearMax() * m.gear;
+  missions = [];
+}
+const storyFixedWeather = () => !!(storyMode && weather && weather.story);
+function storyBossType(){
+  const g = storyStage().goal;
+  return g.type === "rush" ? g.list[Math.min(storyRun.rushIdx, g.list.length - 1)] : g.boss;
+}
+// 보스 격파 — 목표 보스면 이긴다(러시는 다음 보스)
+function storyBossKilled(b){
+  const g = storyStage().goal;
+  if(g.type === "rush"){
+    storyRun.rushIdx++;
+    if(storyRun.rushIdx >= g.list.length) storyRun.win = true;
+    else nextBossAt = dist + 40;
+  } else if(g.type === "boss" && b.type === g.boss) storyRun.win = true;
+}
+// 매 프레임 — 별 카운터를 세고, 목표를 이뤘는지 본다
+function storyUpdate(dt){
+  const s = storyStage(), g = s.goal, m = s.mods || {}, r = storyRun;
+  if(stun > 0 && r.prevStun <= 0) r.stuns++;
+  if(armHurt > 0 && r.prevArm <= 0) r.arm++;
+  if(elecT > 0 && r.prevElec <= 0) r.elec++;
+  if(viceHook && !r.prevHook) r.hook++;
+  if(boss && boss.type === 6){ if(boss.daze > 0 && r.prevDaze <= 0) r.daze++; r.prevDaze = boss.daze; }
+  r.prevStun = stun; r.prevArm = armHurt; r.prevElec = elecT; r.prevHook = viceHook;
+  // 해왕류 한 마리(2-1) — 400m 근처에서 반드시 나온다
+  if(m.king === 1 && !r.kingDone && dist > 330){ r.kingDone = true; mobs.push({ kind:1, x: p.x + 1300, y: SEA, phase:0, t:0, h:0, gone:false }); }
+  // 포격 n번 — 하나가 끝나면 곧 다음
+  if(m.barrage && !barrage && nextBarrageAt > dist + 300 && r.barrages < m.barrage) nextBarrageAt = dist + 260;
+  if(m.barrage && !barrage && r.barrages >= m.barrage) nextBarrageAt = Infinity;
+  // 해군 n번 — 다음 추격을 곧바로
+  if(g.type === "navy" && !navy){
+    if(navyEscapes < g.n && nextNavyAt > dist + 200) nextNavyAt = dist + 150;
+    if(navyEscapes >= g.n) nextNavyAt = Infinity;
+  }
+  if(r.win && slowT <= 0 && !pickPending) return storyClear();
+  if((g.type === "dist" && dist >= g.m) || (g.type === "navy" && navyEscapes >= g.n && dist >= g.m)) return storyClear();
+}
+const storyLeft = () => {
+  const s = storyStage(), g = s.goal;
+  if(g.type === "dist") return "목표 " + g.m + "m까지 " + Math.max(0, Math.ceil(g.m - dist)) + "m";
+  if(g.type === "navy") return "해군 따돌리기 " + Math.min(navyEscapes, g.n) + "/" + g.n + " · " + Math.max(0, Math.ceil(g.m - dist)) + "m 남음";
+  if(g.type === "race") return rival ? "결승 부표까지 " + Math.max(0, Math.ceil((rival.finish - p.x) / 22)) + "m" : "곧 경주가 시작된다";
+  if(g.type === "rush") return "망령 " + Math.min(storyRun.rushIdx + 1, g.list.length) + "/" + g.list.length;
+  return BOSSES[g.boss].name + " 격파";
+};
+function storyStarVal(st){
+  const r = storyRun;
+  switch(st.k){
+    case "fusen": return r.fusenUsed;
+    case "perfect": return perfects;
+    case "stun": return r.stuns;
+    case "coin": return coinsGot;
+    case "route": return (routesDone.up || 0) + (routesDone.low || 0);
+    case "treasure": return Math.floor(treasure);
+    case "lead": return r.lead;
+    case "arm": return r.arm;
+    case "time": return Math.floor(playT / 60);
+    case "king": return kingKills;
+    case "geyser": return geyserHits;
+    default: return r[st.k] || 0;
+  }
+}
+const storyStarOk = (st) => { const v = storyStarVal(st); return st.max !== undefined ? v <= st.max : v >= st.min; };
+// 클리어 — 별·보상·합류·비기를 정하고, 끝 대사를 거쳐 결과 화면으로
+function storyClear(){
+  const s = storyStage(), r = storyRun;
+  const was = storyBits(s.id);
+  let bitsNow = 1;
+  if(storyStarOk(s.stars[0])) bitsNow |= 2;
+  if(storyStarOk(s.stars[1]) && !r.revived) bitsNow |= 4;
+  const first = !(was & 1);
+  const reward = first ? s.reward : Math.floor(s.reward / 10);
+  storyStars[s.id] = was | bitsNow;
+  const res = { win:true, bits: bitsNow, newBits: bitsNow & ~was, reward, first, crew:null, art:null };
+  if(s.crew){
+    const c = crewDef(s.crew);
+    if(c && crewOwned.indexOf(c.id) < 0){ crewOwned.push(c.id); crewSel = c.id; res.crew = c; }
+  }
+  if(s.art && first){ res.art = artDef(s.art); if(!artSel) artSel = s.art; }
+  if(s.end){ storyEnd++; }
+  storyResult = res;
+  treasure += reward;
+  rope = null; sling = null; artSpin = null;
+  // 기록 — 창고 보물·선원 경험치·일지(최고 거리는 안 센다)
+  state = STATE.OVER;
+  deathReason = "클리어";
+  overAt = performance.now();
+  runGrade = null; newGradeRecord = false;
+  bank += Math.floor(treasure);
+  crewGainXp(dist);
+  logRun();
+  const unlocked = checkTitles();
+  if(unlocked){ newTitle = unlocked.name; saveTitles(); }
+  saveShop();
+  syncHUD();
+  for(let i=0;i<40;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#9fe0a0");
+  if(s.post && s.post.length && storySeen.indexOf(s.id + "+") < 0){ openTalk(s.post, STATE.OVER, s.id); storyTalk.post = true; }
+}
+// 다음 스테이지(같은 장 끝이면 다음 장 첫 스테이지)
+function storyNext(){
+  if(!storyMode) return false;
+  const i = storyIdx(storyMode.ch, storyMode.st) + 1;
+  if(i >= STORY_ALL.length){ state = STATE.STORY_MAP; return false; }
+  let ch = 0, st = i;
+  while(st >= STORY_CH[ch].stages.length){ st -= STORY_CH[ch].stages.length; ch++; }
+  return startStory(ch, st);
+}
+function openStoryMap(){
+  practiceMode = null; dailyMode = false; blitzMode = false; rushMode = false;
+  // 처음이면 아직 안 깬 첫 스테이지가 있는 장을 펼친다
+  if(!storyMode){
+    const i = STORY_ALL.findIndex(s => !storyCleared(s.id));
+    let ch = 0, st = i < 0 ? 0 : i;
+    while(st >= STORY_CH[ch].stages.length){ st -= STORY_CH[ch].stages.length; ch++; }
+    storyCh = Math.min(ch, STORY_CH.length - 1);
+  }
+  state = STATE.STORY_MAP;
+}
+function leaveStory(){ storyMode = null; storyRun = null; state = STATE.MENU; }
+function storyMapRows(){
+  const rows = [];
+  const tw = 112, tg = 8, tx0 = W/2 - (STORY_CH.length*tw + (STORY_CH.length - 1)*tg)/2;
+  STORY_CH.forEach((c, i) => {
+    const open = storyOpen(i, 0);
+    rows.push({ key:-1, x: tx0 + i*(tw + tg), y: 66, w: tw, h: 34, label: c.name + (open ? "  " + chapterStars(i) + "★" : " 🔒"), sel: i === storyCh, dim: !open, tab:true,
+                col: i === storyCh ? "#ffd76a" : undefined, action: () => { storyCh = i; } });
+  });
+  const C = STORY_CH[storyCh], n = C.stages.length, cw = n > 4 ? 162 : 196, cg = 10;
+  const cx0 = W/2 - (n*cw + (n-1)*cg)/2;
+  C.stages.forEach((s, j) => {
+    const open = storyOpen(storyCh, j), bits = storyBits(s.id), x = cx0 + j*(cw + cg), y = 150, h = 230;
+    rows.push({ key: j + 1, x, y, w: cw, h, dim: !open, on: (bits & 1) > 0, glow: open && !(bits & 1), col: s.crew || s.end ? "#e6a8f0" : undefined,
+      label: s.name, action: () => startStory(storyCh, j),
+      draw: () => {
+        uiText((j + 1) + ") " + s.id, x + 12, y + 18, UIF(700, 12), "rgba(244,236,217,.55)");
+        uiText(s.crew || s.end ? "★ 장 보스" : s.goal.type === "boss" || s.goal.type === "rush" ? "보스" : s.goal.type === "race" ? "경주" : s.goal.type === "navy" ? "추격" : "항해",
+               x + cw - 12, y + 18, UIF(700, 11), s.crew || s.end ? "#e6a8f0" : "rgba(217,184,119,.8)", "right");
+        drawWrapped(open ? s.name : "🔒 " + s.name, x + 12, y + 44, cw - 24, 20, UIF(800, 16), open ? "#f4ecd9" : "rgba(244,236,217,.4)", 2);
+        uiText(["노을 군도","빙하 해역","화산 해역","심연"][s.biome] + " · " + ["노을","밤","새벽","낮"][STORY_SKY[s.sky]], x + 12, y + 88, UIF(500, 11), "rgba(143,214,216,.8)");
+        drawWrapped(storyGoalText(s), x + 12, y + 110, cw - 24, 16, UIF(600, 12), "rgba(244,236,217,.8)", 2);
+        for(let k=0;k<3;k++) uiText(bits & (1 << k) ? "★" : "☆", x + 12 + k*22, y + 152, UIF(800, 20), bits & (1 << k) ? "#ffd76a" : "rgba(244,236,217,.3)");
+        drawWrapped("★★ " + s.stars[0].text, x + 12, y + 176, cw - 24, 15, UIF(500, 11), bits & 2 ? "#ffd76a" : "rgba(244,236,217,.55)", 1);
+        drawWrapped("★★★ " + s.stars[1].text, x + 12, y + 194, cw - 24, 15, UIF(500, 11), bits & 4 ? "#ffd76a" : "rgba(244,236,217,.55)", 1);
+        if(s.crew || s.art) uiText("보상: " + [s.crew ? crewDef(s.crew).name : null, s.art ? artDef(s.art).short : null].filter(Boolean).join(" · "), x + 12, y + h - 12, UIF(700, 11), "#e6a8f0");
+      } });
+  });
+  rows.push({ key: 0, x: W/2 - 260, y: H - 64, w: 160, h: 38, label: "0) ← 메뉴로", action: leaveStory });
+  rows.push({ key: 9, x: W/2 - 80, y: H - 64, w: 160, h: 38, label: "9) 이야기 다시 보기", dim: !storySeen.length,
+              action: () => { const s = STORY_CH[storyCh].stages.filter(q => storyCleared(q.id) || storySeen.indexOf(q.id) >= 0).pop(); if(s) openTalk(s.pre.concat(storyCleared(s.id) ? s.post : []), STATE.STORY_MAP, null); } });
+  rows.push({ key: 8, x: W/2 + 100, y: H - 64, w: 160, h: 38, label: "8) 비기: " + (artSel ? artDef(artSel).short : "없음"), dim: !ARTS.some(a => artOwned(a.id)), action: cycleArt });
+  return rows;
+}
+const storyGoalText = (s) => {
+  const g = s.goal;
+  if(g.type === "dist") return g.m + "m 항해";
+  if(g.type === "boss") return BOSSES[g.boss].name + " 격파";
+  if(g.type === "race") return RIVALS[g.rival].name + "와 경주 승리";
+  if(g.type === "navy") return "해군 " + g.n + "번 따돌리고 " + g.m + "m";
+  return g.list.map(t => BOSSES[t].name).join(" → ") + " 연전";
+};
+function drawStoryMap(){
+  ctx.fillStyle = "rgba(10,20,30,0.9)";
+  ctx.fillRect(0, 0, W, H);
+  // 바탕 — 낡은 해도 줄
+  ctx.save(); ctx.strokeStyle = "rgba(217,184,119,.08)"; ctx.lineWidth = 1;
+  for(let x = 0; x < W; x += 60){ ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for(let y = 0; y < H; y += 60){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.restore();
+  centerText("스토리 — 대항해도", 30, UIF(800, 24), "#f4ecd9");
+  uiText("★ " + storyStarTotal() + "/" + STORY_STAR_MAX, W - 20, 30, "700 16px ui-monospace, Menlo, monospace", "#ffd76a", "right");
+  const C = STORY_CH[storyCh];
+  centerText(C.name + " — " + C.sub, 124, UIF(700, 16), "#d9b877");
+  const rows = storyMapRows();
+  // 스테이지 사이 점선 항로
+  const cards = rows.filter(r => r.key >= 1 && r.key <= 5);
+  ctx.save(); ctx.strokeStyle = "rgba(217,184,119,.4)"; ctx.setLineDash([5, 6]); ctx.lineWidth = 2;
+  for(let i=1;i<cards.length;i++){ ctx.beginPath(); ctx.moveTo(cards[i-1].x + cards[i-1].w, cards[i-1].y + 115); ctx.lineTo(cards[i].x, cards[i].y + 115); ctx.stroke(); }
+  ctx.restore();
+  for(const r of rows) drawBtn(r, r.tab ? UIF(800, 13) : UIF(700, 14));
+  if(gearMsg){ centerText(gearMsg.text, H - 88, UIF(600, 13), gearMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, gearMsg.t / 20)); gearMsg.t -= 1; if(gearMsg.t <= 0) gearMsg = null; }
+  centerText("숫자 키 1~5 스테이지 · ← → 장 바꾸기 · Esc 메뉴로", H - 14, UIF(400, 12), "rgba(244,236,217,.55)");
+}
+// 대사창 — 화면 아래 1/3, 왼쪽에 얼굴, 글자가 한 자씩
+function drawTalk(){
+  const t = storyTalk;
+  if(!t) return;
+  if(t.after === STATE.STORY_MAP) drawStoryMap();
+  ctx.fillStyle = "rgba(5,10,16,.55)"; ctx.fillRect(0, 0, W, H);
+  t.chars = Math.min(t.lines[t.i][1].length, t.chars + 1.5);
+  const [who, text] = t.lines[t.i], col = speakerCol(who);
+  const box = { x: 40, y: H - 190, w: W - 80, h: 150, col, fill: "rgba(16,28,40,.96)" };
+  drawPanel(box, 14);
+  ctx.beginPath(); ctx.arc(box.x + 62, box.y + 75, 42, 0, Math.PI*2); ctx.fillStyle = col; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(13,20,30,.8)"; ctx.stroke();
+  uiText(who === "할아버지 메모" ? "✎" : who[0], box.x + 62, box.y + 77, UIF(900, 34), "#14222e", "center");
+  uiText(who, box.x + 124, box.y + 30, UIF(800, 17), col);
+  drawWrapped(text.slice(0, Math.floor(t.chars)), box.x + 124, box.y + 64, box.w - 160, 26, UIF(500, 18), "#f4ecd9", 3);
+  uiText((t.i + 1) + "/" + t.lines.length + "  ·  누르면 다음 · Esc 건너뛰기", box.x + box.w - 18, box.y + box.h - 16, UIF(500, 12), "rgba(244,236,217,.5)", "right");
+  const s = storyStage();
+  if(s && t.after === STATE.READY) centerText((STORY_CH[storyMode.ch].name) + " · " + s.id + " " + s.name, 40, UIF(800, 22), "#ffd76a");
+}
+// 플레이 중 위쪽 — 스테이지 이름·목표·별 조건
+function drawStoryHud(){
+  const s = storyStage();
+  if(!s) return;
+  const y = boss ? 70 : 22;
+  ctx.save();
+  ctx.fillStyle = "rgba(13,27,38,.62)";
+  rrPath(W/2 - 190, y - 13, 380, 44, 8); ctx.fill();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = UIF(800, 13); ctx.fillStyle = "#ffd76a";
+  ctx.fillText(s.id + " " + s.name + "  ·  " + storyLeft(), W/2, y);
+  ctx.font = UIF(600, 11);
+  const a = storyStarOk(s.stars[0]), b = storyStarOk(s.stars[1]);
+  ctx.fillStyle = a ? "#9fe0a0" : "rgba(244,236,217,.55)";
+  ctx.fillText("★★ " + s.stars[0].text, W/2 - 90, y + 18);
+  ctx.fillStyle = b && !storyRun.revived ? "#9fe0a0" : "rgba(244,236,217,.55)";
+  ctx.fillText("★★★ " + s.stars[1].text, W/2 + 90, y + 18);
+  ctx.restore();
 }
 
 // MENU/PRACTICE_SELECT 화면의 선택지 — 그리기와 클릭·숫자키 판정이 이 배열 하나를 같이 본다
@@ -1072,19 +1747,28 @@ function menuRows(){
     const top = H/2 - 108, rh = 33;
     const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
     return btnRows([
-      { y: top,        label: "1) 본게임" + (diffSel !== "normal" ? " — " + DIFFS[diffSel].name : ""), action: startMainGame },
-      { y: top + rh,   label: "2) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
-      { y: top + rh*2, label: "3) 보물 창고" + (crewNewsCount() ? "  ✉ 새 동료 소식 " + crewNewsCount() : ""), glow: crewNewsCount() > 0,
+      { y: top,        label: "1) 📜 스토리 모드 — ★" + storyStarTotal() + "/" + STORY_STAR_MAX, action: openStoryMap, story: true },
+      { y: top + rh,   label: "2) 무한 모드" + (diffSel !== "normal" ? " — " + DIFFS[diffSel].name : "") + (best ? " — 최고 " + Math.floor(best) + "m" : ""), action: startMainGame },
+      { y: top + rh*2, label: "3) 도전 — 오늘의 항해 · 60초 사냥 · 보스 러시 · 연습" + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: () => { state = STATE.CHALLENGE; } },
+      { y: top + rh*3, label: "4) 보물 창고" + (crewNewsCount() ? "  ✉ 새 동료 소식 " + crewNewsCount() : ""), glow: crewNewsCount() > 0,
         action: () => { state = STATE.SHOP; shopMsg = null; shopPage = crewNewsCount() ? 4 : 0; crewStory = null; } },
-      { y: top + rh*3, label: "4) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
       { y: top + rh*4, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; dexPage = false; } },
-      { y: top + rh*5, label: "6) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝 (내일 다시)" : "") + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
-      { y: top + rh*6, label: "7) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
-      { y: top + rh*7, label: "8) 설정", action: () => { state = STATE.SETTINGS; } },
-      { y: top + rh*8, label: "9) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount },
-      { key: 0, y: top + rh*9, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
-    ], 440, 29);
+      { y: top + rh*5, label: "6) 설정", action: () => { state = STATE.SETTINGS; } },
+      { y: top + rh*6, label: "7) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount, acct: true },
+      { key: 0, y: top + rh*7, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
+    ], 480, 31);
   }
+  if(state === STATE.CHALLENGE){
+    const top = H/2 - 92, rh = 44;
+    return btnRows([
+      { y: top,        label: "1) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
+      { y: top + rh,   label: "2) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝 (내일 다시)" : "") + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
+      { y: top + rh*2, label: "3) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
+      { y: top + rh*3, label: "4) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
+      { key: 9, y: top + rh*4 + 14, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } }
+    ], 480, 36);
+  }
+  if(state === STATE.STORY_MAP) return storyMapRows();
   if(state === STATE.MINI_SELECT){
     const top = H/2 - 70, rh = 64;
     const rows = MINIS.map((q, i) => {
@@ -1143,11 +1827,11 @@ function menuRows(){
     const top = H/2 - 150, rowH = 34;
     const slice = PRACTICE_OPTIONS.slice(practicePage*PER, practicePage*PER + PER);
     const rows = slice.map((o, i) => ({
-      y: top + i*rowH, label: (i+1) + ") " + o.label, action: () => startPractice(practicePage*PER + i)
+      y: top + i*rowH, label: (i+1) + ") " + o.label + (o.lock && o.lock() ? " 🔒" : ""), dim: !!(o.lock && o.lock()), action: () => startPractice(practicePage*PER + i)
     }));
     rows.push({ key: 8, y: top + PER*rowH + 10, label: "8) " + (practicePage < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (practicePage+1) + "/" + pages + ")",
                 action: () => { practicePage = (practicePage + 1) % pages; } });
-    rows.push({ key: 9, y: top + PER*rowH + 44, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; practicePage = 0; } });
+    rows.push({ key: 9, y: top + PER*rowH + 44, label: "9) ← 도전으로", action: () => { state = STATE.CHALLENGE; practicePage = 0; } });
     return btnRows(rows, 480, 30);
   }
   return [];
@@ -1280,6 +1964,8 @@ function reset(){
   newTitle = null;
   holding = false;              // 리셋 시 눌림 상태도 함께 초기화 (안 그러면 재시작 직후 팔이 안 걸릴 수 있다)
   pPrevX = p.x; pPrevY = p.y;
+  artCd = 0; artT = 0; artHeld = null; artThrow = null; artSpin = null; jackCd = 0;
+  if(storyMode) storySetup(); else { storyRun = null; storyResult = null; }
   anchors.push({ x:250, y:96, kind:0 });
   anchors.push({ x:470, y:108, kind:1 });
   lastAX = 470; lastAY = 108;
@@ -1288,7 +1974,7 @@ function reset(){
 }
 
 function pickMissions(){
-  if(practiceMode || blitzMode || rushMode) return [];    // 연습·60초 사냥·보스 러시엔 미션이 없다
+  if(practiceMode || blitzMode || rushMode || storyMode) return [];    // 스토리·연습·60초 사냥·보스 러시엔 미션이 없다
   const pool = MISSIONS.slice();
   const out = [];
   while(out.length < MISSION_COUNT && pool.length){
@@ -1435,6 +2121,7 @@ function updateBarrage(dt){
     }
   } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && dist >= nextBarrageAt){
     barrage = { cd: 45, hit: false, t: 0 };
+    storyCount("barrages");
     dexSee("barrage");
     missionFlash = { text: "적 해적선의 포격! 붉은 표식을 피해라", reward:0, t:150, weather:"storm" };
   }
@@ -1443,6 +2130,7 @@ function updateBarrage(dt){
 
 function updateWeather(dt){
   if(flash > 0) flash -= 0.06*dt;
+  if(storyFixedWeather()){ if(weather.type === "storm" && Math.random() < 0.005*dt) flash = 1; return; }   // 스토리 고정 날씨는 보스전에도 걷히지 않는다
   if(weather){
     if(weather.type === "storm" && Math.random() < 0.005*dt) flash = 1;
     // 보스전 중엔 거리가 멈추니, 그대로 두면 날씨가 보스전 내내 이어진다 — 보스가 뜨면 걷힌다
@@ -1638,6 +2326,12 @@ function syncHUD(){
     slb.classList.toggle("cool", !rope || (slingCd || 0) > 0);
     slb.textContent = (slingCd || 0) > 0 ? Math.ceil(slingCd/60) + "초" : "새총";
   }
+  const ab = document.getElementById("artBtn");
+  if(ab){
+    ab.classList.toggle("none", !artSel);
+    ab.classList.toggle("cool", (artCd || 0) > 0 && !artHeld && !artSpin);
+    ab.textContent = artHeld ? "던지기" : (artCd || 0) > 0 ? Math.ceil(artCd/60) + "초" : artSel ? artDef(artSel).short : "비기";
+  }
   const gb = document.getElementById("gunBtn");
   if(gb){
     const gcd = Math.max(0, gunCd || 0);
@@ -1669,7 +2363,7 @@ function generate(){
     const an = { x, y, kind: genRand() < 0.62 ? 0 : 1 };   // 0 돛대, 1 바위 기둥
     const bz = inBonus(x / 22);
     if(!practiceMode && x/22 > 60 && genRand() < (bz ? 0.3 : blitzMode ? 0.09 : GOLD_CHANCE * (wk("gold") ? 2 : 1))) an.gold = true;
-    else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && genRand() < ROT_CHANCE) an.rot = true;
+    else if(!practiceMode && an.kind === 0 && x/22 > ROT_FROM && genRand() < ROT_CHANCE * hazK("rot")) an.rot = true;
     // 항구 — 거리로 정해지고 난수를 쓰지 않아서 오늘의 항해 코스도 그대로다
     if(!practiceMode && !blitzMode && !rushMode && x/22 >= nextPortAt){
       an.port = true; an.kind = 0; an.gold = false; an.rot = false;
@@ -1717,8 +2411,8 @@ function generate(){
     if(!bz) spawnMobs(lastAX, x);        // 보물섬 해역엔 잡몹이 없다
     if(!practiceMode && !rushMode){
       const bio = biomeAt(zoneM(x));
-      if(bio === 1 && genRand() < FLOE_CHANCE) floes.push({ x: lastAX + gap*(0.3 + genRand()*0.4), t: genRand()*100 });
-      if(bio === 2 && !bz && genRand() < GEYSER_CHANCE) geysers.push({ x: lastAX + gap*(0.35 + genRand()*0.3), t: genRand()*200, cyc: 230 + genRand()*80 });
+      if((bio === 1 || bio === 3) && genRand() < FLOE_CHANCE * hazK("floe") * (bio === 3 ? 0.5 : 1)) floes.push({ x: lastAX + gap*(0.3 + genRand()*0.4), t: genRand()*100 });
+      if((bio === 2 || bio === 3) && !bz && genRand() < GEYSER_CHANCE * hazK("geyser") * (bio === 3 ? 0.5 : 1)) geysers.push({ x: lastAX + gap*(0.35 + genRand()*0.3), t: genRand()*200, cyc: 230 + genRand()*80 });
     }
     lastAX = x; lastAY = y;
   }
@@ -1746,12 +2440,12 @@ const DEX_CATS = [
 const DEX = [
   { id:"fish",  cat:"life", name:"식인 물고기" }, { id:"king", cat:"life", name:"해왕류" },
   { id:"gull",  cat:"life", name:"폭탄 갈매기" }, { id:"jelly", cat:"life", name:"트램펄린 해파리" },
-  ...[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
+  ...[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
   { id:"gold",  cat:"sea", name:"황금 고리" },  { id:"rot", cat:"sea", name:"삭은 돛대" },
   { id:"port",  cat:"sea", name:"항구" },       { id:"barrel", cat:"sea", name:"보물 통" },
   { id:"meat",  cat:"sea", name:"고기" },       { id:"map", cat:"sea", name:"보물 지도 조각" },
   { id:"floe",  cat:"sea", name:"유빙" },       { id:"geyser", cat:"sea", name:"용암 분수" },
-  { id:"biome0", cat:"zone", name:"노을 군도" }, { id:"biome1", cat:"zone", name:"빙하 해역" }, { id:"biome2", cat:"zone", name:"화산 해역" },
+  { id:"biome0", cat:"zone", name:"노을 군도" }, { id:"biome1", cat:"zone", name:"빙하 해역" }, { id:"biome2", cat:"zone", name:"화산 해역" }, { id:"biome3", cat:"zone", name:"심연" },
   { id:"wind",  cat:"zone", name:"순풍" },      { id:"storm", cat:"zone", name:"폭풍" },
   { id:"fog",   cat:"zone", name:"짙은 안개" }, { id:"bonus", cat:"zone", name:"보물섬 해역" },
   { id:"barrage", cat:"event", name:"포격 구간" }, { id:"navy", cat:"event", name:"해군 추격" },
@@ -1928,6 +2622,14 @@ function drawRoutes(){
 /* ---------- 잡몹 ---------- */
 // 두 고리 사이 구간(x0~x1)에 잡몹을 뿌린다
 function spawnMobs(x0, x1){
+  if(storyMode){
+    const s = storyStage(), m = s.mods || {};
+    if(m.mobs === 0 || s.goal.type === "boss" || s.goal.type === "rush") return;   // 보스 스테이지는 연습처럼 보스만
+    if(m.king === "rush" && x1 - lastKingX > 900 && genRand() < 0.6){
+      lastKingX = x1;
+      mobs.push({ kind:1, x: x1 + 120 + genRand()*160, y: SEA, phase:0, t:0, h:0, gone:false });
+    }
+  }
   if((practiceMode && practiceMode.type === "boss") || rushMode) return;   // 보스 연습·러시 중엔 잡몹 없이 보스만
   if(practiceMode && practiceMode.type === "king"){
     // 해왕류 폭주 연습 — 최소 거리 제한 없이, 훨씬 자주·훨씬 촘촘하게 쏟아낸다
@@ -2341,13 +3043,27 @@ window.addEventListener("keydown", (e)=>{
   const k = keyName(e);
   if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); goToMenu(); return; }
   if(state === STATE.MINI){ miniKey(k, true, e); return; }
+  if(state === STATE.STORY_TALK){
+    e.preventDefault();
+    if(e.repeat) return;
+    if(k === "Escape") talkNext(true);
+    else talkNext();
+    return;
+  }
   if(inMenu()){
+    if(state === STATE.STORY_MAP && (k === "ArrowLeft" || k === "ArrowRight")){
+      e.preventDefault();
+      storyCh = (storyCh + (k === "ArrowRight" ? 1 : STORY_CH.length - 1)) % STORY_CH.length;
+      return;
+    }
     if(k === "Escape"){
       e.preventDefault();
       if(state === STATE.LOG && dexPage) dexPage = false;          // 도감 → 일지
       else if(state === STATE.LOG && titlePage) titlePage = 0;     // 칭호 고르기 → 일지
       else if(state === STATE.SHOP && crewStory) crewStory = null;   // 이야기 창 → 선원 탭
       else if(state === STATE.SHOP){ state = STATE.MENU; shopPage = 0; }   // 창고는 탭이라 한 번에 메뉴로
+      else if(state === STATE.STORY_MAP) leaveStory();
+      else if(state === STATE.PRACTICE_SELECT) state = STATE.CHALLENGE;
       else if(state !== STATE.MENU) state = STATE.MENU;
       return;
     }
@@ -2392,7 +3108,9 @@ window.addEventListener("keydown", (e)=>{
     if(gm){ e.preventDefault(); selectGear(parseInt(gm[1], 10)); return; }
     if(k === "KeyC"){ e.preventDefault(); cycleCrew(); return; }
     if(k === "KeyV"){ e.preventDefault(); cycleDiff(); return; }
+    if(k === "KeyG"){ e.preventDefault(); cycleArt(); return; }
   }
+  if(state === STATE.OVER && storyResult && storyResult.win && (k === "Enter" || k === "KeyN")){ e.preventDefault(); storyNext(); return; }
   if(k === "KeyP" || k === "Escape"){ e.preventDefault(); togglePause(); return; }
   if(k === "KeyR"){ reset(); return; }
   if(k === "KeyC" && state === STATE.OVER){ e.preventDefault(); shareResult(); return; }
@@ -2409,6 +3127,7 @@ window.addEventListener("keydown", (e)=>{
   else if(k === "KeyW"){ e.preventDefault(); fireGun(); }
   else if(k === "KeyE"){ e.preventDefault(); fireGear(); }
   else if(k === "KeyF"){ e.preventDefault(); if(!e.repeat) startSling(); }
+  else if(k === "KeyG"){ e.preventDefault(); if(!e.repeat) artPress(); }
 }, {passive:false});
 
 window.addEventListener("keyup", (e)=>{
@@ -2421,6 +3140,7 @@ window.addEventListener("keyup", (e)=>{
   else if(k === "ArrowDown" || k === "KeyS") keys.down = false;
   else if(k === "ArrowUp") keys.up = false;
   else if(k === "KeyF") fireSling();
+  else if(k === "KeyG") artLift();
 });
 
 canvas.addEventListener("mouseenter", ()=>{ try{ canvas.focus({preventScroll:true}); }catch(e){} });
@@ -2434,6 +3154,7 @@ canvas.addEventListener("pointerdown", (e)=>{
     else if(inB(GIVEUP_BTN)) declineRevive();
     return;
   }
+  if(state === STATE.STORY_TALK){ talkNext(); return; }
   if(state === STATE.PICK || state === STATE.PORT){
     const pos = canvasPos(e);
     for(const B of overlayButtons()) if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ B.act(); break; }
@@ -2490,6 +3211,7 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
     else if(k === "gun"){ fireGun(); }
     else if(k === "gear"){ fireGear(); }
     else if(k === "sling"){ startSling(); }
+    else if(k === "art"){ artPress(); }
     else if(k === "pause"){ togglePause(); }
   };
   const lift = (e)=>{
@@ -2504,6 +3226,7 @@ document.querySelectorAll(".tb, .tpause").forEach((btn)=>{
     else if(k === "up"){ keys.up = false; }
     else if(k === "grab"){ release(false); }
     else if(k === "sling"){ fireSling(); }
+    else if(k === "art"){ artLift(); }
   };
   btn.addEventListener("pointerdown", press);
   btn.addEventListener("pointerup", lift);
@@ -2538,6 +3261,7 @@ function revive(){
   reviveUsed = true;
   state = STATE.PLAY;
   last = performance.now();
+  if(storyRun) storyRun.revived = true;      // 부활한 판은 ★★★을 못 받는다
   rope = null; stun = 0; iframes = 100;
   p.y = SEA - 30; p.vy = -15.5; p.vx = Math.max(Math.abs(p.vx), 8);
   stallX = p.x; stallT = 0;
@@ -2573,11 +3297,17 @@ function die(reason){
   deathReason = reason;
   overAt = performance.now();
   runBounty = computeBounty();
-  runGrade = practiceMode ? null : computeGrade();
+  runGrade = practiceMode || storyMode ? null : computeGrade();
   newGradeRecord = false;
   if(runGrade && GRADE_ORDER.indexOf(runGrade[0]) > (bestGrade ? GRADE_ORDER.indexOf(bestGrade) : -1)){ bestGrade = runGrade[0]; newGradeRecord = true; }
-  if(!practiceMode && runBounty > bestBounty){ bestBounty = runBounty; newBountyRecord = true; }
-  if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
+  if(!practiceMode && !storyMode && runBounty > bestBounty){ bestBounty = runBounty; newBountyRecord = true; }
+  if(storyMode){              // 스토리 — 최고 거리·콤보엔 안 세고, 모은 보물은 창고로
+    storyResult = { win:false };
+    bank += Math.floor(treasure);
+    crewGainXp(dist);
+    saveShop();
+    logRun();
+  } else if(!practiceMode){          // 연습 모드 기록은 최고 거리·최고 콤보에 반영하지 않는다
     if(diffNow() === "normal"){ if(dist > best){ best = dist; saveBest(); } }
     else if(dist > (bestDiff[diffNow()] || 0)) bestDiff[diffNow()] = dist;   // 아래 saveShop()에 같이 저장된다
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
@@ -2619,11 +3349,12 @@ const BOSSES = [
   { name:"패기의 검호 무상",   tag:"패왕의 기세는 기어 상태로만 버틴다 — 기세 뒤 지친 몸을 노려라", named:true },
   { name:"번개 신관 뇌명",     tag:"낙뢰 기둥을 옆으로 비켜라(바위 기둥은 버틴다) — 북 셋을 모두 부숴라" },
   { name:"용암 대장장이 풀무", tag:"망치질에 용암 분수가 터진다 — 달군 고리를 피하고 망치질 뒤 풀무를 쳐라", named:true },
-  { name:"불새 염익",          tag:"지나간 높이에 불꽃 띠가 남는다 — 방향을 틀 때 꼬리깃을 노려라" }
+  { name:"불새 염익",          tag:"지나간 높이에 불꽃 띠가 남는다 — 방향을 틀 때 꼬리깃을 노려라" },
+  { name:"각성한 크라켄",      tag:"페이즈마다 동료가 돕는다 — 눈·소용돌이 속 눈·심장을 노려라", big:true }
 ];
 const BIG_BOSSES = [5, 7];   // 대형 슬롯은 크라켄·유령선 중 무작위(반반)
 const ADMIRAL = 8;           // 해군 대장 군함 — 대형 슬롯이 아니라 두 번째 해군 추격 자리에 나온다
-const isBigType = (t) => BIG_BOSSES.indexOf(t) >= 0 || t === ADMIRAL;
+const isBigType = (t) => BIG_BOSSES.indexOf(t) >= 0 || t === ADMIRAL || t === AWAKEN;
 const GHOST_S = 1.4;         // 유령선 그림 배율 — 약점 좌표도 같은 배율을 쓴다
 const SHARK = 9, VICE = 10, MUSANG = 11, THUNDER = 12, SMITH = 13, FIREBIRD = 14;
 // 해역마다 일반 중간보스 셋 + 네임드 하나. 한 해역(2000m) 안에선 일반끼리 겹치지 않게 뽑는다.
@@ -2631,9 +3362,11 @@ const SHARK = 9, VICE = 10, MUSANG = 11, THUNDER = 12, SMITH = 13, FIREBIRD = 14
 const BIOME_POOLS = [
   { mid:[0, 3, 2],          named:6 },        // 노을 군도 — 곡예사·밧줄 끊는 자·흑조호 / 먹물 장군 문어
   { mid:[9, 12, 1],         named:MUSANG },   // 빙하 — 톱니턱·뇌명·작살잡이 / 무상
-  { mid:[4, 10, FIREBIRD],  named:SMITH }     // 화산 — 돌풍술사·바이스·불새 / 용암 대장장이
+  { mid:[4, 10, FIREBIRD],  named:SMITH },    // 화산 — 돌풍술사·바이스·불새 / 용암 대장장이
+  // 심연 — 해역에 묶이지 않고 무작위(겹쳐도 된다). 신규 보스는 여기에 먼저 넣는다
+  { mid:[0, 1, 2, 3, 4, SHARK, VICE, THUNDER, FIREBIRD], named:[6, MUSANG, SMITH], random:true }
 ];
-const NAMED = BIOME_POOLS.map(z => z.named);
+const NAMED = [...new Set([].concat(...BIOME_POOLS.map(z => z.named)))];
 const isNamed = (t) => NAMED.indexOf(t) >= 0;
 const NAMED_HP = 5;
 let bossBag = { zone: -1, used: [] };
@@ -2643,7 +3376,8 @@ const lastMidSlot = () => dist + 500 * diffK("boss") + 220 >= nextBigAt;
 function pickMidBoss(){
   const z = Math.floor(Math.max(0, dist) / BIOME_LEN);
   if(bossBag.zone !== z) bossBag = { zone: z, used: [] };
-  const pool = BIOME_POOLS[z % BIOME_POOLS.length].mid;
+  const zp = BIOME_POOLS[z % BIOME_POOLS.length], pool = zp.mid;
+  if(zp.random) return pool[Math.floor(Math.random() * pool.length)];
   let left = pool.filter(t => bossBag.used.indexOf(t) < 0);
   if(!left.length){                       // 어려움(보스 간격 0.8배)이면 한 해역에 네 번 — 다 나왔으면 바로 직전 것만 빼고 다시
     const last = bossBag.used[bossBag.used.length - 1];
@@ -2659,7 +3393,7 @@ const CHASERS = [SHARK, VICE];
 // 대형 보스 — 따라붙는 거리, 기어 경계 주기(이 중 GUARD_ON 동안 약점을 감춘다), 강화 기어를 켰을 때 몸을 사리는 시간
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
-const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2 };
+const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2, 15:15 };
 const bossBounty = (b) => b.big ? (600 + bossKills*80) : b.named ? (350 + bossKills*60) : (150 + bossKills*40);
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
@@ -2824,7 +3558,9 @@ const TITLES = [
   { id:"mapper",    name:"전설의 보물 사냥꾼", desc:"보물 지도 완성",         need:(s) => (s.maps || 0) >= 1 },
   { id:"kraken10",  name:"해왕을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 },
   { id:"ghost10",   name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 },
-  { id:"naturalist", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length }
+  { id:"naturalist", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length },
+  { id:"voyage_end", name:"대항해의 끝",      desc:"스토리 최종장을 깬다",     need:(s) => (s.storyEnd || 0) >= 1 },
+  { id:"star81",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX }
 ];
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
@@ -2843,7 +3579,7 @@ function logRun(){
   runXp = Math.floor(treasure) + Math.floor(dist);
   lifeLog.xp = (lifeLog.xp || 0) + runXp;
   lifeLog.runs++;
-  if(!blitzMode && !rushMode){             // 거리로 겨루는 판만 최근 기록 그래프에 남긴다
+  if(!blitzMode && !rushMode && !storyMode){             // 거리로 겨루는 판만 최근 기록 그래프에 남긴다
     if(!Array.isArray(lifeLog.recent)) lifeLog.recent = [];
     lifeLog.recent.push(Math.floor(dist));
     if(lifeLog.recent.length > 20) lifeLog.recent.shift();
@@ -2894,7 +3630,7 @@ function pickTitle(id){
 }
 
 function checkTitles(){
-  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone, dexN: dexFound() });
+  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone, dexN: dexFound(), storyEnd, stars: storyStarTotal() });
   let unlocked = null;
   for(const t of TITLES){
     if(!unlockedTitles.has(t.id) && t.need(stats)){
@@ -2912,10 +3648,11 @@ function clearCuts(){
 function spawnBoss(big, forceType){
   let type;
   if(forceType !== undefined) type = forceType;
+  else if(storyMode) type = storyBossType();
   else if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
   else if(rushMode) type = RUSH_ORDER[rushIdx];
   else if(big){ type = BIG_BOSSES[Math.floor(Math.random()*BIG_BOSSES.length)]; bigSpawns++; }   // 2000m마다 크라켄·유령선 같은 확률
-  else if(lastMidSlot() && Math.random() < diffK("named")) type = zonePool().named;
+  else if(lastMidSlot() && Math.random() < diffK("named")){ const nm = zonePool().named; type = Array.isArray(nm) ? nm[Math.floor(Math.random() * nm.length)] : nm; }
   else type = pickMidBoss();
   const hp0 = BOSS_HP[type] || (big ? 8 : 2);
   boss = { type, big:!!big, named: !big && isNamed(type), p2:false, hp: hp0, maxHp: hp0,
@@ -3131,6 +3868,7 @@ function weakPoints(b){
       const open = (b.t % 150) < 62;
       if(open) out.push({ x:b.x + 40, y:SEA - 26, r:24, mark:"숨구멍" });
     }
+    if(b.type === AWAKEN) awakenWeak(b, out);
   }
   return out;
 }
@@ -3201,7 +3939,8 @@ function knockKing(){
 function damageBoss(ranged, mark, power){
   const b = boss;
   // 기어 강화 중엔 공격력 배율이 붙는다(기어 3 거대 주먹은 자체 공격력 4)
-  const amt = (power || 1) * (buff() ? buff().atk : 1);
+  const amt = (power || 1) * (buff() ? buff().atk : 1) + (artOn("redhawk") ? 1 : 0);
+  if(b.type === AWAKEN && b.assistT > 0) storyCount("assist");
   if(b.type === THUNDER){ breakDrum(b); b.hp = b.drums.filter(Boolean).length + 0; }   // 북 하나 = 체력 1(공격력 배율과 상관없이)
   else b.hp = Math.max(0, b.hp - amt);
   b.flash = 16; b.invul = b.big ? 44 : b.named ? 36 : 30;
@@ -3237,14 +3976,10 @@ function damageBoss(ranged, mark, power){
       lifeBossKills++;
       if(lifeBossKills === PARROT_UNLOCK)
         pops.push({ x:b.x, y:b.y-100, t:180, text:"앵무새가 동료로 합류했다!", color:"#3fae5a" });
-      if(b.type === 5) lifeKrakenKills++;
+      if(b.type === 5 || b.type === AWAKEN) lifeKrakenKills++;
       if(b.type === 7) lifeGhostKills++;
       if(b.type === ADMIRAL) lifeAdmiralKills++;
       dexSee("boss" + b.type);
-      {
-        const news = CREW.find(c => c.boss === b.type && crewOwned.indexOf(c.id) < 0 && storyKills(c) === 1);
-        if(news){ crewNews = news; pops.push({ x:p.x, y:p.y - 124, t:200, text:"✉ " + news.name + "이(가) 배에 오르고 싶어 한다 — 창고 → 선원", color:"#e6a8f0" }); }
-      }
       const unlocked = checkTitles();
       if(unlocked){
         newTitle = unlocked.name;
@@ -3254,8 +3989,11 @@ function damageBoss(ranged, mark, power){
     }
     // 연습은 예전처럼 바로 무작위 보상, 그 밖에는 슬로모션이 끝나면 카드 3장 중에서 고른다(러시 마지막 보스는 곧 완주라 생략)
     if(practiceMode) applyBossReward(b);
+    else if(storyMode){ storyBossKilled(b); if(!storyRun.win) applyBossReward(b); }
     else if(!(rushMode && rushIdx + 1 >= RUSH_ORDER.length)){ pickOffer = rollCards(false, b.named ? 2 : 1); pickPending = true; }
-    if(rushMode){
+    if(storyMode){
+      // 스토리 — 다음 보스는 storyBossKilled()가 정한다(러시만)
+    } else if(rushMode){
       rushIdx++;
       nextBossAt = dist + 40; nextBigAt = Infinity;
       if(rushIdx >= RUSH_ORDER.length) rushDone = true;   // 마지막 해군 대장 군함까지 — update()에서 완주 처리
@@ -3650,7 +4388,7 @@ function updateBoss(dt){
           p.vy -= 0.06 * dt;
           if(rope && !rope.a.sky){
             b.tear += dt;
-            if(b.tear > GUST_TEAR){ rope = null; sling = null; pops.push({ x:p.x, y:p.y - 40, t:55, text:"돌풍에 팔이 풀렸다!", color:"#c7ecec" }); }
+            if(b.tear > GUST_TEAR){ storyCount("tear"); rope = null; sling = null; pops.push({ x:p.x, y:p.y - 40, t:55, text:"돌풍에 팔이 풀렸다!", color:"#c7ecec" }); }
           }
         }
         if(b.blowT <= 0){ b.blowT = 0; b.gustCd = 300 * rage; }
@@ -3676,7 +4414,8 @@ function updateBoss(dt){
     }
 
   } else {
-    // 크라켄
+    // 크라켄(각성한 크라켄도 같은 몸에 페이즈를 얹는다)
+    if(b.type === AWAKEN) updateAwaken(b, dt);
     // 너무 뒤처지면 완전히 잠수해 앞질러 나간 뒤 다시 떠오른다
     if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.tents = []; }
     if(b.dive === 1){                                   // 몸을 완전히 숨긴다
@@ -3771,6 +4510,110 @@ function updateBoss(dt){
       }
     }
   }
+}
+
+/* ---------- 각성한 크라켄(15) — 최종 보스 ----------
+   크라켄 패턴(부상·잠수·촉수)에 페이즈를 얹는다. 체력 15 → 10 아래 2페이즈(소용돌이가 고리를 삼킨다), 5 아래 3페이즈(먹물이 하늘을 덮고 심장이 드러난다).
+   페이즈가 넘어갈 때마다, 그리고 2페이즈부터는 주기적으로 데려온 적 있는 동료가 끼어들어 틈(b.assistT)을 만든다 — 그 틈에 맞히면 '협공 명중' */
+const AW_MAW_CD = 300, AW_MAW_WARN = 60, AW_MAW_OPEN = 120, AW_TIRED = 110, AW_ASSIST = 260;
+const awStage = (b) => b.hp > 10 ? 1 : b.hp > 5 ? 2 : 3;
+function awakenAssist(b, stage){
+  const has = (id) => crewOwned.indexOf(id) >= 0;
+  const say = (who, text) => pops.push({ x:p.x, y:p.y - 90, t:140, text: who + ": " + text, color: speakerCol(who) });
+  b.assistT = AW_ASSIST;
+  b.daze = 90;                                   // 동료가 시선을 끄는 동안 눈이 드러난다
+  if(stage === 2){
+    if(has("wright")){
+      say("조선공", "임시 돛대를 세운다!");
+      for(const dx of [260, 470]) anchors.push({ x: p.x + dx, y: 150 + Math.random()*40, kind:0 });
+    }
+    if(has("sniper")) say("저격수", "눈을 맞혔다 — 지금이야!");
+  } else if(stage === 3){
+    if(has("music")){ say("음악가", "먹물을 걷어 낼게요!"); b.inkClear = 360; }
+    if(has("sword")){ say("검객", "촉수는 제가 벱니다."); b.tents = []; }
+    if(has("jack")){ say("갈고리 잭", "떨어지면 건져 주마!"); jackCd = 0; }
+  } else {
+    const pool = ["music","sword","sniper","wright","arch","jack"].filter(has);
+    if(pool.length){ const id = pool[Math.floor(Math.random()*pool.length)]; say(crewDef(id).name, "지금이야, 눈을 노려!"); }
+  }
+}
+function updateAwaken(b, dt){
+  const st = awStage(b);
+  if(!b.aw){ b.aw = st; b.mawCd = AW_MAW_CD; b.tiredCd = 330; b.assistCd = 900; b.assistT = 0; b.daze = 0; b.tired = 0; b.inkClear = 0; }
+  if(st !== b.aw){
+    b.aw = st;
+    addShake(12, 30);
+    pops.push({ x:b.x, y:b.y - 140, t:140, text: st === 2 ? "소용돌이가 고리를 삼킨다!" : "먹물이 하늘을 덮는다!", color:"#d9a8f0" });
+    awakenAssist(b, st);
+  }
+  if(b.assistT > 0) b.assistT -= dt;
+  if(b.daze > 0){ b.daze -= dt; if(b.phase === 1 && b.dive === 0){ b.phase = 0; b.sub = Math.max(b.sub, b.daze); } }   // 동료가 시선을 끄는 동안은 떠올라 눈을 드러낸다
+  if(b.inkClear > 0) b.inkClear -= dt;
+  if(st >= 2){
+    b.assistCd -= dt;
+    if(b.assistCd <= 0){ b.assistCd = 900; awakenAssist(b, 0); }
+    // 소용돌이 — 플레이어가 갈 자리 앞에서 예고 뒤 입을 벌려 근처 고리를 삼킨다
+    if(!b.maw){
+      b.mawCd -= dt;
+      if(b.mawCd <= 0){ b.maw = { x: p.x + 260 + Math.max(0, p.vx) * 20, t: 0 }; b.mawCd = AW_MAW_CD; }
+    } else {
+      const m = b.maw;
+      m.t += dt;
+      if(m.t >= AW_MAW_WARN && !m.ate){
+        m.ate = true;
+        addShake(8, 18);
+        for(const a of anchors) if(Math.abs(a.x - m.x) < 130) a.cut = 200;
+        if(Math.abs(p.x - m.x) < 110 && p.y > SEA - 220) knock(true);
+        for(let i=0;i<24;i++) spark(m.x + (Math.random()-0.5)*160, SEA - 10, "#5a2f6b");
+      }
+      if(m.t >= AW_MAW_WARN + AW_MAW_OPEN) b.maw = null;
+    }
+  }
+  if(st >= 3){
+    if(b.tired > 0) b.tired -= dt;
+    else {
+      b.tiredCd -= dt;
+      if(b.tiredCd <= 0){ b.tiredCd = 330; b.tired = AW_TIRED; pops.push({ x:b.x, y:b.y - 130, t:80, text:"크라켄이 숨을 고른다 — 심장!", color:"#ff8f80" }); }
+    }
+  }
+}
+function awakenWeak(b, out){
+  if(b.maw && b.maw.t >= AW_MAW_WARN) out.push({ x:b.maw.x, y:SEA - 40, r:32, mark:"소용돌이 눈" });
+  if(b.tired > 0) out.push({ x:b.x, y:b.y - 20, r:34, mark:"심장" });
+}
+function drawAwakenExtras(b, x){
+  // 왕관처럼 솟은 가시와 붉은 빛
+  ctx.save();
+  ctx.fillStyle = "#2a1238";
+  for(let i=-3;i<=3;i++){ ctx.beginPath(); ctx.moveTo(x + i*22 - 9, b.y - 82); ctx.lineTo(x + i*22, b.y - 120 - (3 - Math.abs(i))*8); ctx.lineTo(x + i*22 + 9, b.y - 82); ctx.fill(); }
+  ctx.strokeStyle = "rgba(255,90,90," + (0.3 + Math.sin(time*0.1)*0.2).toFixed(2) + ")"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.ellipse(x, b.y - 20, 110, 80, 0, 0, Math.PI*2); ctx.stroke();
+  if(b.tired > 0){
+    ctx.fillStyle = "rgba(255,80,80," + (0.6 + Math.sin(time*0.4)*0.3).toFixed(2) + ")";
+    ctx.beginPath(); ctx.arc(x, b.y - 20, 18 + Math.sin(time*0.4)*4, 0, Math.PI*2); ctx.fill();
+  }
+  if(b.maw){
+    const m = b.maw, mx = m.x - cam.x, k = Math.min(1, m.t / AW_MAW_WARN);
+    ctx.strokeStyle = m.t < AW_MAW_WARN ? "rgba(255,120,120,.75)" : "rgba(143,79,208,.9)"; ctx.lineWidth = 3;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath(); ctx.ellipse(mx, SEA - 6, 130 * k, 22 * k + 2, 0, 0, Math.PI*2); ctx.stroke();
+    ctx.setLineDash([]);
+    if(m.t >= AW_MAW_WARN){
+      ctx.fillStyle = "#1b0f26"; ctx.beginPath(); ctx.ellipse(mx, SEA - 10, 100, 34, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#f6e7a8"; ctx.beginPath(); ctx.ellipse(mx, SEA - 40, 22, 16, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.ellipse(mx + 3, SEA - 40, 7, 12, 0, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+// 3페이즈 먹물 — 화면 위쪽 1/3을 가린다(음악가가 걷어 내는 동안은 옅게)
+function drawAwakenInk(){
+  const b = boss;
+  if(!b || b.type !== AWAKEN || !b.aw || b.aw < 3) return;
+  const a = b.inkClear > 0 ? 0.2 : 0.93;
+  const g = ctx.createLinearGradient(0, 0, 0, H * 0.45);
+  g.addColorStop(0, "rgba(10,4,18," + a + ")"); g.addColorStop(0.75, "rgba(10,4,18," + (a * 0.85).toFixed(2) + ")"); g.addColorStop(1, "rgba(10,4,18,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * 0.45);
 }
 
 function distOriginToSeg(ax, ay, bx, by){
@@ -3975,7 +4818,8 @@ function updateFist(dt){
     } else if(m.h > 30 && m.phase !== 4){
       const top = SEA - m.h;
       if(near(m.x, top - 26) < FIST_R + 74 || near(m.x, (top+SEA)/2) < FIST_R + KING_W){
-        // 해왕류의 비늘은 원거리 주먹을 튕겨 낸다 — 근거리 기술로만 쓰러진다
+        // 해왕류의 비늘은 원거리 주먹을 튕겨 낸다 — 근거리 기술로만 쓰러진다(레드호크 불주먹은 태워 버린다)
+        if(artOn("redhawk")){ killKing(m); stop(); if(fist.back) return; continue; }
         if(!fist.kingPing){ fist.kingPing = true; pops.push({ x:m.x, y:top - 60, t:50, text:"튕겨 나갔다! 근거리로 쳐라", color:"#8fd6d8" }); for(let k=0;k<8;k++) spark(m.x, top, "#8fd6d8"); }
         fist.back = true;
         return;
@@ -4165,9 +5009,29 @@ function crewKillFish(m){
   m.gone = true; treasure += 15; fishKills++; crewKills++; addGear("kill");
   for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
 }
+// 갈고리 잭 — 바다로 떨어지는 중이고 팔이 비어 있으면 가장 가까운 앞 고리에 갈고리를 걸어 준다
+const JACK_CD = 60*40;
+function updateJack(dt){
+  if(jackCd > 0){ jackCd -= dt; return; }
+  if(rope || p.vy <= 0 || p.y < SEA - 120 || stun > 0) return;
+  let best = null, bd = reach() * 1.3;
+  for(const a of anchors){
+    if(a.cut || a.broken || a.x < p.x - 40) continue;
+    const d = Math.hypot(a.x - p.x, a.y - p.y);
+    if(d < bd){ bd = d; best = a; }
+  }
+  if(!best) return;
+  rope = { a: best, len: Math.max(REEL_MIN, Math.min(bd * 0.85, SEA - 52 - best.y)) };
+  p.vy = Math.min(p.vy, -4); p.vx = Math.max(p.vx, 5);
+  airTime = 0; holding = false;
+  jackCd = JACK_CD * (1 - 0.075 * (crewLv("jack") - 1));
+  crewFx.push({ x1:crewMate.x, y1:crewMate.y, x2:best.x, y2:best.y, t:20, col:"#f0a24e" });
+  pops.push({ x:p.x, y:p.y - 44, t:70, text:"잭의 구명 갈고리!", color:"#f0a24e" });
+}
 function updateCrew(dt){
   for(let i=crewFx.length-1;i>=0;i--){ crewFx[i].t -= dt; if(crewFx[i].t <= 0) crewFx.splice(i,1); }
   if(!crewSel || !crewMate) return;
+  if(crewOn("jack")) updateJack(dt);
   const c = crewMate;
   // 뒤쪽 위에서 둥실 따라온다
   const tx = p.x - 52 * (p.face || 1), ty = Math.max(40, p.y - 40) + Math.sin(time*0.08)*5;
@@ -4214,7 +5078,7 @@ function hireCrew(c){
     shopMsg = { text: crewSel ? c.name + "을(를) 데려간다" : "선원 없이 출항한다", t:90, good:true };
   } else if(isStoryCrew(c)){
     if(storyReady(c)){ crewStory = c; return true; }
-    shopMsg = { text:"🔒 " + BOSSES[c.boss].name + "을(를) 격침하면 " + c.name + "의 이야기가 열린다", t:130 };
+    shopMsg = { text:"🔒 스토리 " + c.stage + "을(를) 깨면 " + c.name + "이(가) 합류한다", t:130 };
     return false;
   } else if(bank < c.cost){
     shopMsg = { text:"보물이 " + (c.cost - bank) + " 모자라다", t:90 };
@@ -4244,7 +5108,7 @@ function updateNavy(dt){
   if(navy){
     navy.t += dt;
     const k = Math.min(1, navy.t / NAVY_T);
-    const v = (NAVY_SPD[0] + (NAVY_SPD[1] - NAVY_SPD[0]) * k) * (crewOn("nav") ? 0.85 - 0.03 * (crewLv("nav") - 1) : 1) * diffK("navy");
+    const v = (NAVY_SPD[0] + (NAVY_SPD[1] - NAVY_SPD[0]) * k) * (crewOn("nav") ? 0.85 - 0.03 * (crewLv("nav") - 1) : 1) * diffK("navy") * (storyMode && navyChases >= 2 ? (storyMods().navySpd || 1) : 1);
     navy.x = Math.max(navy.x + v*dt, cam.x - 340);   // 화면 밖으로 너무 처지지 않게
     navy.fire -= dt;
     if(navy.fire <= 0 && navy.x > cam.x - 60){
@@ -4273,7 +5137,7 @@ function updateNavy(dt){
     }
   } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && !barrage && !rival && !navyBeaten && dist >= nextNavyAt){
     navyChases++;
-    if(navyChases >= 2){
+    if(navyChases >= 2 && !storyMode){
       // 두 번째 추격부터는 해군 대장이 직접 군함을 몰고 나온다 — 꺾을 때까지 거리가 멈춘다
       spawnBoss(true, ADMIRAL);
       nextNavyAt = dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
@@ -4308,13 +5172,13 @@ function rivalPath(x){
   const sag = Math.min(150, SEA - 70 - Math.max(A.y, B.y));
   return { y: A.y + (B.y - A.y) * t + sag * Math.sin(Math.PI * t), A, t };
 }
-const rivalStake = () => RIVAL_REWARD + 200 * rivalWins;
+const rivalStake = () => Math.round((RIVAL_REWARD + 200 * rivalWins) * (crewOn("jack") ? 1.2 + 0.03 * (crewLv("jack") - 1) : 1));
 // 라이벌이 끼어들 수 있는 때 — 보스·해군·포격·보물섬이 없을 때만(그동안은 경주가 미뤄지고, 예고도 멈춘다)
 const rivalFree = () => !practiceMode && !rushMode && !blitzMode && !boss && !navy && !barrage && !bonusOn && state === STATE.PLAY;
 function startRival(){
   const who = RIVALS[rivalRaces % RIVALS.length];
   rivalRaces++;
-  rival = { x: p.x - 70, y: p.y, t: 0, spd: RIVAL_SPD * diffK("rival"), finish: p.x + RIVAL_LEN*22, who, over: null, overT: 0, A: null, armT: 0, stake: rivalStake() };
+  rival = { x: p.x - 70, y: p.y, t: 0, spd: RIVAL_SPD * diffK("rival") * (storyMode && storyMods().rivalSpd || 1), finish: p.x + RIVAL_LEN*22, who, over: null, overT: 0, A: null, armT: 0, stake: rivalStake() };
   missionFlash = { text: "라이벌 해적 '" + who.name + "'의 도전! " + RIVAL_LEN + "m 앞 결승 부표까지 — 걸린 현상금 " + rival.stake, reward:0, t:170, bonus:true };
   dexSee("rival");
 }
@@ -4352,7 +5216,11 @@ function updateRival(dt){
       missionFlash = { text: "'" + r.who.name + "'을(를) 이겼다! 현상금 +" + gain + " · 보상 카드", reward:0, t:150, record:true };
       pops.push({ x:p.x, y:p.y - 50, t:100, text:"경주 승리 +" + gain, color:"#ffd76a" });
       for(let i=0;i<30;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#9fe0a0");
-      pickOffer = rollCards(false); pickPending = true;
+      if(storyMode){ storyRun.win = true; storyRun.lead = Math.floor((p.x - r.x) / 22); }
+      else { pickOffer = rollCards(false); pickPending = true; }
+    } else if(storyMode){
+      missionFlash = { text: "'" + r.who.name + "'에게 졌다… 다시 도전하자", reward:0, t:150, weather:"storm" };
+      die("경주");
     } else if(fusen > 0){
       // 지면 라이벌이 풍선 하나를 쏘아 터뜨린다
       fusen--;
@@ -4739,6 +5607,7 @@ function update(dt){
   if(slingCd > 0) slingCd -= dt;
   updateFist(dt);
   updateGun(dt);
+  updateArts(dt);
   updateMobs(dt);
   updateGulls(dt);
   updateJellies(dt);
@@ -4748,12 +5617,13 @@ function update(dt){
   updateNavy(dt);
   updateRival(dt);
   checkMissions();
-  if(!recordBroken && !practiceMode && runBest >= 50 && dist > runBest){
+  if(!recordBroken && !practiceMode && !storyMode && runBest >= 50 && dist > runBest){
     recordBroken = true;
     missionFlash = { text: "신기록 돌파!", reward: 0, t: 150, record: true };
     pops.push({ x:p.x, y:p.y-60, t:120, text:"신기록! " + Math.floor(runBest) + "m 돌파", color:"#ffd76a" });
     for(let i=0;i<40;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#f0a24e");
   }
+  if(storyMode && storyRun) storyUpdate(dt);
   if(state !== STATE.PLAY) return;
 
   if(Math.abs(p.x - stallX) > STALL_RESET_DX){ stallX = p.x; stallT = 0; }
@@ -4808,6 +5678,7 @@ function update(dt){
     if(fusen > 0){
       // 고무고무 풍선 — 바다에 닿는 순간 몸을 부풀려 튕겨 오른다
       fusen--;
+      storyCount("fusenUsed");
       rope = null;
       p.y = SEA - 16;
       p.vy = -FUSEN_BOUNCE;
@@ -4937,6 +5808,7 @@ function resetProfile(){
   techLv = { pistol:1, whip:1 }; mats = { melee:0, ranged:0, gear:0 }; eqRanged = "pistol"; eqMelee = "whip";
   lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[], dex:{} };
   dailyDate = ""; dailyBest = 0; ghostBest = null; streakDate = ""; streak = 0;
+  storyStars = {}; storySeen = []; storyEnd = 0; artSel = null;
 }
 function loadProfile(){
   return Promise.all([loadBest(), loadBestChain(), loadTitles(), loadShop(), loadDaily(), loadLog()]).then(() => syncHUD());
@@ -5001,7 +5873,8 @@ let SAVE_DEF = null;                                          // 새 계정 기�
 function captureSaveDefaults(){ SAVE_DEF = SAVE_REC().map(f => JSON.parse(f())); }
 const CODE_HEAD = "GOMU1-", CODE2_HEAD = "G2-";
 // 낱말표 — 코드 형식의 일부라 절대 고치지 않는다(순서를 바꾸면 예전 코드를 못 읽는다). 새 낱말은 끝에만 덧붙일 것
-const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022"];
+const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022",
+  "story","st","seen","end","art","grab","sense","redhawk","puff","spin","jack","boss15","biome3","voyage_end","star81","captain","starlit"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -5379,6 +6252,12 @@ function applyShopRecord(v){
     if(r.crewXp) crewXp = Object.assign({}, r.crewXp);
     if(DIFFS[r.diff]) diffSel = r.diff;
     if(r.bestDiff) bestDiff = Object.assign({ easy:0, hard:0 }, r.bestDiff);
+    if(r.story){
+      storyStars = storyRead(r.story.st);
+      storySeen = Array.isArray(r.story.seen) ? r.story.seen.slice() : [];
+      storyEnd = r.story.end || 0;
+    }
+    artSel = r.art && artDef(r.art) && artOwned(r.art) ? r.art : null;
     if(r.mini){
       miniBest = Object.assign({ jelly:0, cannon:0, hop:0 }, r.mini.b);
       miniMedals = Object.assign({ jelly:0, cannon:0, hop:0 }, r.mini.m);
@@ -5401,7 +6280,8 @@ async function loadShop(){
 function recShop(){
   return JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, blitzD: blitzDate, rush9: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
                            tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel, crewXp,
-                           mini: { b: miniBest, m: miniMedals, n: miniPlays }, diff: diffSel, bestDiff });
+                           mini: { b: miniBest, m: miniMedals, n: miniPlays }, diff: diffSel, bestDiff,
+                           story: { st: storyRec(), seen: storySeen, end: storyEnd }, art: artSel });
 }
 async function saveShop(){
   const v = recShop();
@@ -5447,9 +6327,15 @@ const BIOME_LEN = 2000;     // 대형 보스 주기와 같다 — 대형 보스�
 const BIOMES = [
   { name:"노을 군도",  pillar:["#241f2e","#332b40"], isle:"rgba(22,18,38,0.5)" },
   { name:"빙하 해역",  pillar:["#9ccbdc","#cfeaf2"], isle:"rgba(220,238,246,0.55)" },
-  { name:"화산 해역",  pillar:["#1e1414","#2e1c1a"], isle:"rgba(40,16,14,0.6)" }
+  { name:"화산 해역",  pillar:["#1e1414","#2e1c1a"], isle:"rgba(40,16,14,0.6)" },
+  { name:"심연",      pillar:["#161230","#2a2050"], isle:"rgba(12,8,30,0.62)" }
 ];
-const biomeAt = (m) => Math.floor(Math.max(0, m) / BIOME_LEN) % BIOMES.length;
+const biomeAt = (m) => {
+  const s = storyStage();
+  if(s) return s.mods && s.mods.cycle ? Math.floor(Math.max(0, m) / 300) % 3 : s.biome;   // 스토리는 스테이지가 해역을 정한다(최종장 1은 세 해역이 번갈아)
+  return Math.floor(Math.max(0, m) / BIOME_LEN) % BIOMES.length;
+};
+const hazK = (k) => storyMode && storyMods()[k] || 1;
 // 해역은 화면의 거리(m) 기준 — 보스전 동안 안 쳐준 거리(distOffset)를 빼야 2000m 대형 보스와 해역 경계가 맞는다
 const zoneM = (x) => x / 22 - (distOffset || 0);
 let biomeShown = 0;
@@ -5469,7 +6355,8 @@ const SKY_KEYS = [
 
 // 지금 하늘 — 네 구간 사이를 부드럽게 섞는다. night는 밤에 가까운 정도(0~1)
 function skyNow(){
-  const t = ((dist || 0) % DAY_LEN) / DAY_LEN * 4;
+  const fixed = storyFixedSky();
+  const t = fixed !== null ? fixed : ((dist || 0) % DAY_LEN) / DAY_LEN * 4;
   const i = Math.floor(t) % 4, j = (i + 1) % 4;
   let f = t - Math.floor(t);
   f = f < 0.55 ? 0 : (f - 0.55) / 0.45;         // 구간 대부분은 그 시간대를 유지하고 끝에서 넘어간다
@@ -6421,7 +7308,8 @@ function updateSmith(b, dt){
 }
 // 달군 고리를 잡으려 하면 — 데여서 팔 부상(grab에서 부른다)
 function hotGrab(a){
-  if(!a || !(a.hot > 0) || invinc()) return false;
+  if(!a || !(a.hot > 0) || invinc() || artOn("redhawk")) return false;
+  storyCount("hot");
   hurtArm(ARM_CUT, "앗 뜨거! 달군 고리");
   return true;
 }
@@ -6783,7 +7671,7 @@ function updateMusang(b, dt){
       flash = settings.flash ? 0.6 : 0;
       for(let i=0;i<30;i++) spark(b.x, b.y, i % 2 ? "#8f4fd0" : "#1b1218");
       if(state === STATE.PLAY){
-        if(gearGuard()){ treasure += 80; addGear("near"); pops.push({ x:p.x, y:p.y - 46, t:80, text:"기세를 버텼다! +80", color:"#ffd76a" }); }
+        if(gearGuard()){ storyCount("guard"); treasure += 80; addGear("near"); pops.push({ x:p.x, y:p.y - 46, t:80, text:"기세를 버텼다! +80", color:"#ffd76a" }); }
         else overwhelm("패왕의 기세에 짓눌렸다!");
       }
       b.st = "tired"; b.tired = MU_TIRED;
@@ -7446,6 +8334,7 @@ function drawBoss(){
       ctx.beginPath(); ctx.ellipse(hx, hy, 13, 8, 0, 0, Math.PI*2); ctx.fill();
       if(Math.random() < 0.2) spark(hx + (Math.random()-0.5)*30, hy, "#d9a8f0");
     }
+    if(b.type === AWAKEN) drawAwakenExtras(b, x);
   }
 
   if(b.big && b.guarding){
@@ -8200,6 +9089,17 @@ function drawBiomeParticles(){
   const bio = biomeAt(zoneM(p.x));
   if(bio === 0) return;
   ctx.save();
+  if(bio === 3){
+    ctx.fillStyle = "rgba(20,8,40,.28)"; ctx.fillRect(0, 0, W, H);
+    for(let i=0;i<40;i++){
+      const x = (hash(i*5.3)*W*1.2 - cam.x*0.15 + Math.sin(time*0.03 + i)*14) % (W*1.2);
+      const y = H - ((hash(i*8.1)*H + time*(0.5 + hash(i*2)*0.9)) % H);
+      ctx.strokeStyle = "rgba(190,160,255," + (0.25 + hash(i*3)*0.35).toFixed(2) + ")"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc((x + W*1.2) % (W*1.2) - W*0.1, y, 2 + hash(i*7)*3, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
   for(let i=0;i<50;i++){
     if(bio === 1){                                   // 눈
       const x = (hash(i*3.3)*W*1.2 + time*(0.6 + hash(i)*0.8) - cam.x*0.2) % (W*1.2);
@@ -8483,7 +9383,8 @@ function drawStallWarning(){
 /* 화면 위 버튼 줄 — 모바일엔 M·R·C 키가 없어서 출항·일시정지·결과 화면에 누를 수 있는 버튼을 둔다 */
 function goToMenu(){
   if(state === STATE.REVIVE) declineRevive();   // 부활 창이면 판을 정상 종료(보물·기록 저장)하고 나간다
-  state = STATE.MENU; practicePage = 0; shopPage = 0;
+  if(state === STATE.STORY_TALK){ storyTalk = null; }
+  state = storyMode ? STATE.STORY_MAP : STATE.MENU; practicePage = 0; shopPage = 0;
   syncHUD();
 }
 function screenButtons(){
@@ -8501,11 +9402,17 @@ function screenButtons(){
     });
     const cd = crewDef(crewSel);
     const crewLabel = cd ? "선원 " + cd.name + " Lv." + crewLv(cd.id) + " (C)" : crewOwned.length ? "선원: 없음 (C)" : "선원 고용하기 →";
-    const bottom = [[crewLabel, cycleCrew, cd ? cd.col : "rgba(244,236,217,.6)"], ["← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]];
+    const bottom = [[crewLabel, cycleCrew, cd ? cd.col : "rgba(244,236,217,.6)"]];
+    if(ARTS.some(a => artOwned(a.id))) bottom.push([artSel ? "비기 " + artDef(artSel).short + " (G)" : "비기 없음 (G)", cycleArt, artSel ? "#ff8f70" : "rgba(244,236,217,.6)"]);
+    bottom.push([storyMode ? "← 지도로" : "← 메뉴로", goToMenu, "rgba(244,236,217,.8)"]);
     if(mainGame()) bottom.unshift(["난이도 " + DIFFS[diffSel].name + " (V)", cycleDiff, DIFFS[diffSel].col]);   // 본게임에서만
     return gearRow.concat(row(bottom));
   }
   if(state === STATE.PAUSE) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 시작 (R)", reset, "#d9b877"], ["계속 (P)", togglePause, "#9fe0a0"]]);
+  if(state === STATE.OVER && storyMode){
+    const nextOk = storyResult && storyResult.win && storyIdx(storyMode.ch, storyMode.st) + 1 < STORY_ALL.length;
+    return row([["지도로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 (R)", reset, "#d9b877"]].concat(nextOk ? [["다음 ▶ (Enter)", storyNext, "#9fe0a0"]] : []));
+  }
   if(state === STATE.OVER) return row([["메뉴로 (M)", goToMenu, "rgba(244,236,217,.8)"], ["다시 (R)", reset, "#9fe0a0"], ["결과 공유 (C)", shareResult, "#d9b877"]]);
   return [];
 }
@@ -8952,38 +9859,42 @@ function shopUI(){
                   action: () => upgradeTech(t.id) });
     });
   } else if(shopPage === 4){
-    // 선원 — 3×3 카드. 이야기 선원은 보스를 격침하면 열리고, 고용 선원은 보물로
-    const cw = (SHOP_W - 24) / 3, ch = (SHOP_BOT - SHOP_TOP - 4 - 20) / 3;
+    // 선원 — 5×2 카드. 이야기 선원은 스토리 장 보스를 깨면 합류하고, 고용 선원은 보물로
+    const cw = (SHOP_W - 48) / 5, ch = (SHOP_BOT - SHOP_TOP - 4 - 12) / 2;
     CREW.forEach((c, i) => {
-      const x = SHOP_X + (i % 3)*(cw + 12), y = SHOP_TOP + 4 + Math.floor(i / 3)*(ch + 10);
+      const x = SHOP_X + (i % 5)*(cw + 12), y = SHOP_TOP + 4 + Math.floor(i / 5)*(ch + 12);
       const own = crewOwned.indexOf(c.id) >= 0, on = crewSel === c.id, story = isStoryCrew(c), ready = storyReady(c), locked = story && !own && !ready;
-      rows.push({ key:i + 1, x, y, w:cw, h:ch, on, glow: ready, dim: locked || (!story && !own && bank < c.cost), col: own ? c.col : undefined, label:c.name,
+      rows.push({ key:(i + 1) % 10, x, y, w:cw, h:ch, on, glow: ready, dim: locked || (!story && !own && bank < c.cost), col: own ? c.col : undefined, label:c.name,
         action: () => hireCrew(c),
         draw: () => {
           ctx.beginPath(); ctx.arc(x + 30, y + 30, 17, 0, Math.PI*2);
           ctx.fillStyle = locked ? "rgba(244,236,217,.12)" : c.col; ctx.fill();
           uiText(locked ? "?" : c.name[0], x + 30, y + 31, UIF(800, 15), locked ? "rgba(244,236,217,.5)" : "#14222e", "center");
-          uiText(c.name, x + 56, y + 23, UIF(800, 16), locked ? "rgba(244,236,217,.55)" : "#f4ecd9");
-          ctx.font = UIF(800, 16);
+          // 카드가 좁아(5×2) 긴 이름은 글자를 줄여 배지가 카드 안에 들어오게
+          const nf = UIF(800, 16), sf = UIF(800, 13), bw = story ? 44 : 34;
+          ctx.font = nf;
+          const nameF = 62 + ctx.measureText(c.name).width + bw > cw - 10 ? sf : nf;
+          uiText(c.name, x + 56, y + 23, nameF, locked ? "rgba(244,236,217,.55)" : "#f4ecd9");
+          ctx.font = nameF;
           const bx = x + 62 + ctx.measureText(c.name).width;
           const badge = { x: bx, y: y + 14, w: story ? 44 : 34, h: 18, col: story ? "#e6a8f0" : "#ffd76a", fill: story ? "rgba(90,50,100,.6)" : "rgba(90,70,30,.6)" };
           drawPanel(badge, 9);
           uiText(story ? "이야기" : "고용", badge.x + badge.w/2, badge.y + 10, UIF(700, 10), badge.col, "center");
           if(own) uiText("Lv." + crewLv(c.id) + (crewNext(c.id) ? " · " + (crewXp[c.id] || 0) + "/" + crewNext(c.id) + "m" : " · 최고"), x + 56, y + 42, UIF(600, 11), c.col);
-          else if(story) uiText("조건: " + BOSSES[c.boss].name + " 격침" + (ready ? " ✓" : ""), x + 56, y + 42, UIF(600, 11), ready ? "#9fe0a0" : "rgba(230,168,240,.7)");
-          drawWrapped(locked ? c.tease : c.desc, x + 14, y + 64, cw - 28, 16, UIF(500, 12), locked ? "rgba(244,236,217,.45)" : "rgba(244,236,217,.75)", 2);
+          else if(story) uiText("조건: 스토리 " + c.stage + (ready ? " ✓" : ""), x + 56, y + 42, UIF(600, 11), ready ? "#9fe0a0" : "rgba(230,168,240,.7)");
+          drawWrapped(locked ? c.tease : c.desc, x + 14, y + 64, cw - 28, 16, UIF(500, 12), locked ? "rgba(244,236,217,.45)" : "rgba(244,236,217,.75)", 5);
           const st = on ? "⚓ 동행 중" : own ? "데려가기" : ready ? "✉ 이야기 보기" : locked ? "🔒 잠김" : "💰 " + commas(c.cost);
           uiText(st, x + cw - 14, y + ch - 14, UIF(800, 13), on ? "#9fe0a0" : ready ? "#e6a8f0" : locked ? "rgba(244,236,217,.4)" : own ? c.col : bank < c.cost ? "rgba(217,184,119,.5)" : "#ffd76a", "right");
-          uiText((i + 1) + "", x + cw - 12, y + 12, UIF(600, 10), "rgba(244,236,217,.35)", "right");
+          uiText(((i + 1) % 10) + "", x + cw - 12, y + 12, UIF(600, 10), "rgba(244,236,217,.35)", "right");
         } });
     });
   } else {
     // 두건 — 5×3 칸
-    const cw = (SHOP_W - 4*10) / 5, ch = (SHOP_BOT - SHOP_TOP - 4 - 16) / 3;
+    const cw = (SHOP_W - 5*10) / 6, ch = (SHOP_BOT - SHOP_TOP - 4 - 16) / 3;
     SKINS.forEach((k, i) => {
-      const x = SHOP_X + (i % 5)*(cw + 10), y = SHOP_TOP + 4 + Math.floor(i / 5)*(ch + 8);
+      const x = SHOP_X + (i % 6)*(cw + 10), y = SHOP_TOP + 4 + Math.floor(i / 6)*(ch + 8);
       const own = ownedSkins.indexOf(k.id) >= 0 || (k.title && !skinLocked(k)), on = skin === k.id;
-      const status = on ? "✓ 장착 중" : own ? "장착하기" : k.port ? "🔒 항구 한정" : k.mini ? "🔒 미니게임 금 3" : k.title === "naturalist" ? "🔒 도감 완성" : k.title ? "🔒 칭호 보상" : "💰 " + commas(k.cost);
+      const status = on ? "✓ 장착 중" : own ? "장착하기" : k.port ? "🔒 항구 한정" : k.mini ? "🔒 미니게임 금 3" : k.title === "naturalist" ? "🔒 도감 완성" : k.title === "voyage_end" ? "🔒 스토리 엔딩" : k.title === "star81" ? "🔒 별 81개" : k.title ? "🔒 칭호 보상" : "💰 " + commas(k.cost);
       rows.push({ key: i < 9 ? i + 1 : -1, x, y, w:cw, h:ch, on, dim: !own && (k.title || k.mini || k.port ? true : bank < k.cost), label:k.name,
         action: () => pickSkin(k),
         draw: () => {
@@ -9029,7 +9940,7 @@ function drawShop(){
     ctx.beginPath(); ctx.arc(box.x + 50, box.y + 50, 24, 0, Math.PI*2); ctx.fillStyle = c.col; ctx.fill();
     uiText(c.name[0], box.x + 50, box.y + 51, UIF(800, 20), "#14222e", "center");
     uiText("✉ " + c.name + "의 이야기", box.x + 88, box.y + 40, UIF(800, 21), "#f4ecd9");
-    uiText(BOSSES[c.boss].name + "을(를) 격침한 뒤", box.x + 88, box.y + 64, UIF(500, 13), "rgba(230,168,240,.85)");
+    uiText("스토리 " + c.stage + "을(를) 깬 뒤", box.x + 88, box.y + 64, UIF(500, 13), "rgba(230,168,240,.85)");
     let y = box.y + 104;
     for(const para of c.story){
       const lines = wrapLines(para, box.w - 64, UIF(500, 15));
@@ -9048,7 +9959,7 @@ function drawShop(){
     } else centerText(shopMsg.text, H - 43, UIF(700, 14), shopMsg.good ? "#9fe0a0" : "#f7a8a0", al);
     if(shopMsg.t <= 0) shopMsg = null;
   }
-  const foot = shopPage === 4 ? "이야기 선원은 그 보스를 격침하면 합류 · 고용 선원은 보물로 · 함께 항해한 거리만큼 레벨이 오른다(최고 Lv.5)"
+  const foot = shopPage === 4 ? "이야기 선원은 스토리 장 보스를 깨면 합류 · 고용 선원은 보물로 · 함께 항해한 거리만큼 레벨이 오른다(최고 Lv.5)"
              : "본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키·클릭 · ← → 탭 바꾸기 · Esc 메뉴로";
   centerText(foot, H - 16, UIF(400, 12), "rgba(244,236,217,.55)");
 }
@@ -9059,7 +9970,7 @@ function draw(){
     uiState = state;
     const tc = document.querySelector(".touch");
     if(tc){
-      tc.classList.toggle("idle", state !== STATE.PLAY && state !== STATE.MINI);
+      tc.classList.toggle("idle", state !== STATE.PLAY && state !== STATE.MINI);   // 대사창·지도도 idle
       tc.classList.toggle("mini", state === STATE.MINI);   // 미니게임은 이동·팔 버튼만
     }
   }
@@ -9120,6 +10031,7 @@ function draw(){
   drawFire();
   drawFist();
   drawGun();
+  drawArts();
 
   // 팔 재사용 대기 표시
   if(state === STATE.PLAY && grabCd > 0){
@@ -9164,6 +10076,7 @@ function draw(){
 
   sea();
   ctx.restore();
+  drawAwakenInk();
 
   if(state === STATE.PLAY || state === STATE.PAUSE) drawWeather();
   if(state === STATE.PLAY || state === STATE.PAUSE) drawBiomeParticles();
@@ -9181,10 +10094,12 @@ function draw(){
   if(state === STATE.PLAY) drawRivalHud();
   if(state === STATE.PLAY) drawBossIntro();
   if(state === STATE.PLAY) drawSinkBanner();
-  if(state === STATE.PLAY) drawMissions();
+  if(state === STATE.PLAY && !storyMode) drawMissions();
+  if(state === STATE.PLAY && storyMode && storyRun) drawStoryHud();
+  if(state === STATE.PLAY) drawArtScreen();
   if(state === STATE.PLAY) drawHint();
   if(state === STATE.PLAY) drawMissionFlash();
-  warnY = boss ? 68 : 22;
+  warnY = (boss ? 68 : 22) + (storyMode && state === STATE.PLAY ? 50 : 0);
   if(state === STATE.PLAY) drawKingWarning();
   if(state === STATE.PLAY) drawRivalWarning();
   if(state === STATE.PLAY) drawStallWarning();
@@ -9222,7 +10137,8 @@ function draw(){
     ctx.fillStyle = "rgba(13,27,38,0.74)";
     ctx.fillRect(0,0,W,H);
     centerText("닻을 내렸다", H/2 - 120, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
-    if(practiceMode || dailyMode || blitzMode || rushMode)
+    if(storyMode) centerText("스토리 " + storyStage().id + " " + storyStage().name + " — " + storyGoalText(storyStage()), H/2 - 88, "600 14px 'Pretendard', system-ui, sans-serif", "#ffd76a");
+    else if(practiceMode || dailyMode || blitzMode || rushMode)
       centerText(practiceMode ? "연습 모드 — " + practiceLabel() : dailyMode ? "오늘의 항해" : blitzMode ? "60초 보물 사냥 · 남은 " + Math.ceil(blitzT/60) + "초" : "보스 러시 " + Math.min(rushIdx+1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length,
                  H/2 - 88, "600 14px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     // 이번 판 상황
@@ -9254,14 +10170,19 @@ function draw(){
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 하루 한 판 · 바다에 빠지면 끝" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
+    if(storyMode){
+      const s = storyStage(), bits = storyBits(s.id);
+      centerText(STORY_CH[storyMode.ch].name + " · " + s.id + " " + s.name + " — " + storyGoalText(s), H/2 - 150, "800 18px 'Pretendard', system-ui, sans-serif", "#ffd76a");
+      centerText("★ 클리어 · ★★ " + s.stars[0].text + " · ★★★ " + s.stars[1].text + " (부활하면 ★★★ 없음)" + (bits & 1 ? "  — 지금 " + "★".repeat(starCount(bits)) : ""), H/2 - 128, "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
+    }
     if(mainGame()) centerText("난이도 " + DIFFS[diffSel].name + " — " + DIFFS[diffSel].desc + " · 이 난이도 최고 " + Math.floor(curBest()) + "m",
                                                           H/2 - 130, "700 14px 'Pretendard', system-ui, sans-serif", DIFFS[diffSel].col);
-    if(!practiceMode && !rushMode){ const wn = weeklyNow(); centerText("🌊 이번 주 해류: " + wn.name + " — " + wn.desc, H/2 - 113, "600 13px 'Pretendard', system-ui, sans-serif", wn.col); }
+    if(!practiceMode && !rushMode && !storyMode){ const wn = weeklyNow(); centerText("🌊 이번 주 해류: " + wn.name + " — " + wn.desc, H/2 - 113, "600 13px 'Pretendard', system-ui, sans-serif", wn.col); }
     centerText("팔을 뻗어 돛대 밧줄을 잡는다", H/2 - 60, "700 27px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     centerText("← → 로 그네를 밀어 속도를 올리고, ↓ 로 줄을 감아 돛대 위로 오른다", H/2 - 28, "400 15px 'Pretendard', system-ui, sans-serif", "#f0a24e");
     centerText("오래 날다가 다음 밧줄을 잡으면 보물이 쌓인다 — 연속 성공은 최대 " + CHAIN_CAP + "배", H/2 - 4, "400 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.72)");
     centerText("보스마다 약점이 여러 개고 전부 움직인다 — 빠른 속도로 부딪쳐라", H/2 + 18, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(176,58,52,.95)");
-    centerText("Q " + techOf(eqRanged).name + " · W " + techOf(eqMelee).name + " · E 기어(아래에서 선택)", H/2 + 38, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
+    centerText("Q " + techOf(eqRanged).name + " · W " + techOf(eqMelee).name + " · E 기어(아래에서 선택)" + (artSel ? " · G " + artDef(artSel).name + " Lv." + artLv(artSel) : ""), H/2 + 38, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(240,162,78,.95)");
     centerText("화면을 누르거나 Space로 출항 · M 메뉴로", H/2 + 60, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
     if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 84, "600 13px 'Pretendard', system-ui, sans-serif", "#9fe0a0");
     if(tip) centerText("팁 · " + tip, H/2 + 106, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.8)");
@@ -9295,7 +10216,9 @@ function draw(){
     ctx.fillRect(0,0,W,H);
     drawPoster(W/2 - 330, 52, 250, 380);
     if(runGrade) drawGradeStamp(W/2 + 300, 118);
-    const reasonText = deathReason === "완주" ? "보스 러시 완주!"
+    const reasonText = deathReason === "클리어" ? "스테이지 클리어!"
+      : deathReason === "경주" ? "경주에서 졌다"
+      : deathReason === "완주" ? "보스 러시 완주!"
       : deathReason === "시간" ? "시간 종료!"
       : deathReason === "바다" ? "바다에 빠졌다"
       : deathReason === "정체" ? "너무 오래 멈춰 선단에 뒤처졌다"
@@ -9305,6 +10228,7 @@ function draw(){
     let overY = 92;
     const line = (t, font, color, gap) => { leftText(t, lx, overY, font, color); overY += gap; };
     if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Pretendard', system-ui, sans-serif", "#8fd6d8", 26);
+    if(storyMode) line("스토리 " + storyStage().id + " " + storyStage().name, "700 14px 'Pretendard', system-ui, sans-serif", "#ffd76a", 26);
     if(rushMode) line(rushDone ? ((newRushRecord ? "★ 최단 기록 " : "완주 기록 ") + fmtTime(rushT) + (rushBest && !newRushRecord ? " · 최단 " + fmtTime(rushBest) : ""))
                                : ("보스 " + rushIdx + "/" + RUSH_ORDER.length + " 격파" + (rushBest ? " · 최단 " + fmtTime(rushBest) : "")),
                       "700 14px 'Pretendard', system-ui, sans-serif", newRushRecord ? "#ffd76a" : "#8fd6d8", 26);
@@ -9319,7 +10243,20 @@ function draw(){
       line(reasonText, "700 " + sz + "px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
     }
     line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
-    if(!practiceMode) line("창고 보물 " + Math.floor(bank) + (diffK("loot") !== 1 ? "  (난이도 " + DIFFS[diffNow()].name + " ×" + diffK("loot") + ")" : ""), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
+    if(storyMode && storyResult && storyResult.win){
+      const s = storyStage(), r = storyResult;
+      line("★".repeat(starCount(r.bits)) + "☆".repeat(3 - starCount(r.bits)) + (r.newBits & 6 ? "  새 별!" : "") + "   " + (r.first ? "첫 클리어 보물 +" : "다시 깬 보물 +") + r.reward,
+           "800 20px 'Pretendard', system-ui, sans-serif", "#ffd76a", 28);
+      line((r.bits & 2 ? "✓ " : "· ") + s.stars[0].text + "   " + (r.bits & 4 ? "✓ " : "· ") + s.stars[1].text + (storyRun && storyRun.revived ? " (부활해서 ★★★ 없음)" : ""),
+           "600 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.8)", 22);
+      if(r.crew) line("⚓ " + r.crew.name + " 합류! — " + r.crew.desc, "700 14px 'Pretendard', system-ui, sans-serif", r.crew.col, 22);
+      if(r.art) line("✦ 비기 획득: " + r.art.name + " — 출항 화면에서 G로 장착", "700 14px 'Pretendard', system-ui, sans-serif", "#ff8f70", 22);
+      if(s.end) line("🌊 대항해의 끝 — 무한 모드 '심연' 해역과 각성한 크라켄 연습이 열렸다", "700 14px 'Pretendard', system-ui, sans-serif", "#d9a8f0", 22);
+    } else if(storyMode && storyStage()){
+      const s = storyStage();
+      line("목표: " + storyGoalText(s) + " — 다시 도전하자 (R)", "600 14px 'Pretendard', system-ui, sans-serif", "#8fd6d8", 24);
+    }
+    if(!practiceMode && !storyMode) line("창고 보물 " + Math.floor(bank) + (diffK("loot") !== 1 ? "  (난이도 " + DIFFS[diffNow()].name + " ×" + diffK("loot") + ")" : ""), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
     if(missions.length){
       const done = missions.filter(m => m.done).length;
       line("미션 " + done + "/" + missions.length + " 완료", "600 15px 'Pretendard', system-ui, sans-serif", done ? "#9fe0a0" : "rgba(244,236,217,.6)", 20);
@@ -9334,7 +10271,7 @@ function draw(){
     if(gears > 0) facts.push(GEARS[gearSel].name + " ×" + gears);
     if(facts.length) line(facts.join(" · "), "600 14px 'Pretendard', system-ui, sans-serif", "rgba(255,215,106,.85)", 24);
     if(maxChain > 1){
-      const newChainRecord = maxChain >= bestChain && !practiceMode;
+      const newChainRecord = maxChain >= bestChain && !practiceMode && !storyMode;
       line((newChainRecord ? "★ 신기록 " : "") + "최고 콤보 ×" + maxChain, "600 14px 'Pretendard', system-ui, sans-serif",
            newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
@@ -9349,7 +10286,7 @@ function draw(){
     ctx.fillRect(0,0,W,H);
     centerText("고무팔 · 대항해", H/2 - 214, "700 30px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
     for(const row of menuRows()){
-      row.col = row.mini ? "#e6a8f0" : /^9\)/.test(row.label) ? "#8fd6d8" : row.glow ? "#e6a8f0" : "#f0a24e";
+      row.col = row.mini ? "#e6a8f0" : row.story ? "#ffd76a" : row.acct ? "#8fd6d8" : row.glow ? "#e6a8f0" : "#f0a24e";
       drawBtn(row, UIF(700, 17));
     }
     centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + commas(bank), H/2 - 182, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
@@ -9424,6 +10361,17 @@ function draw(){
                H/2 - 146, "500 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.7)");
     for(const row of menuRows()) drawBtn(row, UIF(700, 18));
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
+  } else if(state === STATE.STORY_MAP){
+    drawStoryMap();
+  } else if(state === STATE.STORY_TALK){
+    drawTalk();
+  } else if(state === STATE.CHALLENGE){
+    ctx.fillStyle = "rgba(13,27,38,0.78)";
+    ctx.fillRect(0,0,W,H);
+    centerText("도전", H/2 - 160, "800 26px 'Pretendard', system-ui, sans-serif", "#f4ecd9");
+    centerText("매일 바뀌는 바다 · 하루 한 판 보물 사냥 · 보스 9연전 · 연습", H/2 - 130, "500 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.7)");
+    for(const row of menuRows()) drawBtn(row, UIF(700, 16));
+    centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.PRACTICE_SELECT){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
@@ -9441,6 +10389,7 @@ function loop(now){
   if(dt > 3) dt = 3;
   // 보스 격침 순간의 슬로모션 — 실제 시간 기준으로 줄어든다
   if(slowT > 0 && state === STATE.PLAY){ slowT -= dt; dt *= 0.3; }
+  else if(artOn("sense")) dt *= SENSE_K;
   // 다음 프레임을 먼저 예약한다 — 그리기·갱신 중 오류가 한 번 나도 게임이 통째로 멈추지 않게.
   // (v39에서 음수 반지름 원 하나 때문에 루프가 끊겨 화면이 굳었다)
   requestAnimationFrame(loop);
@@ -10306,7 +11255,18 @@ window.__swing = {
                   scan: (x) => { cam.x = x; p.x = x + W*0.32; generate(); return anchors; } }),
   spawnBoss: (big, type) => { boss = null; bossIntro = null; spawnBoss(big, type); return boss; },
   lifeStats: () => ({ boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, titles: [...unlockedTitles] }),
-  port: () => ({ idx: portIdx, next: nextPortAt, bought: portBought, act: portAct, leave: leavePort, price: (i) => portPrice(PORT_ITEMS[i]) })
+  port: () => ({ idx: portIdx, next: nextPortAt, bought: portBought, act: portAct, leave: leavePort, price: (i) => portPrice(PORT_ITEMS[i]) }),
+  story: () => ({ mode: storyMode, stars: storyStars, seen: storySeen, end: storyEnd, run: storyRun, res: storyResult, talk: storyTalk, ch: STORY_CH, all: STORY_ALL,
+                  start: startStory, next: storyNext, open: openStoryMap, leave: leaveStory, talkNext, clear: storyClear, open2: storyOpen, total: storyStarTotal, max: STORY_STAR_MAX,
+                  setBits: (id, b) => { if(b === undefined) delete storyStars[id]; else storyStars[id] = b; }, setEnd: (n) => { storyEnd = n; }, setCh: (n) => { storyCh = n; },
+                  drawMap: drawStoryMap, drawTalk, hud: drawStoryHud, starOk: storyStarOk, left: storyLeft }),
+  art: () => ({ sel: artSel, cd: artCd, t: artT, held: artHeld, thrown: artThrow, spin: artSpin, press: artPress, lift: artLift, cycle: cycleArt, lv: artLv, owned: artOwned,
+                set: (id) => { artSel = id; }, list: ARTS, on: artOn, setCd: (v) => { artCd = v; } }),
+  jack: () => ({ cd: jackCd, setCd: (v) => { jackCd = v; } }),
+  biome: (m) => biomeAt(m),
+  pools: () => BIOME_POOLS,
+  toChallenge: () => { state = STATE.CHALLENGE; },
+  stateIds: STATE
 };
 
 reset();
