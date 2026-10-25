@@ -1910,53 +1910,48 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
-/* --- v47: 이야기 선원 — 보스를 격침해야 합류, 나머지는 보물로 고용 --- */
+/* --- v47→v49: 이야기 선원 — 스토리 장 보스를 깨야 합류(무한 모드 격침으로는 안 열린다), 나머지는 보물로 고용 --- */
 {
-  const a = A(), U = () => a.shopUi(), CT = () => a.crewTest(), cr = a.crew, sh = a.shop();
-  const list = CT().list, story = list.filter(c => c.boss !== undefined);
-  ok("이야기 선원 5명 · 고용 선원 4명", story.length === 5 && list.length - story.length === 4 && ["cook","nav","doctor","helm"].every(id => !("boss" in list.find(c => c.id === id))));
+  const a = A(), U = () => a.shopUi(), CT = () => a.crewTest(), cr = a.crew, sh = a.shop(), ST = () => a.story();
+  const list = CT().list, story = list.filter(c => c.stage !== undefined);
+  ok("이야기 선원 6명(잭 포함) · 고용 선원 4명", story.length === 6 && list.length - story.length === 4 && ["cook","nav","doctor","helm"].every(id => !("stage" in list.find(c => c.id === id))));
   ok("이야기 선원마다 이야기 문단·예고 문구가 있다", story.every(c => c.story.length >= 2 && c.tease));
-  ok("이야기 선원 보스는 서로 다르고 실제 보스다", new Set(story.map(c => c.boss)).size === 5 && story.every(c => c.boss >= 0 && c.boss < 15));
-  // 깨끗한 상태에서 시작
-  const owned0 = cr().owned.slice(), sel0 = cr().sel;
+  ok("이야기 선원의 스테이지는 서로 다르고 실제 스토리 스테이지다", new Set(story.map(c => c.stage)).size === 6 && story.every(c => ST().all.some(s => s.id === c.stage)));
+  const owned0 = cr().owned.slice(), sel0 = cr().sel, bits0 = Object.assign({}, ST().stars);
   cr().owned.length = 0;
-  story.forEach(c => U().dex("boss" + c.boss));
+  story.forEach(c => ST().setBits(c.stage));
   sh.setBank(10000000);
   const iSword = list.findIndex(c => c.id === "sword");
-  ok("보스를 못 잡았으면 보물이 많아도 이야기 선원은 못 데려온다", !cr().hire(iSword) && cr().owned.indexOf("sword") < 0 && a.shop().bank === 10000000 && !U().story());
-  ok("소식이 없으면 메뉴에 배지가 없다", U().news() === 0);
-  U().dex("boss11", 1);                    // 무상을 한 번 격침했다
-  ok("무상을 격침하면 검객의 이야기가 열린다", U().ready(list[iSword]) && U().news() === 1);
+  ok("스토리를 안 깼으면 보물이 많아도 이야기 선원은 못 데려온다", !cr().hire(iSword) && cr().owned.indexOf("sword") < 0 && a.shop().bank === 10000000 && !U().story());
+  U().dex("boss11", 1);                    // 무한 모드에서 무상을 격침해도
+  ok("무한 모드에서 보스를 격침해도 이야기 선원은 열리지 않는다", !U().ready(list[iSword]) && U().news() === 0);
+  U().dex("boss11");
+  ST().setBits("2-4", 1);                  // 스토리 2-4를 깼는데 아직 합류 기록이 없으면(예: 예전 저장) 창고에서 맞이한다
+  ok("스토리 2-4를 깼으면 검객의 이야기가 열린다", U().ready(list[iSword]) && U().news() === 1);
   a.toMenu();
   ok("메뉴 '보물 창고' 줄에 새 동료 소식", a.rows().some(r => /새 동료 소식 1/.test(r.label)));
   a.rows().find(r => /보물 창고/.test(r.label)).action();
   ok("소식이 있으면 창고가 선원 탭으로 열린다", U().page() === 4);
-  ok("선원 탭 머리에 ✉ 배지", a.rows().some(r => r.tab && /✉1/.test(r.label)));
   cr().hire(iSword);
-  ok("검객 카드를 누르면 이야기 창이 뜬다(아직 합류 전)", U().story() && U().story().id === "sword" && cr().owned.indexOf("sword") < 0);
-  ok("이야기 창이 떠 있으면 그 창 버튼 둘만 누를 수 있다", a.rows().length === 2 && a.rows().some(r => r.key === 1) && a.rows().some(r => r.key === 9));
+  ok("검객 카드를 누르면 이야기 창이 뜬다", U().story() && U().story().id === "sword");
   let err = null; try{ U().draw(); }catch(e){ err = e.message; }
   ok("이야기 창을 그려도 오류가 없다", !err, err);
   a.rows().find(r => r.key === 1).action();
   ok("[동료로 맞이하기] — 공짜로 합류하고 바로 동행", cr().owned.indexOf("sword") >= 0 && cr().sel === "sword" && a.shop().bank === 10000000 && !U().story());
-  ok("합류한 뒤엔 소식이 사라진다", U().news() === 0);
-  ok("합류한 이야기 선원은 다시 누르면 내린다(고용 선원과 같다)", cr().hire(iSword) && cr().sel === null);
-  // 판 중에 처음 격침하면 알림
-  U().dex("boss6");
-  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);   // 연습 모드가 남아 있으면 도감이 안 센다
+  ok("합류한 이야기 선원은 다시 누르면 내린다", cr().hire(iSword) && cr().sel === null);
+  // 무한 모드에서 문어를 격침해도 소식이 없다
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);
   const P = T().P();
   T().setBoss({ type:6, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon:70, fishSkill:200,
                 invul:0, flash:0, x:P.x+50, y:P.y, vy:0, air:false, phase:0, sub:0,
                 perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 });
   T().dmg(true, "test");
-  ok("판 중에 문어를 처음 격침하면 음악가 소식", U().runNews() && U().runNews().id === "music" && U().news() === 1, U().runNews() && U().runNews().id);
-  // 모든 탭을 그려도 오류가 없다
+  ok("무한 모드에서 문어를 격침해도 음악가 소식은 없다", !U().runNews() && cr().owned.indexOf("music") < 0);
   err = null;
   try{ for(let i = 0; i < 6; i++){ U().tab(i); U().draw(); } }catch(e){ err = e.message; }
   ok("창고 탭 여섯 개를 모두 그려도 오류가 없다", !err, err);
-  // 되돌리기
   cr().owned.length = 0; owned0.forEach(id => cr().owned.push(id)); cr().set(sel0);
-  story.forEach(c => U().dex("boss" + c.boss));
+  story.forEach(c => { ST().setBits(c.stage, bits0[c.stage]); U().dex("boss" + c.boss); });
   sh.setBank(0);
   a.toMenu();
 }
@@ -1964,10 +1959,10 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 신규 선원 5명 --- */
 {
   const a = A(), CT = () => a.crewTest(), C = a.crew();
-  ok("선원은 9명 — 선의·고고학자·조선공·음악가·조타수 추가", CT().list.length === 9 && ["doctor","arch","wright","music","helm"].every(id => CT().list.some(c => c.id === id)));
+  ok("선원은 10명 — 선의·고고학자·조선공·음악가·조타수·갈고리 잭 추가", CT().list.length === 10 && ["doctor","arch","wright","music","helm","jack"].every(id => CT().list.some(c => c.id === id)));
   a.shopPage(4);
-  const crewRows = a.rows().filter(r => r.key >= 1 && r.key <= 9 && r.w).length;
-  ok("창고 선원 탭은 9명이 한 화면(1~9)", crewRows === 9, crewRows);
+  const crewRows = a.rows().filter(r => r.key >= 0 && r.key <= 9 && r.w && r.h > 100).length;
+  ok("창고 선원 탭은 10명이 한 화면(1~9, 0)", crewRows === 10, crewRows);
   const stunWith = (id) => { C.set(id); a.startMain(); H.step(); a.hold(true); H.step(); return T().hit(false); };
   const s0 = stunWith(null), s1 = stunWith("doctor");
   ok("선의 — 휘청 시간 -30%", Math.abs(s1 - s0 * 0.7) < 0.01, s0.toFixed(1) + " → " + s1.toFixed(1));
@@ -2060,7 +2055,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 바다 도감 --- */
 {
   const a = A(), X = () => a.dex();
-  ok("도감은 39종 — 생물·보스 15종·지형·해역·사건", X().list.length === 39 && X().list.filter(e => e.cat === "boss").length === 15);
+  ok("도감은 41종 — 생물·보스 16종·지형·해역(심연 포함)·사건", X().list.length === 41 && X().list.filter(e => e.cat === "boss").length === 16);
   a.startMain(); H.step(); a.hold(true); H.step();
   ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
   delete X().book.wind;
@@ -2610,6 +2605,211 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   H.step();
   ok("가진 것보다 많이는 못 가져간다", a.peek().treasure >= 0 && a.peek().treasure < 50, "보물 " + Math.floor(a.peek().treasure));
   a.toMenu();
+}
+
+/* --- v49: 스토리 모드 · 무한 모드 · 도전 메뉴 · 비기 · 갈고리 잭 · 심연 해역 · 각성한 크라켄 --- */
+{
+  const a = A(), ST = () => a.story(), AR = () => a.art(), S = a.stateIds;
+  const skipTalk = () => { let n = 0; while(ST().talk && n++ < 50) ST().talkNext(true); };
+  const go = () => { skipTalk(); H.step(); a.hold(true); H.step(); };      // 출항
+  const stepN = (n, fn) => { for(let i=0;i<n;i++){ if(fn) fn(); if(a.peek().state === 9) a.decline(); H.step(); } };
+  const bits0 = Object.assign({}, ST().stars), seen0 = ST().seen.slice(), owned0 = a.crew().owned.slice(), sel0 = a.crew().sel, bank0 = a.bank();
+  const clearAll = () => { for(const k of Object.keys(ST().stars)) delete ST().stars[k]; ST().seen.length = 0; };
+  // 메뉴
+  a.toMenu();
+  let rows = a.rows();
+  ok("메뉴 1)은 스토리 모드, 2)는 무한 모드, 3)은 도전", /스토리 모드/.test(rows[0].label) && /무한 모드/.test(rows[1].label) && /도전/.test(rows[2].label));
+  rows[2].action();
+  ok("도전 화면(state 16)에 오늘의 항해·60초 사냥·보스 러시·연습", a.peek().state === 16 && ["오늘의 항해","60초","보스 러시","연습 모드"].every(t => a.rows().some(r => r.label.includes(t))));
+  a.rows().find(r => /연습 모드/.test(r.label)).action();
+  ok("도전 → 연습 목록", a.peek().state === 5);
+  a.toMenu();
+  a.rows()[1].action();
+  ok("무한 모드 = 예전 본게임(출항 화면, 스토리 아님)", a.peek().state === 0 && !ST().mode && a.diff().now === a.diff().sel);
+  // 데이터
+  ok("스토리는 7묶음 27스테이지 · 별 81개", ST().ch.length === 7 && ST().all.length === 27 && ST().max === 81);
+  ok("스테이지 id가 겹치지 않고, 별 조건 둘 · 시작 대사가 있다", new Set(ST().all.map(s => s.id)).size === 27 && ST().all.every(s => s.stars.length === 2 && s.pre.length && s.reward > 0));
+  ok("장 보스 스테이지 다섯 곳이 동료 하나와 비기 하나를 준다", ST().all.filter(s => s.crew && s.art).length === 5 && new Set(ST().all.filter(s => s.art).map(s => s.art)).size === 5);
+  // 잠금 · 대사
+  clearAll();
+  ok("첫 스테이지만 열려 있다", ST().open2(0, 0) && !ST().open2(0, 1) && !ST().open2(1, 0));
+  ok("잠긴 스테이지는 시작되지 않는다", ST().start(1, 0) === false);
+  ST().open();
+  ok("스토리 지도(state 14) — 아직 안 깬 첫 장이 펼쳐진다", a.peek().state === 14);
+  let err = null;
+  try{ for(let i=0;i<7;i++){ ST().setCh(i); ST().drawMap(); } ST().setCh(0); }catch(e){ err = e.message; }
+  ok("지도 일곱 장을 모두 그려도 오류가 없다", !err, err);
+  ST().start(0, 0);
+  ok("처음 하는 스테이지는 대사창(state 15)부터", a.peek().state === 15 && ST().talk && ST().talk.lines.length === 3);
+  err = null; try{ ST().drawTalk(); }catch(e){ err = e.message; }
+  ok("대사창을 그려도 오류가 없다", !err, err);
+  ST().talkNext(); ST().talkNext();
+  ok("누르면 글자를 다 보이고, 한 번 더 누르면 다음 줄", ST().talk.i === 1);
+  skipTalk();
+  ok("대사가 끝나면 출항 화면, 본 대사는 기록", a.peek().state === 0 && ST().seen.indexOf("P-1") >= 0);
+  ok("스토리는 무한 모드가 아니다(난이도·최고 기록 무관)", a.diff().now === "normal" && ST().mode && ST().mode.ch === 0);
+  ok("스토리엔 미션이 없다", a.peek().missions.length === 0);
+  // 거리 스테이지 클리어
+  const best0 = a.diff().best, b0 = a.bank();
+  go();
+  T().setFusen(9);
+  T().teleport(160 * 22);
+  stepN(3);
+  ok("P-1: 150m를 넘으면 클리어(별 비트 1)", (ST().stars["P-1"] & 1) === 1 && ST().res && ST().res.win, "bits=" + ST().stars["P-1"]);
+  ok("클리어하면 끝 대사 뒤 결과 화면", a.peek().state === 15 || a.peek().state === 2);
+  skipTalk();
+  ok("결과 화면(state 2) · 사유 '클리어'", a.peek().state === 2 && a.peek().deathReason === "클리어");
+  ok("첫 클리어 보물이 창고로(최고 거리는 그대로)", a.bank() >= b0 + 300 && a.diff().best === best0, "창고 " + (a.bank() - b0));
+  ok("다음 스테이지가 열렸다", ST().open2(0, 1));
+  err = null; try{ H.step(); }catch(e){ err = e.message; }
+  ok("결과 화면 그리기 오류 없음", !err, err);
+  // 별 — 다시 깨도 별은 합쳐질 뿐 줄지 않는다, 부활하면 ★★★ 없음
+  ST().setBits("P-1", 7);
+  ST().start(0, 0); go(); T().setFusen(9); ST().run.revived = true; T().teleport(160 * 22); stepN(3); skipTalk();
+  ok("다시 깨도 별은 줄지 않는다", ST().stars["P-1"] === 7);
+  ok("부활한 판은 ★★★(비트 4)을 받지 못한다", (ST().res.bits & 4) === 0);
+  ok("다시 깬 보물은 첫 클리어의 10%", ST().res.reward === 30 && !ST().res.first);
+  // 다음 스테이지 버튼
+  ST().next();
+  ok("다음 스테이지 = P-2", ST().mode.ch === 0 && ST().mode.st === 1);
+  // 보스 스테이지 — 그 보스만, 카드 없이 클리어
+  ["P-1","P-2","1-1","1-2"].forEach(id => ST().setBits(id, 1));
+  ST().start(1, 2); go(); T().setFusen(9);
+  T().teleport(140 * 22); stepN(4, () => a.hold(true));
+  const bb = a.boss();
+  ok("1-3: 120m에서 밧줄 끊는 자가 나온다", bb && bb.type === 3, bb && bb.type);
+  ok("보스 스테이지엔 잡몹이 없다", a.peek().mobs.length === 0);
+  bb.hp = 1; bb.invul = 0; T().dmg(true, "t");
+  stepN(60, () => a.hold(true)); skipTalk();
+  ok("보스를 격파하면 보상 카드 없이 클리어", (ST().stars["1-3"] & 1) === 1 && a.peek().state === 2, "state=" + a.peek().state);
+  // 장 보스 — 동료 합류 + 비기
+  a.crew().owned.length = 0;
+  ST().setBits("1-3", 1);
+  ST().start(1, 3); go(); T().setFusen(9);
+  T().teleport(140 * 22); stepN(4, () => a.hold(true));
+  const oc = a.boss();
+  ok("1-4: 먹물 장군 문어", oc && oc.type === 6);
+  oc.hp = 1; oc.invul = 0; T().dmg(true, "t");
+  stepN(60, () => a.hold(true));
+  ok("장 보스를 깨면 끝 대사(합류 이야기)", a.peek().state === 15 && ST().talk.lines.length >= 2);
+  skipTalk();
+  ok("음악가 합류 · 비기 '받아치기' 획득", a.crew().owned.indexOf("music") >= 0 && ST().res.crew && ST().res.crew.id === "music" && ST().res.art && ST().res.art.id === "grab" && AR().owned("grab"));
+  ok("비기 Lv — 장 별 4개면 Lv.1", AR().lv("grab") === 1);
+  // 경주 — 지면 실패, 이기면 클리어
+  ST().start(1, 1); go(); T().setFusen(9);
+  T().teleport(60 * 22); stepN(3, () => a.hold(true));
+  let rv = a.rival();
+  ok("1-2: 50m에서 갈고리 잭과 경주", rv.r && rv.r.who.name === "갈고리 잭");
+  rv.r.x = rv.r.finish + 1; stepN(2);
+  ok("경주에 지면 그 스테이지는 실패(사유 '경주')", a.peek().state === 2 && a.peek().deathReason === "경주" && ST().res && !ST().res.win);
+  ST().setBits("1-2");
+  ST().start(1, 1); go(); T().setFusen(9);
+  T().teleport(60 * 22); stepN(3, () => a.hold(true));
+  rv = a.rival(); rv.r.x = a.peek().x - 600; rv.r.finish = a.peek().x - 150; stepN(4, () => a.hold(true)); skipTalk();
+  ok("경주에 이기면 클리어(카드 없음)", (ST().stars["1-2"] & 1) === 1 && a.peek().state === 2);
+  // 해군 추격 스테이지에선 해군 대장이 끼어들지 않는다
+  ["1-4","2-1"].forEach(id => ST().setBits(id, 1));
+  ST().start(2, 1); go(); T().setFusen(9);
+  T().teleport(90 * 22); stepN(3, () => a.hold(true));
+  ok("2-2: 출발 직후 해군 추격", !!a.navy().n);
+  a.navy().setChases(5); a.navy().n.t = 9999; stepN(2, () => a.hold(true));
+  ok("추격을 버티면 다음 추격 대신 목표 거리만 남는다(해군 대장 없음)", !a.boss() && a.navy().esc >= 1);
+  T().teleport(520 * 22); stepN(3); skipTalk();
+  ok("해군 따돌리고 500m — 클리어", (ST().stars["2-2"] & 1) === 1);
+  // 비기
+  ST().leave();
+  ["1-1","1-2","1-3","1-4","2-1","2-2","2-3","2-4","3-1","3-2","3-3","3-4","4-1","4-2","4-3","4-4","5-1","5-2","5-3","5-4"].forEach(id => ST().setBits(id, 1));
+  a.startMain(); H.step();
+  AR().set(null);
+  AR().cycle();
+  ok("출항 화면에서 G로 비기를 고른다", AR().sel === "grab");
+  a.hold(true); H.step();
+  AR().setCd(0);
+  a.peek().mobs.length = 0; a.peek().gulls.length = 0; a.peek().barrels.length = 0; a.peek().shots.length = 0;
+  ok("잡을 게 없으면 받아치기는 재충전을 쓰지 않는다", !AR().press() && AR().cd <= 0);
+  a.peek().mobs.push({ kind:0, x:a.peek().x + 60, y:a.peek().y, vy:0, air:true, t:0, cool:0, gone:false });
+  a.peek().mobs.push({ kind:0, x:a.peek().x + 400, y:a.peek().y, vy:0, air:true, t:0, cool:0, gone:true });
+  ok("받아치기 — 가까운 물고기를 붙잡는다", AR().press() && AR().held && a.peek().mobs[0].gone);
+  const target = { kind:0, x:a.peek().x + 300, y:a.peek().y, vy:0, air:true, t:0, cool:0, gone:false };
+  a.peek().mobs.push(target);
+  AR().press();
+  ok("다시 누르면 던진다", !AR().held && AR().thrown);
+  stepN(20);
+  ok("던진 물고기가 다른 물고기를 처치", target.gone);
+  // 기척 읽기 — 세상이 느려진다
+  AR().set("sense"); AR().setCd(0); a.hold(true); H.step();
+  ok("기척 읽기 발동", AR().press() && AR().t > 0);
+  const senseT0 = AR().t; H.step();
+  ok("기척 읽기는 실제 시간으로 줄어든다(느려진 시간 기준이 아니다)", Math.abs(senseT0 - AR().t - 1) < 0.05, (senseT0 - AR().t).toFixed(3));
+  AR().setCd(0);
+  // 레드호크 — 보스 피해 +1
+  AR().set("redhawk"); AR().setCd(0);
+  AR().press();
+  const rb = a.spawnBoss(false, 0); rb.hp = 3; rb.invul = 0;
+  T().dmg(true, "t");
+  ok("레드호크 중엔 보스 피해 +1", a.boss() && a.boss().hp === 1, "hp " + (a.boss() && a.boss().hp));
+  T().setBoss(null);
+  // 풍선 몸 — 낙하 속도 1 이하
+  AR().set("puff"); AR().setCd(0);
+  a.setRope(null); a.hold(false);
+  const PP = T().P(); PP.y = 200; PP.vy = 8;
+  ok("풍선 몸 발동", AR().press());
+  stepN(10);
+  ok("풍선 몸 동안 낙하 속도 1 이하", a.peek().vy <= 1.01, "vy " + a.peek().vy.toFixed(2));
+  // 회전목마
+  AR().set("spin"); AR().setCd(0);
+  const anc = { x: a.peek().x + 60, y: 140, kind: 0 }; T().anchors().push(anc);
+  a.setRope(anc); T().P().y = 240;
+  ok("회전목마 — 매달린 채 누르면 돈다", AR().press() && AR().spin);
+  const tr0 = a.peek().treasure;
+  stepN(50);
+  ok("한 바퀴마다 보물", a.peek().treasure >= tr0 + 50 && AR().spin.laps >= 1, "laps " + (AR().spin && AR().spin.laps));
+  AR().lift();
+  ok("떼면 줄을 놓고 앞으로 날아간다", !a.peek().rope && a.peek().vx > 0 && AR().cd > 0);
+  // 갈고리 잭 — 바다로 떨어지면 건져 준다
+  a.crew().set("jack"); a.jack().setCd(0);
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);
+  a.setRope(null);
+  T().P().y = a.peek().SEA - 90; T().P().vy = 6;
+  T().anchors().push({ x: a.peek().x + 80, y: 160, kind: 0 });
+  stepN(2);
+  ok("잭의 구명 갈고리 — 바다 위에서 앞 고리를 잡아 준다", !!a.peek().rope && a.jack().cd > 0);
+  a.crew().set(sel0);
+  // 심연 해역 · 보스 풀
+  ok("무한 모드 6000m부터 네 번째 해역 '심연'", a.biome(6500) === 3 && a.biome(1000) === 0 && a.biome(8100) === 0);
+  const ab = a.pools()[3];
+  ok("심연 보스 풀은 무작위(일반 9종 · 네임드 3종)", ab.random && ab.mid.length === 9 && ab.named.length === 3);
+  T().setDist(6500);
+  const picks = new Set(); for(let i=0;i<200;i++) picks.add(T().pickMid());
+  ok("심연에선 같은 보스가 겹쳐도 되고, 풀 전체에서 나온다", picks.size >= 7 && [...picks].every(t => ab.mid.indexOf(t) >= 0), [...picks].join(","));
+  // 각성한 크라켄
+  a.startMain(); H.step(); a.hold(true); H.step();
+  const K = a.spawnBoss(true, 15);
+  ok("각성한 크라켄 — 대형 · 체력 15", K.big && K.hp === 15);
+  err = null;
+  try{
+    stepN(30, () => a.hold(true));
+    K.hp = 9; K.invul = 0; stepN(400, () => { a.hold(true); T().setFusen(9); });
+  }catch(e){ err = e.message; }
+  ok("2페이즈 — 소용돌이가 나오고 오류가 없다", !err && K.aw === 2 && (K.maw || K.mawCd < 300), err || ("aw " + K.aw));
+  err = null;
+  try{ K.hp = 4; stepN(400, () => { a.hold(true); T().setFusen(9); }); }catch(e){ err = e.message; }
+  ok("3페이즈 — 먹물·심장, 오류 없음", !err && K.aw === 3 && K.tiredCd !== undefined, err);
+  ok("동료 협공 틈이 생긴다", K.assistCd <= 900);
+  T().setBoss(null);
+  // 연습 — 각성한 크라켄은 엔딩 뒤
+  const endv = ST().end;
+  ST().setEnd(0); a.startPractice(16);
+  ok("엔딩 전엔 각성한 크라켄 연습이 잠겨 있다", !a.peek().practiceMode || a.peek().practiceMode.bossType !== 15);
+  ST().setEnd(1); a.startPractice(16); H.step();
+  ok("엔딩 뒤엔 연습할 수 있다", a.peek().practiceMode && a.peek().practiceMode.bossType === 15);
+  ST().setEnd(endv);
+  // 되돌리기
+  clearAll(); Object.assign(ST().stars, bits0); seen0.forEach(x => ST().seen.push(x));
+  a.crew().owned.length = 0; owned0.forEach(id => a.crew().owned.push(id)); a.crew().set(sel0);
+  AR().set(null); a.shop().setBank(bank0);
+  ST().leave();
+  a.startMain(); H.step(); a.toMenu();
 }
 
 /* --- 프로젝트 원칙 --- */

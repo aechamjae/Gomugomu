@@ -155,7 +155,7 @@ const ok = (name, cond, extra) => {
 
   // 오래 플레이한 계정 — 모든 저장분이 한 글자도 안 틀리고 옮겨진다
   r = await ac().signup("부자", "rich1234", false);
-  const DEXIDS = ["fish","king","gull","jelly","gold","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","navy","rival","skyroute","searoute"].concat([...Array(15).keys()].map(i => "boss" + i));
+  const DEXIDS = ["fish","king","gull","jelly","gold","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","biome3","wind","storm","fog","bonus","barrage","navy","rival","skyroute","searoute"].concat([...Array(16).keys()].map(i => "boss" + i));
   const dex = {}; DEXIDS.forEach((id, i) => { dex[id] = 3 + i * 7; });
   const rich = {
     "swing:best": "12345", "swing:bestChain": "37",
@@ -163,7 +163,9 @@ const ok = (name, cond, extra) => {
     "swing:shop": JSON.stringify({ bank: 987654, up: { reach:3, pistol:3, magnet:2, fusen:1 }, bounty: 2345678, skins: ["red","navy","gold","black","anchor"], skin: "anchor", parrot: false,
                                    mapPieces: 3, mapsDone: 5, blitz: 4567, blitzD: "2026-10-20", rush9: 61234, grade: "A", gearU: 4, gearS: 3,
                                    tech: { pistol:3, whip:2, rifle:5, bazooka:1, gcharge:4, gtime:2 }, mats: { melee:7, ranged:0, gear:11 }, eqR: "rifle", eqM: "bazooka",
-                                   crew: ["cook","nav","sword","helm"], crewS: "sword", crewXp: { cook: 2200, nav: 900, sword: 16000, helm: 40 },
+                                   crew: ["cook","nav","sword","helm","jack"], crewS: "sword", crewXp: { cook: 2200, nav: 900, sword: 16000, helm: 40, jack: 300 },
+                                   story: { st: "737577137711371113111713",       // 스테이지 순서대로 별 비트(P-1 … F-2)
+                                            seen: ["P-1","P-1+","P-2","1-1","1-4","1-4+","F-2"], end: 0 }, art: "spin",
                                    mini: { b: { jelly:312, cannon:1650, hop:151 }, m: { jelly:3, cannon:3, hop:3 }, n: 44 }, diff: "hard", bestDiff: { easy: 3000, hard: 9000 } }),
     "swing:log": JSON.stringify({ runs: 912, dist: 401234, perfects: 3456, missions: 678, gulls: 999, barrels: 345, skims: 2345, gears: 456, golds: 789, xp: 123456,
                                   recent: [1200, 900, 1500, 2100, 800, 1300, 1700, 950, 1100, 2500], dex }),
@@ -183,9 +185,12 @@ const ok = (name, cond, extra) => {
     const x = JSON.parse(richBefore[k]), y = JSON.parse(richAfter[k]); x.ghost = []; return norm(JSON.stringify(x)) === norm(JSON.stringify(y));
   });
   ok("오래 플레이한 계정도 저장분 6가지가 그대로 옮겨진다(유령 기록만 빼고)", same.length === 6, same.join(","));
-  ok("오래 플레이한 계정 코드도 짧다(예전 형식의 1/4 정도)", mk.code.length < 700, mk.code.length + "자");
-  console.log("     (참고: 오래 플레이한 계정 코드 " + mk.code.length + "자)");
+  // v49부터 스토리 진행이 더해져 내용이 늘었다 — 같은 내용을 예전(GOMU1) 방식으로 묶었을 때와 비교한다
+  const legacyLen = Buffer.from(JSON.stringify({ v:1, ver:"v49", at:"2026-10-25", from:"부자", d: rich }), "utf8").toString("base64").length + 15;
+  ok("오래 플레이한 계정 코드도 짧다(같은 내용을 예전 형식으로 묶은 것의 1/3 미만)", mk.code.length * 3 < legacyLen, mk.code.length + "자 / 예전 형식 " + legacyLen + "자");
+  console.log("     (참고: 오래 플레이한 계정 코드 " + mk.code.length + "자, 예전 형식이면 " + legacyLen + "자)");
   ok("불러온 값이 게임에 반영된다", sh().bank === 987654 && a.crew().sel === "sword" && a.tech().eqR === "rifle", "창고=" + sh().bank);
+  ok("스토리 진행·비기도 옮겨진다", a.story().stars["5-4"] === 7 && a.story().stars["F-2"] === 3 && a.story().seen.indexOf("1-4+") >= 0 && a.art().sel === "spin", JSON.stringify(a.story().stars["5-4"]) + " " + a.art().sel);
 
   // 예전 형식(GOMU1)도 계속 읽는다
   const oldCode = { v:1, ver:"v46", at:"2026-10-21", from:"옛날", d:{ "swing:best": "555", "swing:shop": JSON.stringify({ bank: 31337 }) } };
