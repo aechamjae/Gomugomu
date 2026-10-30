@@ -3033,6 +3033,39 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   function stepFrames(k){ for(let i=0;i<k;i++) H.step(); }
 }
 
+/* --- v50: 동료 고유 능력(★) --- */
+{
+  const a = A(), C = () => a.crew();
+  const sel0 = C().sel, owned0 = C().owned.slice();
+  const go = (id) => { C().set(id); a.startMain(); H.step(); a.hold(true); H.step(); T().teleport(300 * 22); };
+  const ready = () => { C().mate.skill = 0; };
+  go("cook"); T().setFusen(0); ready(); H.step();
+  ok("요리사 — 풍선을 새로 불어 준다", a.peek().fusen === 1 && C().mate.skill > 0);
+  go("doctor"); T().setShield(0); ready(); H.step();
+  ok("선의 — 보호막이 없으면 다시 감아 준다", a.crewTest().shield() === 1);
+  go("nav");
+  ok("항해사 — 해군 추격은 8초", Math.round(C().navyT / 60) === 8);
+  T().P().vx = 8; ready(); H.step();
+  ok("항해사 — 순풍을 불러온다", C().mate.wind > 0);
+  go("sniper");
+  const b = a.spawnBoss(false, 0); b.invul = 0; b.x = a.peek().x + 300;
+  ready(); const hp0 = b.hp; H.step();
+  ok("저격수 — 보스 약점을 저격(피해 1)", b.hp === hp0 - 1, "hp " + hp0 + "→" + b.hp);
+  T().setBoss(null);
+  go("wright"); a.hold(false); a.setRope(null);
+  a.peek().anchors.length = 0;
+  const P = T().P(); P.y = a.peek().SEA - 120; P.vy = 4; ready(); H.step();
+  ok("조선공 — 낮게 떨어지면 앞에 임시 돛대", a.peek().anchors.some(an => an.temp && an.x > P.x));
+  go("helm"); a.hold(false); a.setRope(null); T().P().vy = 5; ready();
+  ok("조타수 — 공중에서 한 번 더 도약", C().helmJump() && T().P().vy < -8 && !C().helmJump());
+  go("arch");
+  ok("고고학자 — 창고 보물 +20%", Math.abs(C().loot - 1.2) < 0.001 || C().loot > 1.2);
+  go("music"); H.step();
+  ok("음악가 — 기어 게이지 40%를 채우고 출발", a.peek().gear > 0);
+  go("jack");
+  C().set(sel0); C().owned.length = 0; owned0.forEach(id => C().owned.push(id));
+  a.toMenu();
+}
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");

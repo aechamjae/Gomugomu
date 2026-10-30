@@ -549,36 +549,36 @@ const fusenMax = () => FUSEN_MAX + pk("pouch");
 // boss가 있는 선원은 '이야기 선원' — 보물로는 못 사고, 그 보스를 (연습 말고) 한 번 격침하면 이야기가 열려 합류한다.
 // boss는 BOSSES 번호(여기선 아직 상수가 없어서 숫자로): 6 문어 · 7 유령선 · 8 해군 대장 · 11 무상 · 13 풀무
 const CREW = [
-  { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1" },
-  { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 바람 절반 · 순풍 강화 · 해군이 느려진다" },
+  { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1 · ★ 50초마다 풍선을 새로 불어 준다" },
+  { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 절반 · 해군 감속 · ★ 해군 추격 8초 · 수갑 절반 · 25초마다 순풍" },
   { id:"sword",  name:"검객",   cost:0, boss:11, stage:"2-4", col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다",
     tease:"빙하 해역의 검호 무상과 겨룬 자에게만 칼을 맡긴다",
     story:["무상의 기세가 꺾이자, 얼음 위에서 결투를 지켜보던 젊은 검객이 칼집을 들고 다가왔다.",
            "\"스승님이 무릎 꿇는 건 처음 봅니다. 그 고무팔이 어디까지 닿는지 곁에서 보고 싶습니다.\"",
            "그날부터 검객은 곁으로 날아드는 물고기와 갈매기를 대신 베어 주었다."] },
-  { id:"sniper", name:"저격수", cost:0, boss:8, stage:"5-4", col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다",
+  { id:"sniper", name:"저격수", cost:0, boss:8, stage:"5-4", col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다 · ★ 18초마다 보스 약점을 저격(피해 1)",
     tease:"해군 대장 군함의 망루에서 누군가 총을 겨누고 있다",
     story:["군함이 기울자 망루에서 백기가 올라왔다. 해군 제복을 벗어 던진 저격수였다.",
            "\"명령대로만 쏘는 건 지겨웠어. 네 배에선 내가 고른 걸 쏘겠다.\"",
            "저격수는 앞쪽의 적과 보물 통을 먼저 노려 준다."] },
-  { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -30% · 출발할 때 보호막 1" },
-  { id:"arch",   name:"고고학자", cost:0, boss:7, stage:"4-4", col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50%",
+  { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -30% · 출발할 때 보호막 1 · ★ 보호막이 없으면 40초마다 다시 감아 준다" },
+  { id:"arch",   name:"고고학자", cost:0, boss:7, stage:"4-4", col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50% · ★ 판이 끝나면 창고 보물 +20%",
     tease:"망령의 유령선 선창에서 누군가 해도를 붙들고 있다",
     story:["유령선이 가라앉기 직전, 선창에서 낡은 해도 더미를 끌어안은 학자가 기어 나왔다.",
            "\"백 년 동안 이 배의 지도만 읽었지. 이제 진짜 바다에서 맞춰 보고 싶군.\"",
            "고고학자가 고른 보물 통은 더 무겁고, 지도 조각도 더 자주 눈에 띈다."] },
-  { id:"wright", name:"조선공", cost:0, boss:13, stage:"3-4", col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20%",
+  { id:"wright", name:"조선공", cost:0, boss:13, stage:"3-4", col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20% · ★ 낮게 떨어지면 앞에 임시 돛대를 세운다(20초마다)",
     tease:"용암 대장장이 풀무의 대장간에 사슬에 묶인 일꾼이 있다",
     story:["풀무의 망치가 식자, 대장간 구석에서 사슬에 묶인 채 배를 고치던 조선공이 고개를 들었다.",
            "\"삭은 돛대도 내 손을 거치면 한참 버티지. 풀어 주면 네 배를 맡아 주마.\"",
            "항구 상인들도 조선공의 얼굴을 보면 값을 깎아 준다."] },
-  { id:"music",  name:"음악가", cost:0, boss:6, stage:"1-4", col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25%",
+  { id:"music",  name:"음악가", cost:0, boss:6, stage:"1-4", col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25% · ★ 기어 지속 +30% · 게이지 40% 채우고 출발",
     tease:"먹물 장군 문어의 먹물 속에서 바이올린 소리가 들린다",
     story:["문어가 먹물을 거두자, 촉수에 감겨 춤 반주를 하던 악사가 바이올린을 든 채 떨어졌다.",
            "\"장군님 춤 반주는 이제 그만! 당신 스윙에 맞춰 켜게 해 줘요.\"",
            "음악가의 박자에 맞추면 콤보가 길게 이어지고 기어 게이지도 빨리 찬다."] },
-  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 보상 2배 · 라이벌이 느려진다" },
-  { id:"jack",   name:"갈고리 잭", cost:0, stage:"F-2", col:"#f0a24e", desc:"바다로 떨어지면 앞 고리에 갈고리를 걸어 건져 준다(40초마다) · 라이벌 판돈 +20%",
+  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 2배 · 라이벌 감속 · ★ 공중에서 ↑ 로 한 번 더 도약(10초)" },
+  { id:"jack",   name:"갈고리 잭", cost:0, stage:"F-2", col:"#f0a24e", desc:"바다로 떨어지면 앞 고리에 갈고리를 걸어 건져 준다(25초마다) · 라이벌 판돈 +20%",
     tease:"라이벌의 갈고리가 언젠가 널 구해 줄지도",
     story:["외눈 바론과의 경주가 끝나자, 갈고리 잭이 뱃전에 갈고리를 걸고 올라탔다.",
            "\"이번만은 같은 배다, 고무 꼬맹이. 떨어지면 갈고리로 건져 주지.\"",
@@ -593,6 +593,12 @@ const crewNewsCount = () => CREW.filter(storyReady).length;
 // 새 선원 5명의 효과 — 레벨이 오를수록 조금씩 세진다(Lv.1 기준값에서 단계마다 더한다)
 const crewK = (id, base, per) => crewOn(id) ? base + per * (crewLv(id) - 1) : 0;
 const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 240, CREW_SNIPE_R = 520;
+// v50 동료 고유 능력(★) — 검객만 쓸모 있다는 피드백으로 나머지에게도 하나씩. 쿨타임은 선원 레벨마다 -8%(crewCdMul)
+const CREW_SKILL = { cook: 60*50, nav: 60*25, sniper: 60*18, doctor: 60*40, wright: 60*20, helm: 60*10 };
+const CREW_ARCH_LOOT = 0.2, CREW_MUSIC_GEAR_T = 0.3, CREW_MUSIC_START = 0.4, CREW_NAV_WIND_T = 240, CREW_HELM_JUMP = 11;
+const crewSkillCd = (id) => CREW_SKILL[id] * crewCdMul(id);
+// 고고학자 — 판이 끝나 창고로 옮길 때 보물 +20%(레벨마다 +4%)
+const crewLoot = () => 1 + crewK("arch", CREW_ARCH_LOOT, 0.04);
 let crewOwned = [], crewSel = null, crewMate = null, crewFx = [], crewKills = 0;
 const crewDef = (id) => CREW.find(c => c.id === id) || null;
 const crewOn = (id) => crewSel === id && crewOwned.indexOf(id) >= 0;
@@ -642,6 +648,7 @@ const NAVY_RANKS = [
 ];
 const NAVY_JAIL = 3;          // 이번 항해에서 세 번째로 붙잡히면 압송
 const CUFF_T = 60*30;         // 해루석 수갑 — Q·W·E·비기 봉인 시간
+const navyT = () => NAVY_T * (crewOn("nav") ? 0.67 : 1);   // 항해사 — 지름길을 알아 8초만 버티면 된다
 const navyRankNow = () => NAVY_RANKS[Math.min(NAVY_RANKS.length - 1, Math.max(0, navyChases - 1))];
 
 /* 라이벌 해적 — 가끔 나타나 결승 부표까지 경주를 건다. 이기면 현상금 */
@@ -1623,7 +1630,7 @@ function storyClear(){
   deathReason = "클리어";
   overAt = performance.now();
   runGrade = null; newGradeRecord = false;
-  bank += Math.floor(treasure);
+  bank += Math.floor(treasure * crewLoot());
   crewGainXp(dist);
   logRun();
   const unlocked = checkTitles();
@@ -1921,7 +1928,7 @@ function reset(){
   routes = []; routeLeft = 0; routeSeq = 0; routesDone = { up:0, low:0 };
   nextRouteAt = ROUTE_FIRST + genRand()*200;
   nextPortAt = PORT_FIRST; portIdx = 0; portAt = null; portPending = null; portBought = {}; portMsg = null;
-  crewMate = { x:150 - 50, y:120, cd:90 }; crewFx = []; crewKills = 0; crewLvUp = null; crewNews = null;
+  crewMate = { x:150 - 50, y:120, cd:90, skill: 60*8, wind: 0 }; crewFx = []; crewKills = 0; crewLvUp = null; crewNews = null;
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null; gearForm = null; boundLeft = 0;
@@ -2277,7 +2284,7 @@ function fireGear(){
   const g = GEARS[gearSel];
   gear = 0;
   gearOn = gearSel;
-  gearT = g.t * (1 + 0.08 * tlv("gtime"));   // 특성 '지구력'
+  gearT = g.t * (1 + 0.08 * tlv("gtime")) * (1 + crewK("music", CREW_MUSIC_GEAR_T, 0.05));   // 특성 '지구력'·음악가
   gears++;
   if(gearSel === 3){ gigantPistol(); return; }
   if(boss && boss.big) boss.guardT = GUARD_BUFF;   // 강화 기어를 보면 대형 보스가 한동안 몸을 사린다
@@ -2936,6 +2943,7 @@ function grab(){
     if(!rushMode) dexSee("biome0");      // 출발은 늘 노을 군도 — 해역이 바뀔 때만 세면 첫 해역은 등록이 안 된다
     // 특성 '예열' — 출항 화면에서 기어를 바꿀 수 있어서 출발하는 순간에 채운다
     if(tlv("gstart") && !practiceMode) gear = Math.max(gear, gearMax() * Math.min(0.9, 0.12 * tlv("gstart")));
+    if(crewOn("music") && !practiceMode) gear = Math.max(gear, gearMax() * CREW_MUSIC_START);   // 음악가의 출항곡
   }
   if(state === STATE.OVER){
     if(performance.now() - overAt > 450) reset();
@@ -3011,6 +3019,7 @@ function releaseGrade(){
 function release(boost){
   holding = false;
   if(state === STATE.PAUSE || state === STATE.PICK || state === STATE.PORT) return;
+  if(boost && !rope && helmJump()) return;
   sling = null;
   if(octoThrow()) return;
   if(rope && rocketCharge >= ROCKET_MIN){
@@ -3335,7 +3344,7 @@ function die(reason){
   if(!practiceMode && !storyMode && runBounty > bestBounty){ bestBounty = runBounty; newBountyRecord = true; }
   if(storyMode){              // 스토리 — 최고 거리·콤보엔 안 세고, 모은 보물은 창고로
     storyResult = { win:false };
-    bank += Math.floor(treasure);
+    bank += Math.floor(treasure * crewLoot());
     crewGainXp(dist);
     saveShop();
     logRun();
@@ -3343,7 +3352,7 @@ function die(reason){
     if(diffNow() === "normal"){ if(dist > best){ best = dist; saveBest(); } }
     else if(dist > (bestDiff[diffNow()] || 0)) bestDiff[diffNow()] = dist;   // 아래 saveShop()에 같이 저장된다
     if(maxChain > bestChain){ bestChain = maxChain; saveBestChain(); }
-    bank += Math.floor(treasure * diffK("loot"));
+    bank += Math.floor(treasure * diffK("loot") * crewLoot());
     if(!rushMode) crewGainXp(dist);
     saveShop();
     logRun();
@@ -5076,7 +5085,7 @@ function crewKillFish(m){
   for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
 }
 // 갈고리 잭 — 바다로 떨어지는 중이고 팔이 비어 있으면 가장 가까운 앞 고리에 갈고리를 걸어 준다
-const JACK_CD = 60*40;
+const JACK_CD = 60*25;
 function updateJack(dt){
   if(jackCd > 0){ jackCd -= dt; return; }
   if(rope || p.vy <= 0 || p.y < SEA - 120 || stun > 0) return;
@@ -5094,11 +5103,57 @@ function updateJack(dt){
   crewFx.push({ x1:crewMate.x, y1:crewMate.y, x2:best.x, y2:best.y, t:20, col:"#f0a24e" });
   pops.push({ x:p.x, y:p.y - 44, t:70, text:"잭의 구명 갈고리!", color:"#f0a24e" });
 }
+// 조타수 — 공중에서 ↑ 를 누르면 한 번 더 도약
+function helmJump(){
+  const c = crewMate;
+  if(!crewOn("helm") || !c || c.skill > 0 || state !== STATE.PLAY || stun > 0) return false;
+  p.vy = Math.min(p.vy, -CREW_HELM_JUMP); p.vx = Math.max(p.vx, 0) + 2.5;
+  c.skill = crewSkillCd("helm");
+  airTime = 0;
+  pops.push({ x:p.x, y:p.y - 40, t:50, text:"조타수: 키를 꺾어라!", color:"#8fb8e0" });
+  for(let i=0;i<12;i++) spark(p.x, p.y + 10, "#8fb8e0");
+  return true;
+}
+// ★ 고유 능력 — 공격(c.cd)과 따로 도는 쿨타임(c.skill)
+function updateCrewSkill(c, dt){
+  if(c.wind > 0){ c.wind -= dt; if(state === STATE.PLAY) p.vx += 0.11 * dt; }   // 항해사가 불러온 순풍
+  if(c.skill > 0){ c.skill -= dt; return; }
+  if(state !== STATE.PLAY || practiceMode && crewSel !== "sniper") return;
+  const say = (text, col) => pops.push({ x:p.x, y:p.y - 60, t:80, text, color:col });
+  if(crewOn("cook")){
+    if(fusen < FUSEN_MAX){ fusen++; fusenAnim = 46; say("요리사: 새 풍선 불었어요!", "#f7a8a0"); c.skill = crewSkillCd("cook"); }
+  } else if(crewOn("nav")){
+    if(!boss && p.vx < 16){ c.wind = CREW_NAV_WIND_T; say("항해사: 순풍이 온다!", "#8fd6d8"); c.skill = crewSkillCd("nav"); }
+  } else if(crewOn("doctor")){
+    if(shield <= 0){ shield = 1; say("선의: 붕대 다시 감았어", "#f4f6f8"); for(let i=0;i<10;i++) spark(p.x, p.y, "#8fd6d8"); c.skill = crewSkillCd("doctor"); }
+  } else if(crewOn("sniper")){
+    const b = boss;
+    if(b && b.invul <= 0 && !b.dive && b.hp > 0){
+      const wp = weakPoints(b).filter(w => w.x > cam.x && w.x < cam.x + W);
+      if(wp.length){
+        const w = wp[0];
+        crewFx.push({ x1:c.x, y1:c.y, x2:w.x, y2:w.y, t:16, col:"#ffd76a" });
+        c.skill = crewSkillCd("sniper");
+        say("저격수: " + w.mark + " 명중!", "#ffd76a");
+        damageBoss(true, "저격");
+      }
+    }
+  } else if(crewOn("wright")){
+    if(!rope && p.vy > 2 && p.y > SEA - 200 && !anchors.some(a => !a.cut && !a.broken && a.x > p.x - 20 && Math.hypot(a.x - p.x, a.y - p.y) < reach())){
+      const a = { x: p.x + 150 + Math.max(0, p.vx) * 4, y: Math.max(90, p.y - 150), kind:0, temp:true };
+      anchors.push(a);
+      crewFx.push({ x1:c.x, y1:c.y, x2:a.x, y2:a.y, t:20, col:"#d98f4e" });
+      say("조선공: 임시 돛대 세웠다!", "#d98f4e");
+      c.skill = crewSkillCd("wright");
+    }
+  }
+}
 function updateCrew(dt){
   for(let i=crewFx.length-1;i>=0;i--){ crewFx[i].t -= dt; if(crewFx[i].t <= 0) crewFx.splice(i,1); }
   if(!crewSel || !crewMate) return;
   if(crewOn("jack")) updateJack(dt);
   const c = crewMate;
+  updateCrewSkill(c, dt);
   // 뒤쪽 위에서 둥실 따라온다
   const tx = p.x - 52 * (p.face || 1), ty = Math.max(40, p.y - 40) + Math.sin(time*0.08)*5;
   c.x += (tx - c.x) * Math.min(1, 0.16*dt);
@@ -5200,9 +5255,9 @@ function navyCatch(){
     if(fusen > 0){ fusen--; fusenAnim = 46; text = "해군 " + R.rank + " — 구금! 풍선을 빼앗겼다"; }
     else { const t = Math.floor(treasure * 0.5); treasure -= t; text = "해군 " + R.rank + " — 구금! 보석금 -" + t; }
   } else {
-    cuffT = CUFF_T; gear = 0;
+    cuffT = CUFF_T * (crewOn("nav") ? 0.5 : 1); gear = 0;
     const t = Math.floor(treasure * 0.25); treasure -= t;
-    text = "해루석 수갑! 기술 봉인 30초 · 보물 -" + t;
+    text = "해루석 수갑! 기술 봉인 " + Math.round(cuffT / 60) + "초 · 보물 -" + t;
   }
   pops.push({ x:p.x, y:p.y - 50, t:150, text, color:R.col });
   missionFlash = { text: "붙잡혔다! " + (NAVY_JAIL - navyCaught) + "번 더 잡히면 해저 감옥행", reward:0, t:150, weather:"storm" };
@@ -5214,7 +5269,7 @@ function updateNavy(dt){
   if(navy){
     const R = navy.rank;
     navy.t += dt;
-    const k = Math.min(1, navy.t / NAVY_T);
+    const k = Math.min(1, navy.t / navyT());
     const v = (NAVY_SPD[0] + (NAVY_SPD[1] - NAVY_SPD[0]) * k) * R.spd * (crewOn("nav") ? 0.85 - 0.03 * (crewLv("nav") - 1) : 1) * diffK("navy") * (storyMode && navyChases >= 2 ? (storyMods().navySpd || 1) : 1);
     navy.x = Math.max(navy.x + v*dt, cam.x - 340);   // 화면 밖으로 너무 처지지 않게
     const onScreen = navy.x > cam.x - 60;
@@ -5246,7 +5301,7 @@ function updateNavy(dt){
       }
     }
     if(state === STATE.PLAY && p.x < navy.x + 70){ navyCatch(); return; }
-    if(navy.t >= NAVY_T || boss){
+    if(navy.t >= navyT() || boss){
       if(!boss){
         const rw = R.reward;   // 계급마다 따로 — 대령 250만 · 소장 750만 · 중장 1250만
         navyEscapes++;
@@ -5270,7 +5325,7 @@ function updateNavy(dt){
     navy = { x: cam.x - 260, t: 0, fire: 150, net: 120, shell: 140, rank: R };
     dexSee("navy");
     dexSee("navy_" + R.id);
-    missionFlash = { text: "해군 " + R.rank + " '" + R.name + "' 추격! 12초 버텨라 · 잡히면 " + R.punishText, reward:0, t:170, weather:"storm" };
+    missionFlash = { text: "해군 " + R.rank + " '" + R.name + "' 추격! " + Math.round(navyT() / 60) + "초 버텨라 · 잡히면 " + R.punishText, reward:0, t:170, weather:"storm" };
   }
 }
 
@@ -9091,7 +9146,7 @@ function drawNavy(){
   ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(x - 53, deck - 58, 7, 0, Math.PI*2); ctx.fill();
   ctx.restore();
   if(state === STATE.PLAY){
-    const left = Math.max(0, Math.ceil((NAVY_T - navy.t) / 60));
+    const left = Math.max(0, Math.ceil((navyT() - navy.t) / 60));
     ctx.save();
     ctx.font = "800 15px 'Pretendard', system-ui, sans-serif";
     ctx.textAlign = "center";
@@ -11882,7 +11937,7 @@ window.__swing = {
   pickCard: (i) => choosePick(i || 0),
   pick2: () => ({ offer: pickOffer, pending: pickPending, perks, back: pickReturn }),
   slingStart: startSling, slingFire: fireSling, sling: () => ({ s: sling, cd: slingCd, n: slings, target: slingTarget() }),
-  crew: () => ({ owned: crewOwned, sel: crewSel, mate: crewMate, kills: crewKills, hire: (i) => hireCrew(CREW[i]), cycle: cycleCrew, set: (id) => { if(id && crewOwned.indexOf(id) < 0) crewOwned.push(id); crewSel = id; } }),
+  crew: () => ({ owned: crewOwned, sel: crewSel, mate: crewMate, loot: crewLoot(), navyT: navyT(), helmJump, kills: crewKills, hire: (i) => hireCrew(CREW[i]), cycle: cycleCrew, set: (id) => { if(id && crewOwned.indexOf(id) < 0) crewOwned.push(id); crewSel = id; } }),
   navy: () => ({ n: navy, next: nextNavyAt, esc: navyEscapes, chases: navyChases, beaten: navyBeaten, setNext: (v) => { nextNavyAt = v; }, setChases: (v) => { navyChases = v; },
                  caught: navyCaught, setCaught: (v) => { navyCaught = v; }, cuff: cuffT, setCuff: (v) => { cuffT = v; }, ranks: NAVY_RANKS, jail: NAVY_JAIL }),
   mini: () => ({ m: mini, best: miniBest, medals: miniMedals, start: startMini, down: miniDown, up: miniUp, toList: miniToList, pause: miniPause,
