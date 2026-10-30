@@ -3019,7 +3019,12 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.navy().setChases(2); a.navy().setNext(0); H.step();
   const tr = a.peek().treasure;
   a.navy().n.t = 720; a.navy().n.x = T().P().x - 900; H.step();
-  ok("중장을 따돌리면 현상금 +600(계급마다 +50%)", a.peek().treasure >= tr + 600, "+" + (a.peek().treasure - tr));
+  ok("중장을 따돌리면 현상금 +600", a.peek().treasure >= tr + 600 && a.peek().treasure < tr + 2000, "+" + (a.peek().treasure - tr));
+  st();
+  a.navy().setChases(1); a.navy().setNext(0); H.step();
+  const tr2 = a.peek().treasure;
+  a.navy().n.t = 720; a.navy().n.x = T().P().x - 900; H.step();
+  ok("소장을 따돌리면 현상금 +30,000,000", a.peek().treasure >= tr2 + 30000000, "+" + (a.peek().treasure - tr2));
   a.toMenu();
   function stepFrames(k){ for(let i=0;i<k;i++) H.step(); }
 }

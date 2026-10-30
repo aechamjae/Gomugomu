@@ -636,9 +636,9 @@ const NAVY_REWARD = 300;
 // v50 해군 계급 — 추격할 때마다 계급이 오른다(대령 → 소장 → 중장 → 네 번째는 대장이 군함을 몰고 나온다).
 // 계급마다 공격이 하나씩 늘고, 붙잡혔을 때의 처벌이 다르다. 한 항해에 NAVY_JAIL번째로 붙잡히면 해저 감옥으로 압송(항해 끝)
 const NAVY_RANKS = [
-  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
-  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
-  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
+  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   reward:300,      punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
+  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   reward:30000000, punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
+  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, reward:600,      punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
 ];
 const NAVY_JAIL = 3;          // 이번 항해에서 세 번째로 붙잡히면 압송
 const CUFF_T = 60*30;         // 해루석 수갑 — Q·W·E·비기 봉인 시간
@@ -5246,11 +5246,11 @@ function updateNavy(dt){
     if(state === STATE.PLAY && p.x < navy.x + 70){ navyCatch(); return; }
     if(navy.t >= NAVY_T || boss){
       if(!boss){
-        const rw = Math.round(NAVY_REWARD * (1 + 0.5 * NAVY_RANKS.indexOf(R)));   // 계급이 높을수록 현상금도 오른다
+        const rw = R.reward;   // 계급마다 따로 — 소장은 거액의 현상금(3천만)
         navyEscapes++;
         treasure += rw;
         addGear("near");
-        pops.push({ x:p.x, y:p.y-50, t:100, text:"해군 " + R.rank + "을(를) 따돌렸다! 현상금 +" + rw, color:R.col });
+        pops.push({ x:p.x, y:p.y-50, t:100, text:"해군 " + R.rank + "을(를) 따돌렸다! 현상금 +" + commas(rw), color:R.col });
         for(let i=0;i<24;i++) spark(p.x, p.y, i % 2 ? R.col : "#f4ecd9");
       }
       navy = null;
