@@ -636,9 +636,9 @@ const NAVY_REWARD = 300;
 // v50 해군 계급 — 추격할 때마다 계급이 오른다(대령 → 소장 → 중장 → 네 번째는 대장이 군함을 몰고 나온다).
 // 계급마다 공격이 하나씩 늘고, 붙잡혔을 때의 처벌이 다르다. 한 항해에 NAVY_JAIL번째로 붙잡히면 해저 감옥으로 압송(항해 끝)
 const NAVY_RANKS = [
-  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   reward:300,      punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
-  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   reward:30000000, punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
-  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, reward:600,      punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
+  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   reward:3330000,  punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
+  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   reward:10000000, punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
+  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, reward:16670000, punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
 ];
 const NAVY_JAIL = 3;          // 이번 항해에서 세 번째로 붙잡히면 압송
 const CUFF_T = 60*30;         // 해루석 수갑 — Q·W·E·비기 봉인 시간
@@ -2314,12 +2314,12 @@ function syncHUD(){
   distEl.textContent = Math.floor(dist);
   spdEl.textContent = Math.round(Math.hypot(p.vx, p.vy) * 4);
   spdEl.classList.toggle("onfire", fire > 0);
-  styleEl.textContent = Math.floor(treasure);
+  styleEl.textContent = bigNum(treasure);
   bestEl.textContent = Math.floor(curBest());
   pauseBtn.textContent = state === STATE.PAUSE ? "▶ 계속하기" : "❚❚ 일시정지";
   const md = document.getElementById("mdist"), mt = document.getElementById("mtre");
   if(md) md.textContent = Math.floor(dist) + "m";
-  if(mt) mt.textContent = "보물 " + Math.floor(treasure) + " · 최고 " + Math.floor(curBest()) + "m";
+  if(mt) mt.textContent = "보물 " + bigNum(treasure) + " · 최고 " + Math.floor(curBest()) + "m";
   const ms = document.getElementById("mspd");
   if(ms){
     const spd = Math.round(Math.hypot(p.vx, p.vy) * 4);
@@ -3431,9 +3431,9 @@ const CHASERS = [SHARK, VICE];
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
 const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9 };
-// 격침 현상금 — 해군 소장(3천만)에 맞춰 올렸다: 일반 1천만 · 네임드 3천만 · 대형 5천만, 격파할수록 100만·200만·300만씩 더
-const BOUNTY_MID = 10000000, BOUNTY_NAMED = 30000000, BOUNTY_BIG = 50000000;
-const bossBounty = (b) => b.big ? (BOUNTY_BIG + bossKills*3000000) : b.named ? (BOUNTY_NAMED + bossKills*2000000) : (BOUNTY_MID + bossKills*1000000);
+// 격침 현상금 — 해군 현상금과 같은 단위: 일반 333만 · 네임드 1천만 · 대형 1667만, 격파할수록 33만·67만·100만씩 더
+const BOUNTY_MID = 3330000, BOUNTY_NAMED = 10000000, BOUNTY_BIG = 16670000;
+const bossBounty = (b) => b.big ? (BOUNTY_BIG + bossKills*1000000) : b.named ? (BOUNTY_NAMED + bossKills*670000) : (BOUNTY_MID + bossKills*330000);
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
 const RC_LEAP = 38, RC_SAW = 40;
@@ -3754,7 +3754,7 @@ function drawBlitzTimer(){
   ctx.fillText("0:" + String(sec).padStart(2, "0"), 0, -2);
   ctx.font = "600 10px 'Pretendard', system-ui, sans-serif";
   ctx.fillStyle = "#ffd76a";
-  ctx.fillText("보물 " + Math.floor(treasure), 0, 16);
+  ctx.fillText("보물 " + bigNum(treasure), 0, 16);
   ctx.restore();
 }
 
@@ -5248,7 +5248,7 @@ function updateNavy(dt){
     if(state === STATE.PLAY && p.x < navy.x + 70){ navyCatch(); return; }
     if(navy.t >= NAVY_T || boss){
       if(!boss){
-        const rw = R.reward;   // 계급마다 따로 — 소장은 거액의 현상금(3천만)
+        const rw = R.reward;   // 계급마다 따로 — 대령 333만 · 소장 1천만 · 중장 1667만
         navyEscapes++;
         treasure += rw; bountyLoot += rw;
         addGear("near");
@@ -9190,7 +9190,7 @@ function drawPort(){
   centerText("⚓ " + portIdx + "번째 항구에 정박했다", 96, "800 25px 'Pretendard', system-ui, sans-serif", "#ffd76a");
   const left = PORT_MAX_BUY - Object.keys(portBought).filter(k => k !== "skin").length;
   const items = portItems();
-  centerText("이번 판 보물 " + Math.floor(treasure) + " (창고 보물은 못 쓴다) · 남은 구매 " + left + "/" + PORT_MAX_BUY, 128, "500 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
+  centerText("이번 판 보물 " + bigNum(treasure) + " (창고 보물은 못 쓴다) · 남은 구매 " + left + "/" + PORT_MAX_BUY, 128, "500 14px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.75)");
   const B = overlayButtons();
   items.forEach((it, i) => {
     const R = B[i], price = portPrice(it), got = portBought[it.id];
@@ -10084,7 +10084,7 @@ function resultText(){
   const mode = blitzMode ? "60초 보물 사냥" : dailyMode ? "오늘의 항해 " + todayKey() : practiceMode ? "연습" : rushMode ? "보스 러시" : "본게임" + (diffSel !== "normal" ? " (" + DIFFS[diffSel].name + ")" : "");
   const lines = [
     "🏴‍☠️ 고무팔 · 대항해 — " + mode,
-    blitzMode ? "보물 " + Math.floor(treasure) : Math.floor(dist) + "m · 보물 " + Math.floor(treasure),
+    blitzMode ? "보물 " + bigNum(treasure) : Math.floor(dist) + "m · 보물 " + bigNum(treasure),
     "현상금 ฿ " + commas(runBounty) + (runGrade ? " · 등급 " + runGrade[0] : "") + (title ? " · '" + title + "'" : "")
   ];
   const extra = [];
@@ -10256,6 +10256,14 @@ function computeBounty(){
   return Math.floor(dist) * 1000 + Math.floor(treasure) * 500 + bossKills * 50000 + perfects * 2000 + done * 20000;
 }
 const commas = (n) => String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+// 큰 보물은 화면에 줄여 보인다 — 10만 아래는 쉼표, 그 위는 'N.N만'·'N.N억'(현상금이 수천만~수십억이라 폰 HUD에서 겹쳤다)
+function bigNum(n){
+  n = Math.floor(n);
+  const cut = (v, u) => (v >= 100 ? String(Math.floor(v)) : v.toFixed(1).replace(/\.0$/, "")) + u;
+  if(n >= 1e8) return cut(n / 1e8, "억");
+  if(n >= 1e5) return cut(n / 1e4, "만");
+  return commas(n);
+}
 
 function drawPoster(x, y, w, h){
   ctx.save();
@@ -10567,7 +10575,7 @@ function drawShop(){
   ctx.fillRect(0, 0, W, H);
   const ui = shopUI();
   centerText("보물 창고", 33, UIF(800, 24), "#f4ecd9");
-  uiText("💰 " + commas(bank), W - 20, 33, "700 18px ui-monospace, Menlo, monospace", "#ffd76a", "right");
+  uiText("💰 " + bigNum(bank), W - 20, 33, "700 18px ui-monospace, Menlo, monospace", "#ffd76a", "right");
   const hv = hoverPos;
   if(ui.modal) hoverPos = null;                // 이야기 창 뒤쪽 버튼은 밝아지지 않게
   for(const c of ui.cards){ if(c.w !== undefined) drawPanel(c, 10); c.draw(c); }
@@ -10785,7 +10793,7 @@ function draw(){
       centerText(practiceMode ? "연습 모드 — " + practiceLabel() : dailyMode ? "오늘의 항해" : blitzMode ? "60초 보물 사냥 · 남은 " + Math.ceil(blitzT/60) + "초" : "보스 러시 " + Math.min(rushIdx+1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length,
                  H/2 - 88, "600 14px 'Pretendard', system-ui, sans-serif", "#8fd6d8");
     // 이번 판 상황
-    const facts = [Math.floor(dist) + "m", "보물 " + Math.floor(treasure)];
+    const facts = [Math.floor(dist) + "m", "보물 " + bigNum(treasure)];
     if(chain > 1) facts.push("콤보 ×" + chain);
     if(fusen) facts.push("풍선 " + fusen);
     facts.push(GEARS[gearSel].name + " " + (buff() ? "발동 중" : Math.floor(gear / gearMax() * 100) + "%"));
@@ -10885,7 +10893,7 @@ function draw(){
       while(sz > 14 && ctx.measureText(reasonText).width > W/2 + 250 - lx){ sz--; ctx.font = "700 " + sz + "px 'Pretendard', system-ui, sans-serif"; }
       line(reasonText, "700 " + sz + "px 'Pretendard', system-ui, sans-serif", "#f4ecd9", 40);
     }
-    line(Math.floor(dist) + "m · 보물 " + Math.floor(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
+    line(Math.floor(dist) + "m · 보물 " + bigNum(treasure), "700 19px ui-monospace, Menlo, monospace", "#d9b877", 26);
     if(storyMode && storyResult && storyResult.win){
       const s = storyStage(), r = storyResult;
       line("★".repeat(starCount(r.bits)) + "☆".repeat(3 - starCount(r.bits)) + (r.newBits & 6 ? "  새 별!" : "") + "   " + (r.first ? "첫 클리어 보물 +" : "다시 깬 보물 +") + r.reward,
@@ -10899,7 +10907,7 @@ function draw(){
       const s = storyStage();
       line("목표: " + storyGoalText(s) + " — 다시 도전하자 (R)", "600 14px 'Pretendard', system-ui, sans-serif", "#8fd6d8", 24);
     }
-    if(!practiceMode && !storyMode) line("창고 보물 " + Math.floor(bank) + (diffK("loot") !== 1 ? "  (난이도 " + DIFFS[diffNow()].name + " ×" + diffK("loot") + ")" : ""), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
+    if(!practiceMode && !storyMode) line("창고 보물 " + bigNum(bank) + (diffK("loot") !== 1 ? "  (난이도 " + DIFFS[diffNow()].name + " ×" + diffK("loot") + ")" : ""), "400 13px 'Pretendard', system-ui, sans-serif", "rgba(217,184,119,.75)", 30);
     if(missions.length){
       const done = missions.filter(m => m.done).length;
       line("미션 " + done + "/" + missions.length + " 완료", "600 15px 'Pretendard', system-ui, sans-serif", done ? "#9fe0a0" : "rgba(244,236,217,.6)", 20);
@@ -10932,7 +10940,7 @@ function draw(){
       row.col = row.mini ? "#e6a8f0" : row.story ? "#ffd76a" : row.acct ? "#8fd6d8" : row.glow ? "#e6a8f0" : "#f0a24e";
       drawBtn(row, UIF(700, 17));
     }
-    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + commas(bank), H/2 - 182, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
+    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + bigNum(bank), H/2 - 182, "600 14px ui-monospace, Menlo, monospace", "#ffd76a");
     const wkNow = weeklyNow();
     centerText("🌊 이번 주 해류: " + wkNow.name + " — " + wkNow.desc, H/2 - 150, "600 13px 'Pretendard', system-ui, sans-serif", wkNow.col);
     centerText("숫자 키 또는 클릭으로 선택", H/2 + 236, "400 13px 'Pretendard', system-ui, sans-serif", "rgba(244,236,217,.55)");
@@ -11908,6 +11916,7 @@ window.__swing = {
                 set: (id) => { artSel = id; }, list: ARTS, on: artOn, setCd: (v) => { artCd = v; } }),
   jack: () => ({ cd: jackCd, setCd: (v) => { jackCd = v; } }),
   biome: (m) => biomeAt(m),
+  bigNum,
   pools: () => BIOME_POOLS,
   toChallenge: () => { state = STATE.CHALLENGE; },
   stateIds: STATE
