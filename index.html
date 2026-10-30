@@ -1925,7 +1925,7 @@ function reset(){
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null; gearForm = null; boundLeft = 0;
-  runBounty = 0; newBountyRecord = false; newDailyRecord = false; streakReward = 0;
+  runBounty = 0; newBountyRecord = false; bountyLoot = 0; newDailyRecord = false; streakReward = 0;
   reviveUsed = false; reviveT = 0;
   runXp = 0;
   ghostRec = []; playT = 0;
@@ -3431,7 +3431,9 @@ const CHASERS = [SHARK, VICE];
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
 const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9 };
-const bossBounty = (b) => b.big ? (600 + bossKills*80) : b.named ? (350 + bossKills*60) : (150 + bossKills*40);
+// 격침 현상금 — 해군 소장(3천만)에 맞춰 올렸다: 일반 1천만 · 네임드 3천만 · 대형 5천만, 격파할수록 100만·200만·300만씩 더
+const BOUNTY_MID = 10000000, BOUNTY_NAMED = 30000000, BOUNTY_BIG = 50000000;
+const bossBounty = (b) => b.big ? (BOUNTY_BIG + bossKills*3000000) : b.named ? (BOUNTY_NAMED + bossKills*2000000) : (BOUNTY_MID + bossKills*1000000);
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
 const RC_LEAP = 38, RC_SAW = 40;
@@ -3608,12 +3610,12 @@ const xpNeed = (L) => Math.round(400 + 180 * Math.pow(L, 1.35));
 function levelOf(xp){
   let L = 1, rest = xp;
   while(rest >= xpNeed(L) && L < 99){ rest -= xpNeed(L); L++; }
-  return { L, rest, need: xpNeed(L) };
+  return { L, rest: Math.min(rest, xpNeed(L) - 1), need: xpNeed(L) };
 }
-let runXp = 0, levelBefore = 1;
+let runXp = 0, levelBefore = 1, bountyLoot = 0;   // bountyLoot — 이번 판 격침·해군 현상금(수천만 단위라 경험치에선 뺀다)
 function logRun(){
   levelBefore = levelOf(lifeLog.xp || 0).L;
-  runXp = Math.floor(treasure) + Math.floor(dist);
+  runXp = Math.max(0, Math.floor(treasure - bountyLoot)) + Math.floor(dist);
   lifeLog.xp = (lifeLog.xp || 0) + runXp;
   lifeLog.runs++;
   if(!blitzMode && !rushMode && !storyMode){             // 거리로 겨루는 판만 최근 기록 그래프에 남긴다
@@ -3794,7 +3796,7 @@ function drawBossIntro(){
   ctx.fillText(B.name, W/2 + slide, bandY + 60);
   ctx.fillStyle = "rgba(244,236,217,.75)";
   ctx.font = "400 14px 'Pretendard', system-ui, sans-serif";
-  ctx.fillText(B.tag + "  ·  격침 현상금 " + bossIntro.bounty, W/2 - slide, bandY + 96);
+  ctx.fillText(B.tag + "  ·  격침 현상금 " + commas(bossIntro.bounty), W/2 - slide, bandY + 96);
   ctx.restore();
 }
 
@@ -4019,8 +4021,8 @@ function damageBoss(ranged, mark, power){
   if(b.big && b.hp > 0 && (b.type === 5 || b.type === 7 || b.type === AWAKEN)){ b.phase = 1; b.sub = b.type === 7 ? 120 : 150; }     // 맞으면 크라켄은 물속으로, 유령선은 유령으로
   if(b.hp <= 0){
     const bounty = bossBounty(b);
-    treasure += bounty;
-    pops.push({ x:b.x, y:b.y-40, t:130, text:"격침 +" + bounty, color:"#d9b877" });
+    treasure += bounty; bountyLoot += bounty;
+    pops.push({ x:b.x, y:b.y-40, t:130, text:"격침 +" + commas(bounty), color:"#d9b877" });
     for(let i=0;i<40;i++) spark(b.x, b.y, "#d9b877");
     bossKills++;
     slowT = 42;
@@ -5248,7 +5250,7 @@ function updateNavy(dt){
       if(!boss){
         const rw = R.reward;   // 계급마다 따로 — 소장은 거액의 현상금(3천만)
         navyEscapes++;
-        treasure += rw;
+        treasure += rw; bountyLoot += rw;
         addGear("near");
         pops.push({ x:p.x, y:p.y-50, t:100, text:"해군 " + R.rank + "을(를) 따돌렸다! 현상금 +" + commas(rw), color:R.col });
         for(let i=0;i<24;i++) spark(p.x, p.y, i % 2 ? R.col : "#f4ecd9");

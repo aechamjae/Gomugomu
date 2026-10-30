@@ -2426,7 +2426,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("해역별 네임드 — 노을 문어 · 빙하 무상 · 화산 대장장이", zoneNamed(1500) === 6 && zoneNamed(3500) === 11 && zoneNamed(5500) === 13,
      [zoneNamed(1500), zoneNamed(3500), zoneNamed(5500)].join(","));
   let b = (T().setDist(1500), T().setNextBig(2000), a.spawnBoss(false));
-  ok("네임드는 체력 5 · 금색 컷인 · 현상금 350", b.named && b.maxHp === 5 && a.peek().bossIntro.named && a.peek().bossIntro.bounty === 350,
+  ok("네임드는 체력 5 · 금색 컷인 · 현상금 3천만", b.named && b.maxHp === 5 && a.peek().bossIntro.named && a.peek().bossIntro.bounty === 30000000,
      "hp=" + b.maxHp + " bounty=" + a.peek().bossIntro.bounty);
   b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t");
   ok("체력이 절반 위면 아직 1페이즈", !b.p2);
@@ -2435,7 +2435,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   const tr0 = a.peek().treasure;
   b.invul = 0; T().dmg(true, "t"); b.invul = 0; T().dmg(true, "t");
   const offer = a.pick2().offer || [];
-  ok("네임드 격침 — 현상금 350, 보상 카드에 강화가 두 장 이상", !a.boss() && a.peek().treasure - tr0 >= 350 && offer.filter(c => c.perk).length >= 2,
+  ok("네임드 격침 — 현상금 3천만, 보상 카드에 강화가 두 장 이상", !a.boss() && a.peek().treasure - tr0 >= 30000000 && offer.filter(c => c.perk).length >= 2,
      "강화 " + offer.filter(c => c.perk).length + "장");
   a.diff().set("normal");
 
