@@ -636,9 +636,9 @@ const NAVY_REWARD = 300;
 // v50 해군 계급 — 추격할 때마다 계급이 오른다(대령 → 소장 → 중장 → 네 번째는 대장이 군함을 몰고 나온다).
 // 계급마다 공격이 하나씩 늘고, 붙잡혔을 때의 처벌이 다르다. 한 항해에 NAVY_JAIL번째로 붙잡히면 해저 감옥으로 압송(항해 끝)
 const NAVY_RANKS = [
-  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   reward:3330000,  punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
-  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   reward:10000000, punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
-  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, reward:16670000, punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
+  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   reward:2500000,  punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
+  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   reward:7500000,  punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
+  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, reward:12500000, punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
 ];
 const NAVY_JAIL = 3;          // 이번 항해에서 세 번째로 붙잡히면 압송
 const CUFF_T = 60*30;         // 해루석 수갑 — Q·W·E·비기 봉인 시간
@@ -3431,9 +3431,9 @@ const CHASERS = [SHARK, VICE];
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
 const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9 };
-// 격침 현상금 — 해군 현상금과 같은 단위: 일반 333만 · 네임드 1천만 · 대형 1667만, 격파할수록 33만·67만·100만씩 더
-const BOUNTY_MID = 3330000, BOUNTY_NAMED = 10000000, BOUNTY_BIG = 16670000;
-const bossBounty = (b) => b.big ? (BOUNTY_BIG + bossKills*1000000) : b.named ? (BOUNTY_NAMED + bossKills*670000) : (BOUNTY_MID + bossKills*330000);
+// 격침 현상금 — 해군 현상금과 같은 단위: 일반 250만 · 네임드 750만 · 대형 1250만, 격파할수록 25만·50만·75만씩 더
+const BOUNTY_MID = 2500000, BOUNTY_NAMED = 7500000, BOUNTY_BIG = 12500000;
+const bossBounty = (b) => b.big ? (BOUNTY_BIG + bossKills*750000) : b.named ? (BOUNTY_NAMED + bossKills*500000) : (BOUNTY_MID + bossKills*250000);
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
 const RC_LEAP = 38, RC_SAW = 40;
@@ -5248,7 +5248,7 @@ function updateNavy(dt){
     if(state === STATE.PLAY && p.x < navy.x + 70){ navyCatch(); return; }
     if(navy.t >= NAVY_T || boss){
       if(!boss){
-        const rw = R.reward;   // 계급마다 따로 — 대령 333만 · 소장 1천만 · 중장 1667만
+        const rw = R.reward;   // 계급마다 따로 — 대령 250만 · 소장 750만 · 중장 1250만
         navyEscapes++;
         treasure += rw; bountyLoot += rw;
         addGear("near");
