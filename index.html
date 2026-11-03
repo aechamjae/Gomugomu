@@ -326,7 +326,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v55";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v56";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -6680,12 +6680,15 @@ function toHsl(r, g, b){
   const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return [h * 60, sat, l];
 }
-// 남색 어둠인가 — 그렇다면 알파값을, 아니면 -1
+// 남색 어둠인가 — 그렇다면 알파값을, 아니면 -1.
+// 옅은 막(알파 0.45 미만 — 폭풍·비 올 때 어둡게, 보스 등장 순간 어둡게 등)은 메뉴 판이 아니라 연출이라 그대로 둔다.
+// (예전엔 이것까지 짙은 호두나무색으로 바꿔 날씨·보스 등장 때 화면이 거의 안 보였다)
+const NAVY_MIN_A = 0.45;
 function navyAlpha(v){
   const key = "n" + v; if(colCache.has(key)) return colCache.get(key);
   let out = -1;
   const c = typeof v === "string" ? parseCol(v) : null;
-  if(c){ const [h, sat, l] = toHsl(c[0], c[1], c[2]); if(l < 0.26 && sat > 0.12 && h > 180 && h < 270) out = c[3]; }
+  if(c && c[3] >= NAVY_MIN_A){ const [h, sat, l] = toHsl(c[0], c[1], c[2]); if(l < 0.26 && sat > 0.12 && h > 180 && h < 270) out = c[3]; }
   colCache.set(key, out); return out;
 }
 // 글씨 — 양피지 위에선 같은 색조의 진한 잉크로(금빛은 갈색 금, 초록은 짙은 초록…)
@@ -6746,8 +6749,9 @@ function onPaper(x, y){
       fs.set.call(this, WALNUT + Math.max(0.88, na).toFixed(2) + ")"); fr.call(this, x, y, w, h);
       if(paperPat){ fs.set.call(this, paperPat); fr.call(this, x, y, w, h); }
     } else {
-      // 작은 판(미션·보스 띠·경고) — 양피지 꼬리표
-      fs.set.call(this, "rgba(236,222,190," + Math.max(0.9, na).toFixed(2) + ")"); fr.call(this, x, y, w, h);
+      // 작은 판(미션·경고) — 양피지 꼬리표. 화면을 가로지르는 넓은 띠(보스 등장 컷인 등)는 뒤가 보이게 반투명으로
+      const wide = Math.abs(w) >= W*0.8;
+      fs.set.call(this, "rgba(236,222,190," + (wide ? Math.min(0.62, na) : Math.max(0.88, na)).toFixed(2) + ")"); fr.call(this, x, y, w, h);
       notePaperRect(x, y, w, h);
     }
     fs.set.call(this, cur);
@@ -10279,9 +10283,10 @@ function drawWeather(){
   } else if(weather.type === "fog"){
     // 플레이어 주변만 보이고 멀리는 뿌옇다 — 카메라 확대/축소를 고려한 화면 위치
     const sx = W*0.32 + (p.x - cam.x - W*0.32) * cam.z, sy = H*0.5 + (p.y - H*0.5) * cam.z;
-    const fg = ctx.createRadialGradient(sx, sy, 150, sx, sy, 360);
+    // 너무 하얗게 가리면 앞이 안 보여서(v56) — 보이는 둘레를 넓히고 가장자리도 반투명으로
+    const fg = ctx.createRadialGradient(sx, sy, 200, sx, sy, 470);
     fg.addColorStop(0, "rgba(196,204,214,0)");
-    fg.addColorStop(1, "rgba(196,204,214,.88)");
+    fg.addColorStop(1, "rgba(196,204,214,.6)");
     ctx.fillStyle = fg;
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = "rgba(220,226,234,.10)";
@@ -10291,7 +10296,7 @@ function drawWeather(){
       ctx.beginPath(); ctx.ellipse(x, y, 220, 26, 0, 0, Math.PI*2); ctx.fill();
     }
   } else {
-    ctx.fillStyle = "rgba(10,16,30,.32)";
+    ctx.fillStyle = "rgba(10,16,30,.22)";
     ctx.fillRect(0, 0, W, H);
     ctx.strokeStyle = "rgba(180,200,230,.35)"; ctx.lineWidth = 1.4;
     ctx.beginPath();
