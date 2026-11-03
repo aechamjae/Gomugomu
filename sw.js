@@ -1,4 +1,4 @@
-const CACHE = "gomupal-v53";
+const CACHE = "gomupal-v54";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e)=>{
@@ -20,6 +20,15 @@ self.addEventListener("fetch", (e)=>{
         if(res.ok){ const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
         return res;
       }).catch(()=> caches.match(e.request).then(hit => hit || caches.match("./index.html")))
+    );
+    return;
+  }
+  // 글꼴(구글 폰트) — 한 번 받으면 캐시에 넣어 두고 오프라인에서도 같은 글꼴로
+  if(/fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)){
+    e.respondWith(
+      caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+        const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res;
+      }))
     );
     return;
   }
