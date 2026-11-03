@@ -326,7 +326,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v54";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v55";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -6656,13 +6656,15 @@ function drawPaper(){
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 }
 
-/* ---------- 양피지 UI — 메뉴·HUD는 종이 위 잉크 글씨 ----------
+/* ---------- 양피지 UI — 어두운 호두나무 바탕 위 양피지 카드 ----------
    예전 UI는 어두운 남색 판 위 밝은 글씨라, 그 색을 하나하나 고치는 대신 그리는 순간에 바꿔 칠한다(paperUI가 켜진 동안만).
-   - 남색 계열 어두운 바탕(판·덮개) → 양피지색
-   - 밝은 글씨 → 같은 색조의 진한 잉크 + 종이색 테두리(어느 바탕 위에서도 읽히게)
+   - 화면 전체를 덮는 남색 덮개 → 짙은 호두나무색(뒤 장면이 뿌옇게 비치지 않게 진하게) + 종이 결
+   - 작은 남색 판(fillRect)·버튼 카드(drawPanel) → 양피지. 그 영역은 paperRects에 적어 둔다
+   - 글씨는 양피지 영역 안이면 같은 색조의 진한 잉크로, 밖이면 원래 밝은 색 그대로(+어두운 테두리)
    세상 그림(하늘·돛대·보스)은 이 바꿔 칠하기를 거치지 않는다 */
-let paperUI = false;
+let paperUI = false, paperRects = [];
 const colCache = new Map();
+const WALNUT = "rgba(34,24,16,";
 function parseCol(v){
   let m = /^#([0-9a-f]{3,8})$/i.exec(v);
   if(m){ let h = m[1]; if(h.length <= 4) h = h.split("").map(c => c + c).join(""); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16), h.length === 8 ? parseInt(h.slice(6,8),16)/255 : 1]; }
@@ -6678,46 +6680,87 @@ function toHsl(r, g, b){
   const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return [h * 60, sat, l];
 }
-// 바탕 — 남색 어둠만 양피지로(검은 덮개·잉크 갈색·보스 색은 그대로)
-function paperFill(v){
-  const key = "f" + v; if(colCache.has(key)) return colCache.get(key);
-  let out = v;
-  const c = parseCol(v);
-  if(c){ const [h, sat, l] = toHsl(c[0], c[1], c[2]); if(l < 0.26 && sat > 0.12 && h > 180 && h < 270) out = "rgba(243,231,203," + Math.min(0.95, c[3] * 1.08).toFixed(2) + ")"; }
+// 남색 어둠인가 — 그렇다면 알파값을, 아니면 -1
+function navyAlpha(v){
+  const key = "n" + v; if(colCache.has(key)) return colCache.get(key);
+  let out = -1;
+  const c = typeof v === "string" ? parseCol(v) : null;
+  if(c){ const [h, sat, l] = toHsl(c[0], c[1], c[2]); if(l < 0.26 && sat > 0.12 && h > 180 && h < 270) out = c[3]; }
   colCache.set(key, out); return out;
 }
-// 글씨 — 밝은 색은 같은 색조의 진한 잉크로(금빛은 갈색 금, 초록은 짙은 초록…)
+// 글씨 — 양피지 위에선 같은 색조의 진한 잉크로(금빛은 갈색 금, 초록은 짙은 초록…)
 function inkTextCol(v){
   const key = "t" + v; if(colCache.has(key)) return colCache.get(key);
   let out = null;
   const c = parseCol(v);
   if(c){
     const [h, sat, l] = toHsl(c[0], c[1], c[2]);
-    if(l > 0.52){
-      const s2 = sat < 0.15 ? 0.35 : Math.min(0.7, sat * 0.8), h2 = sat < 0.15 ? 28 : h;
-      out = "hsla(" + Math.round(h2) + "," + Math.round(s2*100) + "%," + Math.round((0.17 + (1 - l) * 0.3) * 100) + "%," + Math.max(0.6, c[3]).toFixed(2) + ")";
+    if(l > 0.5){
+      const s2 = sat < 0.15 ? 0.4 : Math.min(0.75, sat * 0.85), h2 = sat < 0.15 ? 26 : h;
+      out = "hsla(" + Math.round(h2) + "," + Math.round(s2*100) + "%," + Math.round((0.12 + (1 - l) * 0.22) * 100) + "%," + Math.max(0.9, c[3]).toFixed(2) + ")";
     }
   }
   colCache.set(key, out); return out;
 }
+// 어두운 바탕 위 밝은 글씨 — 흐린 글씨(알파 .3~.6)는 눈이 피곤해서 조금 또렷하게
+function lightTextCol(v){
+  const key = "l" + v; if(colCache.has(key)) return colCache.get(key);
+  let out = null;
+  const c = parseCol(v);
+  if(c && c[3] < 0.75){ const [, , l] = toHsl(c[0], c[1], c[2]); if(l > 0.5) out = "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + Math.min(0.85, c[3] + 0.25).toFixed(2) + ")"; }
+  colCache.set(key, out); return out;
+}
+// 양피지 영역 기록 — 장치 좌표로(현재 변환을 곱해서)
+function notePaperRect(x, y, w, h){
+  if(!paperUI || typeof mainCtx.getTransform !== "function") return;
+  const m = mainCtx.getTransform();
+  const ax = m.a*x + m.c*y + m.e, ay = m.b*x + m.d*y + m.f, bx = m.a*(x + w) + m.c*(y + h) + m.e, by = m.b*(x + w) + m.d*(y + h) + m.f;
+  paperRects.push([Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)]);
+}
+function onPaper(x, y){
+  if(!paperRects.length) return false;
+  const m = mainCtx.getTransform();
+  const px = m.a*x + m.c*y + m.e, py = m.b*x + m.d*y + m.f;
+  for(let i = paperRects.length - 1; i >= 0; i--){ const r = paperRects[i]; if(px >= r[0] && px <= r[2] && py >= r[1] && py <= r[3]) return true; }
+  return false;
+}
 (function(){
   const C2D = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
   if(!C2D) return;
-  const fs = Object.getOwnPropertyDescriptor(C2D, "fillStyle"), ft = C2D.fillText, st = C2D.strokeText;
-  if(!fs || !fs.set || typeof ft !== "function") return;
+  const fs = Object.getOwnPropertyDescriptor(C2D, "fillStyle"), ft = C2D.fillText, st = C2D.strokeText, fr = C2D.fillRect;
+  if(!fs || !fs.set || typeof ft !== "function" || typeof mainCtx.getTransform !== "function") return;
+  let raw = null;                                  // 바꾸기 전 원래 색(덮개인지 판인지는 fillRect에서 정한다)
   Object.defineProperty(mainCtx, "fillStyle", { configurable:true,
     get(){ return fs.get.call(this); },
-    set(v){ fs.set.call(this, paperUI && typeof v === "string" ? paperFill(v) : v); } });
+    set(v){
+      raw = v;
+      const na = paperUI ? navyAlpha(v) : -1;
+      fs.set.call(this, na >= 0 ? WALNUT + Math.max(0.6, na).toFixed(2) + ")" : v);   // 경로로 칠한 남색 상자는 짙은 호두나무색(안의 밝은 글씨는 그대로 읽힌다)
+    } });
+  mainCtx.fillRect = function(x, y, w, h){
+    const na = paperUI ? navyAlpha(raw) : -1;
+    if(na < 0) return fr.call(this, x, y, w, h);
+    const cur = fs.get.call(this);
+    if(Math.abs(w*h) >= W*H*0.6){
+      // 화면 전체 덮개 — 진한 호두나무색 + 종이 결. 뒤 장면은 어렴풋이만
+      fs.set.call(this, WALNUT + Math.max(0.88, na).toFixed(2) + ")"); fr.call(this, x, y, w, h);
+      if(paperPat){ fs.set.call(this, paperPat); fr.call(this, x, y, w, h); }
+    } else {
+      // 작은 판(미션·보스 띠·경고) — 양피지 꼬리표
+      fs.set.call(this, "rgba(236,222,190," + Math.max(0.9, na).toFixed(2) + ")"); fr.call(this, x, y, w, h);
+      notePaperRect(x, y, w, h);
+    }
+    fs.set.call(this, cur);
+  };
   mainCtx.fillText = function(t, x, y, mw){
-    const cur = fs.get.call(this), ink = paperUI && typeof cur === "string" ? inkTextCol(cur) : null;
-    if(!ink) return mw === undefined ? ft.call(this, t, x, y) : ft.call(this, t, x, y, mw);
-    const lw = this.lineWidth, ss = this.strokeStyle, lj = this.lineJoin;
-    this.lineJoin = "round"; this.strokeStyle = "rgba(247,238,215,.88)"; this.lineWidth = 3.2;
-    mw === undefined ? st.call(this, t, x, y) : st.call(this, t, x, y, mw);
-    fs.set.call(this, ink);
+    const cur = fs.get.call(this);
+    if(!paperUI || typeof cur !== "string") return mw === undefined ? ft.call(this, t, x, y) : ft.call(this, t, x, y, mw);
+    const inside = onPaper(x, y);
+    const col = inside ? inkTextCol(cur) : lightTextCol(cur);
+    if(!col) return mw === undefined ? ft.call(this, t, x, y) : ft.call(this, t, x, y, mw);
+    fs.set.call(this, col);                         // 테두리 없이 — 번진 듯 흐려 보이지 않게
     mw === undefined ? ft.call(this, t, x, y) : ft.call(this, t, x, y, mw);
     fs.set.call(this, cur);
-    this.lineWidth = lw; this.strokeStyle = ss; this.lineJoin = lj;
   };
 })();
 // 잉크 레이어 — 시작하면 붓(ctx)이 레이어로 바뀌고, 끝나면 잉크 테두리를 둘러 본 화면에 붙인다
@@ -10794,7 +10837,7 @@ function panelTint(v){
   const key = "p" + v; if(colCache.has(key)) return colCache.get(key);
   let out = v;
   const c = paperUI ? parseCol(v) : null;
-  if(c){ const [h, sat, l] = toHsl(c[0], c[1], c[2]); if(l < 0.45) out = "hsla(" + Math.round(h) + "," + Math.round(Math.min(sat, 0.45)*100) + "%,80%,.95)"; }
+  if(c){ const [h, sat, l] = toHsl(c[0], c[1], c[2]); if(l < 0.45) out = "hsla(" + Math.round(h) + "," + Math.round(Math.min(sat, 0.4)*100) + "%,76%,.96)"; }
   colCache.set(key, out); return out;
 }
 function drawPanel(r, rad){
@@ -10805,9 +10848,10 @@ function drawPanel(r, rad){
   if(!r.dim){ ctx.shadowColor = "rgba(50,30,10,.3)"; ctx.shadowBlur = 7; ctx.shadowOffsetY = 2; }
   if(r.glow){ ctx.shadowColor = "#c77ad8"; ctx.shadowBlur = 10 + 6*Math.sin(performance.now()/260); ctx.shadowOffsetY = 0; }
   rrPath(r.x, r.y, r.w, r.h, R);
-  ctx.fillStyle = r.fill ? panelTint(r.fill) : (r.on ? "#e2eac6" : hot ? "#fbf0d4" : r.dim ? "#e8dcbd" : "#f1e2bf");
+  ctx.fillStyle = r.fill ? panelTint(r.fill) : (r.on ? "#dbe4bd" : hot ? "#f3e4c0" : r.dim ? "#cfc2a2" : "#ead9b2");
   ctx.fill();
   ctx.restore();
+  if(ctx === mainCtx) notePaperRect(r.x, r.y, r.w, r.h);
   ctx.save();
   rrPath(r.x, r.y, r.w, r.h, R); ctx.clip();
   if(paperPat){ ctx.fillStyle = paperPat; ctx.fillRect(r.x, r.y, r.w, r.h); }
@@ -11145,7 +11189,7 @@ function draw(){
   drawAnglerDark();
   drawJail();
   drawPaper();
-  paperUI = true;                // 이 아래(HUD·메뉴·결과)는 양피지 위 잉크 글씨
+  paperUI = true; paperRects.length = 0;   // 이 아래(HUD·메뉴·결과)는 호두나무 바탕 위 양피지 카드
 
   if(state === STATE.PLAY || state === STATE.PAUSE) drawWeather();
   if(state === STATE.PLAY || state === STATE.PAUSE) drawBiomeParticles();
