@@ -1557,10 +1557,39 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   H.step();
   const s = a.peek();
   ok("대령에게 붙잡히면 벌금(보물 40%) — 항해는 이어진다", s.state === 1 && !a.navy().n && a.navy().caught === 1 && Math.round(s.treasure) <= 620 && s.treasure >= 590, "state=" + s.state + " 보물=" + s.treasure);
-  // 세 번째로 붙잡히면 해저 감옥 — 보호막이 있어도 끝
+  // v52: 세 번째로 붙잡히면 해저 감옥 — 간수장 마젤란(20) 탈옥전
   a.navy().setCaught(2); a.navy().setNext(0); H.step();
   a.navy().n.x = T().P().x - 50; H.step();
-  ok("한 항해에 세 번째로 붙잡히면 압송 — 그대로 게임오버", a.peek().state === 2 && a.peek().deathReason === "해군", "state=" + a.peek().state + " 사인=" + a.peek().deathReason);
+  const mg = a.boss();
+  ok("세 번째로 붙잡히면 해저 감옥 — 마젤란 탈옥전, 항해는 이어진다", a.peek().state === 1 && mg && mg.type === 20 && mg.named && a.navy().cuff > 0,
+     "state=" + a.peek().state + " 보스=" + (mg && mg.type) + " 사인=" + a.peek().deathReason);
+  ok("열쇠를 잡기 전엔 수갑이 안 풀리고 몸통도 안 드러난다", !mg.keyGot && (mg.st = "rest", T().wp(mg).length === 0));
+  mg.st = "idle"; mg.wait = 999;
+  mg.key.x = T().P().x; mg.key.y = T().P().y; H.step();
+  ok("열쇠를 낚아채면 수갑이 풀린다", mg.keyGot && a.navy().cuff === 0);
+  mg.st = "rest"; mg.stT = 100;
+  ok("숨을 고를 땐 몸통이 약점", T().wp(mg).some(w => w.mark === "몸통"));
+  for(let i=0;i<10 && a.boss();i++){ mg.invul = 0; T().dmg(true, "몸통"); }
+  ok("마젤란을 꺾으면 탈옥 — 전과가 지워지고 항해를 잇는다", !a.boss() && a.peek().state === 1 && a.navy().caught === 0 && a.navy().jailEsc,
+     "boss=" + !!a.boss() + " state=" + a.peek().state + " 전과=" + a.navy().caught);
+  ok("탈옥 칭호 '탈옥수'", T().titles().has("jail"));
+  // 탈옥한 뒤 또 세 번째로 붙잡히면 — 도황과 친구가 된다
+  const pend = a.pick2(); if(pend.pending){ pend.offer = null; }
+  a.navy().setCaught(2); a.navy().setNext(0); H.step();
+  if(a.navy().n){ a.navy().n.x = T().P().x - 50; H.step(); }
+  ok("탈옥한 뒤 또 잡히면 끝 — 도황과 친구가 됐다", a.peek().state === 2 && a.peek().deathReason === "도황", "state=" + a.peek().state + " 사인=" + a.peek().deathReason);
+}
+{
+  // 감옥에서 독룡에 휩쓸리면 끝(보호막이 없을 때)
+  const a = start();
+  T().teleport(300 * 22); H.step();
+  a.navy().setCaught(2); a.navy().setNext(0); H.step();
+  a.navy().n.x = T().P().x - 50; H.step();
+  const mg = a.boss();
+  T().setShield(0); T().setIframes(0);
+  mg.st = "sweep"; mg.stT = 1; mg.bands = [{ y: T().P().y, off: 0 }];
+  H.step();
+  ok("독룡의 높이에 있으면 끝 — 마젤란의 독", a.peek().state === 2 && a.peek().deathReason === "독", "state=" + a.peek().state + " 사인=" + a.peek().deathReason);
 }
 {
   const a = start();
@@ -2064,7 +2093,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 바다 도감 --- */
 {
   const a = A(), X = () => a.dex();
-  ok("도감은 49종 — 생물·보스 20종·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 49 && X().list.filter(e => e.cat === "boss").length === 20);
+  ok("도감은 50종 — 생물·보스 21종(마젤란)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 50 && X().list.filter(e => e.cat === "boss").length === 21);
   a.startMain(); H.step(); a.hold(true); H.step();
   ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
   delete X().book.wind;
