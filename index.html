@@ -318,7 +318,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v51";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v52";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -1875,7 +1875,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     weather, nextWeatherAt, flash, skimT, skimGain, skims, nearMisses, goldRings, gear, gearT, gears, runBounty, newBountyRecord, shakeT = 0, shakeMag = 0,
     barrels, barrelsBroken, tip, newDailyRecord, gulls, gullKills, gullHits, arcs, arcSeq, arcsDone, parrot, bossIntro, slowT = 0, sinkBanner, bonusOn, bonusVisits, jellies, bounces, mapItems, mapGot, blitzT, newBlitzRecord, trail, rings, happyT, rushIdx, rushT, rushDone, newRushRecord, bigSpawns,
     barrage, nextBarrageAt, shells, barragesCleared, floes, geysers, whirls, floeSaves, geyserHits, rocketCharge, rockets,
-    sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyChases, navyBeaten, navyCaught = 0, cuffT = 0, viceHook, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, rival, nextRivalAt, rivalWins, rivalRaces, rivalRand = Math.random, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
+    sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyChases, navyBeaten, navyCaught = 0, cuffT = 0, jailEscaped = false, viceHook, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, rival, nextRivalAt, rivalWins, rivalRaces, rivalRand = Math.random, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
 
 function reset(){
   // 60초 사냥은 하루 한 판 — 끝나고 R로 다시 시작하면 본게임으로 넘어간다
@@ -1922,7 +1922,7 @@ function reset(){
   sling = null; slingCd = 0; slings = 0;
   perks = {}; pickOffer = null; pickPending = false; pickReturn = null; undyingUsed = false;
   navyRand = dailyMode ? mulberry32(todaySeed() * 13 + 3) : Math.random;
-  navy = null; viceHook = null; navyEscapes = 0; navyChases = 0; navyBeaten = false; navyCaught = 0; cuffT = 0; nextNavyAt = NAVY_FIRST + navyRand()*400;
+  navy = null; viceHook = null; navyEscapes = 0; navyChases = 0; navyBeaten = false; navyCaught = 0; cuffT = 0; jailEscaped = false; nextNavyAt = NAVY_FIRST + navyRand()*400;
   rivalRand = dailyMode ? mulberry32(todaySeed() * 17 + 9) : Math.random;
   rival = null; rivalWins = 0; rivalRaces = 0; nextRivalAt = RIVAL_FIRST + rivalRand()*300;
   routes = []; routeLeft = 0; routeSeq = 0; routesDone = { up:0, low:0 };
@@ -2465,7 +2465,7 @@ const DEX_CATS = [
 const DEX = [
   { id:"fish",  cat:"life", name:"식인 물고기" }, { id:"king", cat:"life", name:"해왕류" },
   { id:"gull",  cat:"life", name:"폭탄 갈매기" }, { id:"jelly", cat:"life", name:"트램펄린 해파리" },
-  ...[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
+  ...[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
   { id:"gold",  cat:"sea", name:"황금 고리" },  { id:"rot", cat:"sea", name:"삭은 돛대" },
   { id:"port",  cat:"sea", name:"항구" },       { id:"barrel", cat:"sea", name:"보물 통" },
   { id:"meat",  cat:"sea", name:"고기" },       { id:"map", cat:"sea", name:"보물 지도 조각" },
@@ -3395,9 +3395,10 @@ const BOSSES = [
   { name:"심해 아귀 등불",      tag:"등불에 끌려가지 마라 — 물어뜯은 뒤 벌린 아가리의 등불·아가미를 쳐라" },
   { name:"해파리 여왕 루미나",  tag:"전기 해파리와 촉수 장막을 피해라 — 빛이 꺼질 때 핵을 노려라", named:true },
   { name:"폭풍고래 뇌경",       tag:"물기둥·해일을 피하고 숨구멍을, 솟구칠 땐 흰 배를 쳐라", big:true },
-  { name:"해룡 군주 요르문",    tag:"아치처럼 솟은 몸을 빠져나가며 역린을 — 덮친 머리가 박힌 틈을 노려라", big:true }
+  { name:"해룡 군주 요르문",    tag:"아치처럼 솟은 몸을 빠져나가며 역린을 — 덮친 머리가 박힌 틈을 노려라", big:true },
+  { name:"간수장 마젤란",       tag:"열쇠를 낚아채 수갑을 풀어라 — 독룡이 휩쓰는 높이를 피하고, 숨을 고를 때 몸통을 쳐라", named:true }
 ];
-const ANGLER = 16, JELLYQ = 17, WHALE = 18, SERPENT = 19;
+const ANGLER = 16, JELLYQ = 17, WHALE = 18, SERPENT = 19, MAGELLAN = 20;   // 마젤란 — 해저 감옥 탈옥전에만 나온다
 const BIG_BOSSES = [5, 7, WHALE, SERPENT];   // 대형 슬롯(2000m마다)은 크라켄·유령선·폭풍고래·해룡 중 무작위
 const AWAKEN_CHANCE = 0.2;   // 크라켄이 뽑히면 이 확률로 '각성한 크라켄'이 대신 나온다(운이 나쁘면)
 const ADMIRAL = 8;           // 해군 대장 군함 — 대형 슬롯이 아니라 두 번째 해군 추격 자리에 나온다
@@ -3439,9 +3440,9 @@ const CHASERS = [SHARK, VICE];
 // 대형 보스 — 따라붙는 거리, 기어 경계 주기(이 중 GUARD_ON 동안 약점을 감춘다), 강화 기어를 켰을 때 몸을 사리는 시간
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
-const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9 };
-// 격침 현상금 — 일반 150 · 네임드 350 · 대형 600, 격파할수록 40·60·80씩 더 (v50 수천만 단위 현상금은 보물이 너무 많아 되돌렸다)
-const bossBounty = (b) => b.big ? (600 + bossKills*80) : b.named ? (350 + bossKills*60) : (150 + bossKills*40);
+const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9, 20:NAMED_HP };
+// 격침 현상금 — 일반 150 · 네임드 350 · 대형(과 탈옥한 마젤란) 600, 격파할수록 40·60·80씩 더 (v50 수천만 단위 현상금은 보물이 너무 많아 되돌렸다)
+const bossBounty = (b) => b.big || b.type === MAGELLAN ? (600 + bossKills*80) : b.named ? (350 + bossKills*60) : (150 + bossKills*40);
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
 const RC_LEAP = 38, RC_SAW = 40;
@@ -3607,7 +3608,8 @@ const TITLES = [
   { id:"ghost10",   name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 },
   { id:"naturalist", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length },
   { id:"voyage_end", name:"대항해의 끝",      desc:"스토리 최종장을 깬다",     need:(s) => (s.storyEnd || 0) >= 1 },
-  { id:"star81",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX }
+  { id:"star81",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX },
+  { id:"jail",      name:"탈옥수",            desc:"해저 감옥에서 마젤란을 꺾고 탈옥", need:(s) => ((s.dex || {}).boss20 || 0) >= 1 }
 ];
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
@@ -3705,7 +3707,7 @@ function spawnBoss(big, forceType){
   else if(lastMidSlot() && Math.random() < diffK("named")){ const nm = zonePool().named; type = Array.isArray(nm) ? nm[Math.floor(Math.random() * nm.length)] : nm; }
   else type = pickMidBoss();
   const hp0 = BOSS_HP[type] || (big ? 8 : 2);
-  boss = { type, big:!!big, named: !big && isNamed(type), p2:false, hp: hp0, maxHp: hp0,
+  boss = { type, big:!!big, named: !big && (isNamed(type) || type === MAGELLAN), p2:false, hp: hp0, maxHp: hp0,
            t:0, fire: big ? 90 : 90, harpoon: 70, fishSkill: 200,
            invul:0, flash:0, x:p.x + 560, y:120, vy:0, air:false,
            phase:0, sub:0, perch:null, perch2:null, tents:[], swing:0, sink:0, dive:0 };
@@ -3728,6 +3730,7 @@ function spawnBoss(big, forceType){
   if(type === SMITH){ boss.y = SEA - 64; boss.st = "idle"; boss.wait = 80; boss.cols = []; boss.hotCd = 120; boss.meltCd = 120; boss.blob = null; }
   if(type === FIREBIRD){ boss.st = "warn"; boss.stT = FB_WARN + 30; boss.by = Math.max(70, Math.min(SEA - 70, p.y)); boss.x = p.x - 560; boss.y = boss.by; boss.bands = []; boss.band = null; }
   if(type === ADMIRAL){ boss.y = SEA - 10; boss.fire = 100; boss.net = 160; boss.walk = 0; }
+  if(type === MAGELLAN){ boss.x = p.x + 420; boss.y = MG_Y; boss.st = "idle"; boss.wait = 120; boss.fire = 100; boss.bands = []; boss.keyGot = false; boss.key = { x: p.x + 480, y: 200 }; }
   bossIntro = { type, big:!!big, named:boss.named, t: 0, bounty: bossBounty(boss) };
   if(type === AWAKEN && !storyMode && !practiceMode && !rushMode) pops.push({ x:p.x, y:p.y - 90, t:160, text:"운이 나쁘다… 크라켄이 각성했다!", color:"#d9a8f0" });
   dexMeet("boss" + type);
@@ -3896,6 +3899,8 @@ function weakPoints(b){
 
   } else if(b.type === ANGLER){
     anglerWeak(b, out);
+  } else if(b.type === MAGELLAN){
+    if(b.keyGot && b.st === "rest") out.push({ x:b.x, y:b.y + 6, r:32, mark:"몸통" });   // 수갑을 푼 뒤, 독룡을 내보내고 숨을 고를 때만
   } else if(b.type === JELLYQ){
     if(b.st === "dim") out.push({ x:b.x, y:b.y - 8, r:30, mark:"핵" });   // 빛이 꺼진 동안만 붉은 핵
   } else if(b.type === WHALE){
@@ -4065,6 +4070,8 @@ function damageBoss(ranged, mark, power){
       // 연습 대상만 짧은 간격으로 계속 반복 등장
       if(b.big){ nextBigAt = dist + 60; nextBossAt = Infinity; }
       else { nextBossAt = dist + 60; nextBigAt = Infinity; }
+    } else if(b.type === MAGELLAN){
+      jailEscape();
     } else if(b.type === ADMIRAL){
       // 해군 대장을 꺾으면 이번 항해엔 해군이 더 쫓아오지 않는다 — 대형 보스 일정은 그대로
       navyBeaten = true;
@@ -4383,6 +4390,8 @@ function updateBoss(dt){
     updateAngler(b, dt);
   } else if(b.type === JELLYQ){
     updateJellyQueen(b, dt);
+  } else if(b.type === MAGELLAN){
+    updateMagellan(b, dt);
   } else if(b.type === WHALE){
     updateWhale(b, dt);
   } else if(b.type === SERPENT){
@@ -5227,18 +5236,21 @@ function acceptCrew(c){
 // 해루석 수갑 — 차고 있는 동안 기술(Q·W·기어·비기)을 못 쓴다. 누르면 알려만 준다
 function cuffed(){
   if(!(cuffT > 0) || state !== STATE.PLAY) return false;
-  if(!pops.some(q => q.cuff)) pops.push({ x:p.x, y:p.y - 50, t:40, text:"해루석 수갑 — 힘이 안 들어간다 (" + Math.ceil(cuffT / 60) + "초)", color:"#9aa4b0", cuff:true });
+  if(!pops.some(q => q.cuff)) pops.push({ x:p.x, y:p.y - 50, t:40, text:"해루석 수갑 — 힘이 안 들어간다 (" + (jailCuffed() ? "열쇠를 잡아라" : Math.ceil(cuffT / 60) + "초") + ")", color:"#9aa4b0", cuff:true });
   return true;
 }
-// 붙잡혔다 — 계급마다 처벌이 다르다. 스토리 스테이지·세 번째 체포는 그대로 항해 끝
+// 붙잡혔다 — 계급마다 처벌이 다르다. 스토리 스테이지는 그대로 실패.
+// 세 번째 체포는 해저 감옥 — 간수장 마젤란을 꺾으면 탈옥해 항해를 잇는다(한 항해에 한 번). 탈옥한 뒤 또 잡히면 항해 끝
 function navyCatch(){
   const R = navy.rank;
   navy = null;
   navyCaught++;
   for(let i=0;i<20;i++) spark(p.x, p.y, i % 2 ? R.col : "#f4ecd9");
-  if(storyMode || navyCaught >= NAVY_JAIL){
-    if(!storyMode) pops.push({ x:p.x, y:p.y - 60, t:120, text:"해저 감옥으로 압송된다…", color:"#9aa4b0" });
-    die("해군");
+  if(storyMode){ die("해군"); return; }
+  if(navyCaught >= NAVY_JAIL){
+    if(pk("undying") && !undyingUsed){ die("해군"); return; }   // 불사의 고무가 먼저 한 번 버틴다
+    if(jailEscaped){ die("도황"); return; }
+    startJail();
     return;
   }
   // 놓아준 뒤 바로 다시 잡히지 않게 — 앞으로 내던지고 잠깐 무적, 다음 추격은 조금 빨리(현상금이 올랐다)
@@ -6054,7 +6066,7 @@ const CODE_HEAD = "GOMU1-", CODE2_HEAD = "G2-";
 // 낱말표 — 코드 형식의 일부라 절대 고치지 않는다(순서를 바꾸면 예전 코드를 못 읽는다). 새 낱말은 끝에만 덧붙일 것
 const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022",
   "story","st","seen","end","art","grab","sense","redhawk","puff","spin","jack","boss15","biome3","voyage_end","star81","captain","starlit",
-  "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice"];
+  "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -7165,6 +7177,12 @@ function drawShots(){
         ctx.beginPath(); ctx.arc(x, q.y, 24, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
       }
       continue;
+    } else if(q.kind === 9){
+      // 마젤란의 독 구슬
+      ctx.fillStyle = "rgba(150,90,220,.9)";
+      ctx.beginPath(); ctx.arc(0, 0, q.r, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(190,255,150,.85)";
+      ctx.beginPath(); ctx.arc(-q.r*0.3, -q.r*0.3, q.r*0.4, 0, Math.PI*2); ctx.fill();
     } else if(q.kind === 4){
       // 해군 그물 — 빙글 돌며 펼쳐진다
       ctx.rotate(q.spin * 0.5);
@@ -7877,6 +7895,147 @@ function drawJellyQueen(b, x, hurt){
   ctx.restore();
 }
 
+// 해저 감옥 — 해군에게 세 번째로 붙잡히면 끌려온다. 간수장 마젤란(네임드)을 꺾어야 탈옥해 항해를 잇는다.
+//   처음엔 해루석 수갑(기술 봉인) — 위아래로 떠다니는 열쇠를 낚아채야 풀리고, 그 전엔 몸통이 드러나지 않는다.
+//   idle → warn(MG_WARN, 독룡이 휩쓸 높이 띠 예고, 마지막 MG_LOCK은 고정) → sweep(MG_SWEEP, 독룡 머리가 오른쪽에서 왼쪽으로 지나가고 몸이 띠를 채운다)
+//   → rest(MG_REST, 숨을 고르는 동안 몸통이 약점) → idle. 독룡에 닿으면 끝(보호막은 한 번 막는다). 독 구슬은 휘청.
+//   2페이즈엔 독룡이 둘 — 두 띠 사이(MG_GAP)로 빠져야 한다. 감옥에 있는 동안 거리는 다른 보스처럼 멈춘다
+const MG_Y = 118, MG_WARN = 80, MG_LOCK = 20, MG_SWEEP = 44, MG_REST = 120, MG_BAND = 40, MG_GAP = 170, MG_KEY_R = 26;
+const jailCuffed = () => !!(boss && boss.type === MAGELLAN && !boss.keyGot);
+function startJail(){
+  if(boss){ clearCuts(); boss = null; shots = []; }      // 싸우던 보스는 놓친다 — 감옥으로 끌려간다
+  rival = null; navy = null; viceHook = null; sling = null; rope = null; stun = 0;
+  iframes = Math.max(iframes, 120);
+  p.vx = Math.max(p.vx, 8); p.vy = Math.min(p.vy, -10);
+  spawnBoss(false, MAGELLAN);
+  cuffT = Math.max(cuffT, 60); gear = 0;
+  pops.push({ x:p.x, y:p.y - 60, t:150, text:"해저 감옥으로 압송됐다… 간수장 마젤란이 기다린다", color:"#c9a0ff" });
+  missionFlash = { text: "탈옥하라! 열쇠로 수갑을 풀고 마젤란을 꺾어라 — 지면 항해 끝", reward:0, t:200, weather:"storm" };
+  addShake(10, 24);
+}
+function jailEscape(){
+  jailEscaped = true;
+  navyCaught = 0;                          // 전과는 지워지지만, 탈옥한 뒤 또 잡히면 그걸로 끝
+  cuffT = 0;
+  nextBossAt = dist + 500 * diffK("boss");
+  nextNavyAt = dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
+  pops.push({ x:p.x, y:p.y - 90, t:170, text:"탈옥 성공! 다시 바다로 — 또 잡히면 그땐 끝이다", color:"#c9a0ff" });
+}
+function mgPoison(text){
+  if(invinc() || iframes > 0 || state !== STATE.PLAY) return;
+  if(shield > 0){ knock(false); return; }   // 보호막이 대신 막는다
+  pops.push({ x:p.x, y:p.y - 40, t:80, text, color:"#c9a0ff" });
+  for(let i=0;i<24;i++) spark(p.x, p.y, i % 2 ? "#9a5adc" : "#bfff96");
+  die("독");
+}
+function updateMagellan(b, dt){
+  if(!b.keyGot){
+    cuffT = Math.max(cuffT, 2);                                       // 열쇠를 잡기 전엔 수갑이 안 풀린다
+    const k = b.key;
+    k.y += ((120 + (Math.sin(b.t*0.025)*0.5 + 0.5) * (SEA - 290)) - k.y) * 0.06 * dt;   // 위아래로 천천히 오르내린다
+    if(k.x < p.x - 200) k.x = p.x + 420 + Math.random()*120;          // 지나쳤으면 다시 앞쪽에
+    if(state === STATE.PLAY && Math.hypot(p.x - k.x, p.y - k.y) < MG_KEY_R + 16){
+      b.keyGot = true; cuffT = 0;
+      pops.push({ x:p.x, y:p.y - 50, t:110, text:"열쇠를 낚아챘다 — 수갑이 풀렸다!", color:"#ffd76a" });
+      for(let i=0;i<20;i++) spark(k.x, k.y, "#ffd76a");
+    }
+  }
+  if(skyRelocate(b, dt, MG_Y, 360)) return;
+  const CAP = 9.4;
+  const want = Math.min(p.vx, CAP*0.9) + ((p.x + 330) - b.x) * 0.03;
+  b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+  b.y = MG_Y + Math.sin(b.t*0.03)*14;
+  const rage = b.p2 ? 0.75 : 1;
+  b.fire -= dt;
+  if(b.fire <= 0 && b.st !== "rest"){
+    b.fire = 130 * rage;
+    aimShot({ x:b.x - 30, y:b.y + 10 }, 8.6, 0, 9, 11);
+    if(b.p2) aimShot({ x:b.x - 30, y:b.y + 10 }, 8.6, 0.16, 9, 11);
+  }
+  if(b.st === "idle"){
+    b.wait -= dt;
+    if(b.wait <= 0){
+      b.st = "warn"; b.stT = MG_WARN * rage;
+      b.bands = b.p2 ? [{ y:0, off:-MG_GAP/2 }, { y:0, off:MG_GAP/2 }] : [{ y:0, off:0 }];
+    }
+  } else if(b.st === "warn"){
+    b.stT -= dt;
+    if(b.stT > MG_LOCK) for(const d of b.bands) d.y = Math.max(70 + MG_BAND, Math.min(SEA - 40, p.y + d.off));   // 마지막 순간엔 띠가 고정된다
+    if(b.stT <= 0){ b.st = "sweep"; b.stT = MG_SWEEP; addShake(6, 14); }
+  } else if(b.st === "sweep"){
+    b.stT -= dt;
+    const head = mgHead(b);
+    if(state === STATE.PLAY && p.x > head - 30 && b.bands.some(d => Math.abs(p.y - d.y) < MG_BAND)) mgPoison("독룡에 휩쓸렸다!");
+    if(b.stT <= 0){ b.st = "rest"; b.stT = MG_REST; b.bands = []; if(b.keyGot) pops.push({ x:b.x, y:b.y - 60, t:60, text:"마젤란이 숨을 고른다 — 몸통을 노려라!", color:"#ffd76a" }); }
+  } else if(b.st === "rest"){
+    b.stT -= dt;
+    if(b.stT <= 0){ b.st = "idle"; b.wait = 70 * rage; }
+  }
+}
+// 독룡 머리의 월드 x — 화면 오른쪽 밖에서 왼쪽 밖까지 MG_SWEEP 동안 지나간다
+const mgHead = (b) => cam.x + W + 80 - (W + 200) * (1 - Math.max(0, b.stT) / MG_SWEEP);
+function drawMagellan(b, x, hurt){
+  for(const d of b.bands){
+    if(b.st === "warn"){
+      const lock = b.stT <= MG_LOCK;
+      ctx.strokeStyle = lock ? "rgba(255,110,140,.9)" : "rgba(201,160,255,.6)"; ctx.lineWidth = lock ? 3 : 2;
+      ctx.setLineDash(lock ? [] : [12, 10]);
+      ctx.beginPath(); ctx.moveTo(-200, d.y - MG_BAND); ctx.lineTo(W + 200, d.y - MG_BAND); ctx.moveTo(-200, d.y + MG_BAND); ctx.lineTo(W + 200, d.y + MG_BAND); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(150,90,220,.1)"; ctx.fillRect(-200, d.y - MG_BAND, W + 400, MG_BAND*2);
+    } else if(b.st === "sweep"){
+      const hx = mgHead(b) - cam.x;
+      ctx.fillStyle = "rgba(120,60,190,.75)";                       // 독룡의 몸 — 머리 뒤로 띠를 꽉 채운다
+      ctx.beginPath(); ctx.moveTo(hx, d.y - MG_BAND*0.8);
+      for(let xx = hx; xx <= W + 220; xx += 40) ctx.lineTo(xx, d.y - MG_BAND*0.8 + Math.sin(xx*0.03 + time*0.3)*8);
+      ctx.lineTo(W + 220, d.y + MG_BAND*0.8);
+      for(let xx = W + 220; xx >= hx; xx -= 40) ctx.lineTo(xx, d.y + MG_BAND*0.8 + Math.sin(xx*0.03 + time*0.3)*8);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(190,255,150,.35)";
+      for(let xx = hx + 30; xx < W + 200; xx += 70){ ctx.beginPath(); ctx.arc(xx, d.y + Math.sin(xx*0.05 + time*0.2)*14, 7, 0, Math.PI*2); ctx.fill(); }
+      ctx.fillStyle = "#5a2a96";                                     // 머리 — 벌린 아가리
+      ctx.beginPath(); ctx.moveTo(hx + 30, d.y - MG_BAND); ctx.lineTo(hx - 50, d.y - 18); ctx.lineTo(hx - 10, d.y); ctx.lineTo(hx - 50, d.y + 18); ctx.lineTo(hx + 30, d.y + MG_BAND); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#bfff96"; ctx.beginPath(); ctx.arc(hx + 4, d.y - 22, 5, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  if(!b.keyGot){                                                    // 떠다니는 수갑 열쇠
+    const kx = b.key.x - cam.x, ky = b.key.y;
+    const g = 0.5 + Math.sin(time*0.2)*0.25;
+    ctx.fillStyle = "rgba(255,215,106," + (g*0.4).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(kx, ky, MG_KEY_R + 8, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(kx - 8, ky, 8, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(kx + 18, ky); ctx.moveTo(kx + 12, ky); ctx.lineTo(kx + 12, ky + 7); ctx.moveTo(kx + 18, ky); ctx.lineTo(kx + 18, ky + 9); ctx.stroke();
+  }
+  const tired = b.st === "rest";
+  ctx.save();
+  ctx.translate(x, b.y);
+  ctx.fillStyle = "rgba(150,90,220,.25)";                           // 독 기운
+  ctx.beginPath(); ctx.arc(0, 4, 62 + Math.sin(time*0.12)*5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = hurt ? "#f4ecd9" : "#2a1e3a";                     // 거구의 몸
+  ctx.beginPath(); ctx.ellipse(0, 14, 36, 42, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = tired ? "#ff8f80" : "#4a3466";                    // 숨을 고를 땐 가슴이 붉게 드러난다
+  ctx.beginPath(); ctx.ellipse(0, 8, 18, 20, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(0, -36, 15, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#1b1218";                                        // 뿔 달린 간수 모자
+  ctx.beginPath(); ctx.moveTo(-18, -44); ctx.lineTo(18, -44); ctx.lineTo(12, -56); ctx.lineTo(-12, -56); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-12, -54); ctx.lineTo(-24, -74); ctx.lineTo(-6, -56); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(12, -54); ctx.lineTo(24, -74); ctx.lineTo(6, -56); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = tired ? "#f4ecd9" : "#bfff96";
+  ctx.beginPath(); ctx.arc(-5, -36, 2.4, 0, Math.PI*2); ctx.arc(5, -36, 2.4, 0, Math.PI*2); ctx.fill();
+  if(tired){ ctx.fillStyle = "rgba(244,236,217,.7)"; ctx.font = "700 14px 'Pretendard', system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("헉… 헉…", 0, -84); }
+  ctx.restore();
+}
+// 감옥 분위기 — 보랏빛 어둠, 화면 양옆과 위의 쇠창살
+function drawJail(){
+  if(!boss || boss.type !== MAGELLAN || state === STATE.MENU) return;
+  ctx.save();
+  ctx.fillStyle = "rgba(20,8,36,.32)"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(60,64,80,.85)";
+  for(let i=0;i<3;i++){ ctx.fillRect(8 + i*18, 0, 7, H); ctx.fillRect(W - 15 - i*18, 0, 7, H); }
+  ctx.fillRect(0, 0, W, 9); ctx.fillRect(0, 26, W, 5);
+  ctx.restore();
+}
+
 // 폭풍고래 뇌경(대형) — 수면 위로 등을 내놓고 앞서간다. spout(물기둥) → rest → wave(꼬리 해일) → breach(도약) → rest … 반복.
 //   물기둥: 플레이어가 갈 자리 수면에 물보라 원(WH_SP_WARN, 마지막 WH_SP_LOCK 고정) → 바다에서 하늘 끝까지 솟는 기둥(WH_SP_T). 닿으면 휘청하며 높이 튕긴다.
 //   꼬리 해일: 꼬리를 치켜들었다 내리치면 높이 WH_WAVE_H의 물결이 뒤로(플레이어 쪽) 밀려온다 — 그 위로 넘어가야 한다.
@@ -8525,6 +8684,8 @@ function drawBossWarn(){
   if(boss.type === MUSANG && boss.st === "charge"){ text = "패왕의 기세! 기어(E)를 켜고 버텨라"; left = boss.charge; }
   else if(boss.type === FIREBIRD && boss.st === "warn"){ text = "불새가 이 높이를 휩쓴다! 높이를 바꿔라"; left = boss.stT; col = "#ffb060"; }
   else if(boss.type === ANGLER && boss.st === "warn"){ text = "발밑에서 아귀가 솟는다! 원 밖으로·높이"; left = boss.stT; col = "#d6f0a0"; }
+  else if(boss.type === MAGELLAN && boss.st === "warn"){ text = boss.bands.length > 1 ? "독룡 두 마리! 두 줄 사이 틈으로 빠져라" : "독룡이 이 높이를 휩쓴다! 높이를 바꿔라"; left = boss.stT; col = "#c9a0ff"; }
+  else if(boss.type === MAGELLAN && !boss.keyGot){ text = "해루석 수갑 — 떠다니는 열쇠를 낚아채라"; left = 0; col = "#ffd76a"; }
   else if(boss.type === JELLYQ && boss.st === "warn"){ text = boss.p2 ? "촉수 장막! 위 장막은 아래로, 아래 장막은 위로" : "촉수 장막이 내려온다! 바다 쪽으로 낮게 빠져나가라"; left = boss.stT; col = "#9fe8ff"; }
   else if(boss.type === WHALE && boss.st === "wave"){ text = "꼬리 해일! 높이 올라 넘어라"; left = boss.stT; col = "#bfe4ff"; }
   else if(boss.type === SERPENT && boss.st === "aim"){ text = "해룡이 겨눈다! 조준선에서 비켜라"; left = boss.stT; col = "#9fe0a0"; }
@@ -8541,7 +8702,7 @@ function drawBossWarn(){
   ctx.font = "800 16px 'Pretendard', system-ui, sans-serif"; ctx.fillStyle = col;
   ctx.fillText(text, W/2, 148);
   ctx.font = "700 12px ui-monospace, Menlo, monospace";
-  if(boss.type !== MUSANG){ ctx.fillStyle = "#f4ecd9"; ctx.fillText((left / 60).toFixed(1) + "초", W/2, 167); ctx.restore(); return; }
+  if(boss.type !== MUSANG){ if(left > 0){ ctx.fillStyle = "#f4ecd9"; ctx.fillText((left / 60).toFixed(1) + "초", W/2, 167); } ctx.restore(); return; }
   ctx.fillStyle = gearGuard() ? "#9fe0a0" : "#f4ecd9";
   ctx.fillText(gearGuard() ? "기어 상태 — 버틸 수 있다" : (left / 60).toFixed(1) + "초 · 기어 게이지 " + Math.floor(gear / gearMax() * 100) + "%", W/2, 167);
   ctx.restore();
@@ -8755,6 +8916,8 @@ function drawBoss(){
     drawAngler(b, x, hurt);
   } else if(b.type === JELLYQ){
     drawJellyQueen(b, x, hurt);
+  } else if(b.type === MAGELLAN){
+    drawMagellan(b, x, hurt);
   } else if(b.type === WHALE){
     drawWhale(b, x, hurt);
   } else if(b.type === SERPENT){
@@ -9167,7 +9330,7 @@ function drawCuffs(){
   ctx.beginPath(); ctx.arc(x + 6, y + 4, 6, 0, Math.PI*2); ctx.stroke();
   ctx.font = "700 11px 'Pretendard', system-ui, sans-serif"; ctx.textAlign = "center";
   ctx.fillStyle = "#c9d0d8";
-  ctx.fillText("수갑 " + Math.ceil(cuffT / 60) + "초", x, y - 34);
+  ctx.fillText(jailCuffed() ? "수갑 — 열쇠!" : "수갑 " + Math.ceil(cuffT / 60) + "초", x, y - 34);
   ctx.restore();
 }
 
@@ -10782,6 +10945,7 @@ function draw(){
   ctx.restore();
   drawAwakenInk();
   drawAnglerDark();
+  drawJail();
 
   if(state === STATE.PLAY || state === STATE.PAUSE) drawWeather();
   if(state === STATE.PLAY || state === STATE.PAUSE) drawBiomeParticles();
@@ -10928,6 +11092,8 @@ function draw(){
       : deathReason === "바다" ? "바다에 빠졌다"
       : deathReason === "정체" ? "너무 오래 멈춰 선단에 뒤처졌다"
       : deathReason === "해군" ? "해군에게 붙잡혔다"
+      : deathReason === "도황" ? "다시 해저 감옥 — 도황과 친구가 됐다"
+      : deathReason === "독" ? "마젤란의 독에 쓰러졌다 — 해저 감옥에 갇혔다"
       : "선단에 뒤처졌다";
     const lx = W/2 - 50;
     let overY = 92;
@@ -11938,7 +12104,7 @@ window.__swing = {
   slingStart: startSling, slingFire: fireSling, sling: () => ({ s: sling, cd: slingCd, n: slings, target: slingTarget() }),
   crew: () => ({ owned: crewOwned, sel: crewSel, mate: crewMate, loot: crewLoot(), navyT: navyT(), helmJump, kills: crewKills, hire: (i) => hireCrew(CREW[i]), cycle: cycleCrew, set: (id) => { if(id && crewOwned.indexOf(id) < 0) crewOwned.push(id); crewSel = id; } }),
   navy: () => ({ n: navy, next: nextNavyAt, esc: navyEscapes, chases: navyChases, beaten: navyBeaten, setNext: (v) => { nextNavyAt = v; }, setChases: (v) => { navyChases = v; },
-                 caught: navyCaught, setCaught: (v) => { navyCaught = v; }, cuff: cuffT, setCuff: (v) => { cuffT = v; }, ranks: NAVY_RANKS, jail: NAVY_JAIL }),
+                 caught: navyCaught, setCaught: (v) => { navyCaught = v; }, cuff: cuffT, setCuff: (v) => { cuffT = v; }, ranks: NAVY_RANKS, jail: NAVY_JAIL, jailEsc: jailEscaped }),
   mini: () => ({ m: mini, best: miniBest, medals: miniMedals, start: startMini, down: miniDown, up: miniUp, toList: miniToList, pause: miniPause,
                  allGold: miniAllGold, set: (id, b, md) => { miniBest[id] = b; miniMedals[id] = md; } }),
   toMiniList: () => { state = STATE.MINI_SELECT; },
