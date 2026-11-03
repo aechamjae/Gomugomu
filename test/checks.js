@@ -3062,6 +3062,26 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   function stepFrames(k){ for(let i=0;i<k;i++) H.step(); }
 }
 
+/* --- v53: 해군 추격·마젤란 연습 --- */
+{
+  const a = A();
+  const run = (n) => { for(let i=0;i<n;i++){ a.hold(true); H.step(); } };
+  [0, 1, 2].forEach(r => {
+    a.startPractice(21 + r); H.step(); a.hold(true); H.step();
+    T().teleport(100 * 22); run(3);
+    const n = a.navy().n;
+    ok("연습 — 해군 " + ["대령", "소장", "중장"][r] + " 추격이 바로 나온다", a.peek().practiceMode.type === "navy" && n && n.rank.rank === ["대령", "소장", "중장"][r], n ? n.rank.rank : "없음");
+  });
+  a.navy().setCaught(2);
+  T().setShield(0); T().setIframes(0);
+  a.navy().n.x = T().P().x - 50; H.step();
+  ok("추격 연습은 잡혀도 감옥·게임오버 없이 계속", a.peek().state === 1 && !a.boss() && a.navy().caught === 0, "state=" + a.peek().state);
+  a.startPractice(24); H.step(); a.hold(true); H.step();
+  T().teleport(100 * 22); run(3);
+  ok("연습 — 간수장 마젤란이 나온다(수갑·열쇠부터)", a.boss() && a.boss().type === 20 && !a.boss().keyGot && a.navy().cuff > 0, a.boss() ? "type=" + a.boss().type : "보스 없음");
+  a.toMenu();
+}
+
 /* --- v50: 동료 고유 능력(★) --- */
 {
   const a = A(), C = () => a.crew();

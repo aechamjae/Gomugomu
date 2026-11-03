@@ -318,7 +318,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v52";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v53";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -649,7 +649,7 @@ const NAVY_RANKS = [
 const NAVY_JAIL = 3;          // 이번 항해에서 세 번째로 붙잡히면 압송
 const CUFF_T = 60*30;         // 해루석 수갑 — Q·W·E·비기 봉인 시간
 const navyT = () => NAVY_T * (crewOn("nav") ? 0.67 : 1);   // 항해사 — 지름길을 알아 8초만 버티면 된다
-const navyRankNow = () => NAVY_RANKS[Math.min(NAVY_RANKS.length - 1, Math.max(0, navyChases - 1))];
+const navyRankNow = () => practiceMode && practiceMode.type === "navy" ? NAVY_RANKS[practiceMode.rank] : NAVY_RANKS[Math.min(NAVY_RANKS.length - 1, Math.max(0, navyChases - 1))];
 
 /* 라이벌 해적 — 가끔 나타나 결승 부표까지 경주를 건다. 이기면 현상금 */
 const RIVAL_FIRST = 800;
@@ -1078,13 +1078,18 @@ const PRACTICE_OPTIONS = [
   { type:"boss", bossType:16, label:"심해 아귀 등불 연습 (심연)" },
   { type:"boss", bossType:17, label:"해파리 여왕 루미나 연습 (네임드 · 심연)" },
   { type:"boss", bossType:18, label:"폭풍고래 뇌경 연습 (대형)" },
-  { type:"boss", bossType:19, label:"해룡 군주 요르문 연습 (대형)" }
+  { type:"boss", bossType:19, label:"해룡 군주 요르문 연습 (대형)" },
+  { type:"navy", rank:0, label:"해군 대령 추격 연습 (벌금)" },
+  { type:"navy", rank:1, label:"해군 소장 추격 연습 (그물)" },
+  { type:"navy", rank:2, label:"해군 중장 추격 연습 (포격)" },
+  { type:"boss", bossType:20, label:"간수장 마젤란 연습 (네임드 · 해저 감옥)" }
 ];
 
 function practiceLabel(){
   if(!practiceMode) return "";
   if(practiceMode.type === "boss") return BOSSES[practiceMode.bossType].name + " 연습";
   if(practiceMode.type === "king") return "해왕류 폭주 연습";
+  if(practiceMode.type === "navy") return "해군 " + NAVY_RANKS[practiceMode.rank].rank + " 추격 연습";
   return "";
 }
 
@@ -1103,7 +1108,7 @@ function startPractice(idx){
   blitzMode = false;
   rushMode = false;
   storyMode = null;
-  practiceMode = opt.type === "king" ? { type:"king" } : { type:"boss", bossType:opt.bossType };
+  practiceMode = opt.type === "king" ? { type:"king" } : opt.type === "navy" ? { type:"navy", rank:opt.rank } : { type:"boss", bossType:opt.bossType };
   reset();
 }
 
@@ -1963,6 +1968,8 @@ function reset(){
     else { nextBossAt = 30; nextBigAt = Infinity; }
   } else if(practiceMode && practiceMode.type === "king"){
     nextBossAt = Infinity; nextBigAt = Infinity;   // 폭주 연습 중엔 일반 보스는 끈다
+  } else if(practiceMode && practiceMode.type === "navy"){
+    nextBossAt = Infinity; nextBigAt = Infinity; nextNavyAt = 30;   // 해군 추격 연습 — 고른 계급만 짧은 간격으로 계속
   }
   if(blitzMode){ nextBossAt = Infinity; nextBigAt = Infinity; }
   if(rushMode){ nextBossAt = 30; nextBigAt = Infinity; }
@@ -5245,6 +5252,7 @@ function navyCatch(){
   const R = navy.rank;
   navy = null;
   navyCaught++;
+  if(practiceMode) navyCaught = 0;          // 추격 연습은 몇 번 잡혀도 처벌만 받고 계속 — 감옥은 '마젤란 연습'으로
   for(let i=0;i<20;i++) spark(p.x, p.y, i % 2 ? R.col : "#f4ecd9");
   if(storyMode){ die("해군"); return; }
   if(navyCaught >= NAVY_JAIL){
@@ -5271,9 +5279,9 @@ function navyCatch(){
     text = "해루석 수갑! 기술 봉인 " + Math.round(cuffT / 60) + "초 · 보물 -" + t;
   }
   pops.push({ x:p.x, y:p.y - 50, t:150, text, color:R.col });
-  missionFlash = { text: "붙잡혔다! " + (NAVY_JAIL - navyCaught) + "번 더 잡히면 해저 감옥행", reward:0, t:150, weather:"storm" };
+  missionFlash = { text: practiceMode ? "붙잡혔다! (연습 — 감옥엔 안 간다)" : "붙잡혔다! " + (NAVY_JAIL - navyCaught) + "번 더 잡히면 해저 감옥행", reward:0, t:150, weather:"storm" };
   addShake(8, 20);
-  nextNavyAt = dist + (NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0])) * 0.6;
+  nextNavyAt = practiceMode ? dist + 60 : dist + (NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0])) * 0.6;
 }
 function updateNavy(dt){
   if(cuffT > 0 && state === STATE.PLAY){ cuffT -= dt; if(cuffT <= 0){ cuffT = 0; pops.push({ x:p.x, y:p.y - 50, t:70, text:"수갑이 풀렸다!", color:"#8fd6d8" }); } }
@@ -5322,11 +5330,11 @@ function updateNavy(dt){
         for(let i=0;i<24;i++) spark(p.x, p.y, i % 2 ? R.col : "#f4ecd9");
       }
       navy = null;
-      nextNavyAt = dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
+      nextNavyAt = practiceMode ? dist + 60 : dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
     }
-  } else if(!practiceMode && !rushMode && !blitzMode && !boss && !bonusOn && !barrage && !rival && !navyBeaten && dist >= nextNavyAt){
+  } else if((!practiceMode || practiceMode.type === "navy") && !rushMode && !blitzMode && !boss && !bonusOn && !barrage && !rival && !navyBeaten && dist >= nextNavyAt){
     navyChases++;
-    if(navyChases > NAVY_RANKS.length && !storyMode){
+    if(navyChases > NAVY_RANKS.length && !storyMode && !practiceMode){
       // 대령·소장·중장 다음엔 해군 대장이 직접 군함을 몰고 나온다 — 꺾을 때까지 거리가 멈춘다
       spawnBoss(true, ADMIRAL);
       nextNavyAt = dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
