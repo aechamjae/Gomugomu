@@ -318,7 +318,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v50";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v51";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -642,9 +642,9 @@ const NAVY_REWARD = 300;
 // v50 해군 계급 — 추격할 때마다 계급이 오른다(대령 → 소장 → 중장 → 네 번째는 대장이 군함을 몰고 나온다).
 // 계급마다 공격이 하나씩 늘고, 붙잡혔을 때의 처벌이 다르다. 한 항해에 NAVY_JAIL번째로 붙잡히면 해저 감옥으로 압송(항해 끝)
 const NAVY_RANKS = [
-  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   reward:2500000,  punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
-  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   reward:7500000,  punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
-  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, reward:12500000, punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
+  { id:"col",  rank:"대령", name:"철벽의 그란츠",  col:"#7fa8e0", spd:1,    fire:150, net:0,   shell:0,   reward:300, punish:"fine",  punishText:"벌금 — 보물 40% 압수" },
+  { id:"rear", rank:"소장", name:"그물잡이 모렐",  col:"#9fd0a8", spd:1.05, fire:130, net:230, shell:0,   reward:450, punish:"brig",  punishText:"구금 — 풍선 하나(없으면 보물 50%)" },
+  { id:"vice", rank:"중장", name:"포화의 바스크",  col:"#f0c060", spd:1.1,  fire:120, net:0,   shell:200, reward:600, punish:"cuffs", punishText:"해루석 수갑 — 30초 동안 기술 봉인 · 기어 게이지 0" }
 ];
 const NAVY_JAIL = 3;          // 이번 항해에서 세 번째로 붙잡히면 압송
 const CUFF_T = 60*30;         // 해루석 수갑 — Q·W·E·비기 봉인 시간
@@ -1932,7 +1932,7 @@ function reset(){
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null; gearForm = null; boundLeft = 0;
-  runBounty = 0; newBountyRecord = false; bountyLoot = 0; newDailyRecord = false; streakReward = 0;
+  runBounty = 0; newBountyRecord = false; newDailyRecord = false; streakReward = 0;
   reviveUsed = false; reviveT = 0;
   runXp = 0;
   ghostRec = []; playT = 0;
@@ -3440,9 +3440,8 @@ const CHASERS = [SHARK, VICE];
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
 const BOSS_HP = { 0:3, 1:2, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:2, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9 };
-// 격침 현상금 — 해군 현상금과 같은 단위: 일반 250만 · 네임드 750만 · 대형 1250만, 격파할수록 25만·50만·75만씩 더
-const BOUNTY_MID = 2500000, BOUNTY_NAMED = 7500000, BOUNTY_BIG = 12500000;
-const bossBounty = (b) => b.big ? (BOUNTY_BIG + bossKills*750000) : b.named ? (BOUNTY_NAMED + bossKills*500000) : (BOUNTY_MID + bossKills*250000);
+// 격침 현상금 — 일반 150 · 네임드 350 · 대형 600, 격파할수록 40·60·80씩 더 (v50 수천만 단위 현상금은 보물이 너무 많아 되돌렸다)
+const bossBounty = (b) => b.big ? (600 + bossKills*80) : b.named ? (350 + bossKills*60) : (150 + bossKills*40);
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
 const RC_LEAP = 38, RC_SAW = 40;
@@ -3621,10 +3620,10 @@ function levelOf(xp){
   while(rest >= xpNeed(L) && L < 99){ rest -= xpNeed(L); L++; }
   return { L, rest: Math.min(rest, xpNeed(L) - 1), need: xpNeed(L) };
 }
-let runXp = 0, levelBefore = 1, bountyLoot = 0;   // bountyLoot — 이번 판 격침·해군 현상금(수천만 단위라 경험치에선 뺀다)
+let runXp = 0, levelBefore = 1;
 function logRun(){
   levelBefore = levelOf(lifeLog.xp || 0).L;
-  runXp = Math.max(0, Math.floor(treasure - bountyLoot)) + Math.floor(dist);
+  runXp = Math.floor(treasure) + Math.floor(dist);
   lifeLog.xp = (lifeLog.xp || 0) + runXp;
   lifeLog.runs++;
   if(!blitzMode && !rushMode && !storyMode){             // 거리로 겨루는 판만 최근 기록 그래프에 남긴다
@@ -4030,7 +4029,7 @@ function damageBoss(ranged, mark, power){
   if(b.big && b.hp > 0 && (b.type === 5 || b.type === 7 || b.type === AWAKEN)){ b.phase = 1; b.sub = b.type === 7 ? 120 : 150; }     // 맞으면 크라켄은 물속으로, 유령선은 유령으로
   if(b.hp <= 0){
     const bounty = bossBounty(b);
-    treasure += bounty; bountyLoot += bounty;
+    treasure += bounty;
     pops.push({ x:b.x, y:b.y-40, t:130, text:"격침 +" + commas(bounty), color:"#d9b877" });
     for(let i=0;i<40;i++) spark(b.x, b.y, "#d9b877");
     bossKills++;
@@ -5303,9 +5302,9 @@ function updateNavy(dt){
     if(state === STATE.PLAY && p.x < navy.x + 70){ navyCatch(); return; }
     if(navy.t >= navyT() || boss){
       if(!boss){
-        const rw = R.reward;   // 계급마다 따로 — 대령 250만 · 소장 750만 · 중장 1250만
+        const rw = R.reward;   // 계급이 높을수록 현상금도 오른다 — 대령 300 · 소장 450 · 중장 600
         navyEscapes++;
-        treasure += rw; bountyLoot += rw;
+        treasure += rw;
         addGear("near");
         pops.push({ x:p.x, y:p.y-50, t:100, text:"해군 " + R.rank + "을(를) 따돌렸다! 현상금 +" + commas(rw), color:R.col });
         for(let i=0;i<24;i++) spark(p.x, p.y, i % 2 ? R.col : "#f4ecd9");
