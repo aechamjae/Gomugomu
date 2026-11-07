@@ -169,9 +169,10 @@ function swing(a, st){
   const res = {};
   // 0~4 중간보스 5종, 5 크라켄(대형) — 돌풍술사(4) 추가로 크라켄이 4에서 5로 밀림
   for(const t of [0,1,2,3,4,5]){
+    // v57: 작살잡이(1)는 밧줄을 감는 동안(reel), 흑조호(2)는 재장전하는 동안(reload)만 약점이 열린다
     const b = { type:t, big:t===5, hp:2, maxHp:2, t:0, life:9999, fire:90, invul:0, flash:0,
                 x:P.x+400, y:120, vy:-3, air:true, phase:0, sub:200, perch:null, tents:[],
-                swing:12, sink:0, dive:0 };
+                swing:12, sink:0, dive:0, st: t === 1 ? "reel" : t === 2 ? "reload" : undefined };
     let mx = 0, pos = new Set();
     for(let f=0; f<400; f++){
       b.t = f;
@@ -2571,12 +2572,22 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   // 불새 — 높이를 겨눠 돌진 → 불꽃 띠 → 방향 틀 때 꼬리깃
   fresh();
   b = a.spawnBoss(false, 14);
-  ok("불새는 일반(체력 2) · 뒤쪽 화면 밖에서 높이를 겨눈다", !b.named && b.maxHp === 2 && b.st === "warn" && b.x < a.cam().x && a.weak().length === 0);
+  // v57 리메이크: 앞 하늘에서 마주 보고 겨눈 뒤 뒤쪽으로 휩쓸고, 한 바퀴 돌아와 앞에서 쉴 때만 약점
+  ok("불새는 일반(체력 3) · 앞쪽 하늘에서 날아든다(약점 없음)", !b.named && b.maxHp === 3 && b.st === "hover" && b.x > T().P().x && a.weak().length === 0, "st=" + b.st);
+  b.stT = 1;
+  for(let i=0;i<4 && b.st === "hover";i++) H.step();
+  ok("앞에서 휩쓸 높이를 겨눈다", b.st === "warn" && b.x > T().P().x + 150, "st=" + b.st);
   b.stT = 1;
   for(let i=0;i<4 && b.st === "warn";i++) H.step();
-  ok("돌진하면 지나간 자리에 불꽃 띠가 남는다", b.st === "dash" && b.bands.length === 1);
-  for(let i=0;i<80 && b.st === "dash";i++){ T().setShield(9); a.hold(true); H.step(); }
-  ok("앞질러 나가 방향을 트는 동안 꼬리깃이 약점", b.st === "turn" && a.weak().map(w => w.mark).join() === "꼬리깃", "st=" + b.st);
+  ok("겨눈 높이로 내리꽂혀 뒤쪽으로 휩쓸며 불꽃 띠를 남긴다", b.st === "dash" && b.bands.length === 1);
+  let maxStep = 0, px0 = b.x, sawAhead = false;
+  for(let i=0;i<200 && b.st !== "rest";i++){
+    T().setShield(9); a.hold(true); H.step();
+    maxStep = Math.max(maxStep, Math.abs(b.x - px0) - Math.abs(T().P().vx)); px0 = b.x;
+    if(b.st === "loop" && b.loop === 1 && b.x > T().P().x) sawAhead = true;
+  }
+  ok("휩쓴 뒤 화면 위쪽으로 한 바퀴 돌아 다시 앞으로 — 순간이동 없이", b.st === "rest" && sawAhead && maxStep < 60, "st=" + b.st + " 최대 상대 이동 " + Math.round(maxStep));
+  ok("앞에서 숨 고를 때 꼬리깃·불씨 심장이 약점", b.st === "rest" && a.weak().map(w => w.mark).join() === "꼬리깃,불씨 심장" && b.x > T().P().x, "st=" + b.st);
   fresh();
   b = a.spawnBoss(false, 14);
   const P2 = T().P();
@@ -3115,6 +3126,160 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   C().set(sel0); C().owned.length = 0; owned0.forEach(id => C().owned.push(id));
   a.toMenu();
 }
+/* --- v57: 원거리 조준 개선 · 보스 제한 시간 · 불새·작살잡이·흑조호·아귀 리메이크 --- */
+{
+  const a = A();
+  const E = (x) => T().ev(x);
+  const fresh = () => { a.startPractice(0); H.step(); a.hold(true); H.step(); a.hold(false); a.keys.right = false; a.keys.down = false; };
+  const stepN = (n, fn) => { for(let i=0;i<n;i++){ if(fn) fn(); if(a.peek().state === 9) a.decline(); if(a.peek().state === 10) a.pickCard(0); H.step(); } };
+
+  // 1) 주먹은 가로 속도를 이어받는다 — 최고 속도로 달리며 앞서가는 보스를 쏴도 닿는다(앞에서 나란히 나는 불새로 잰다)
+  fresh();
+  let b = a.spawnBoss(false, 14);
+  let P = T().P();
+  const fly = () => { a.setRope(null); P.vx = 25; P.vy = 0; P.y = 200; T().setShield(9); a.peek().coins.length = 0; b.st = "rest"; b.stT = 999; };
+  stepN(150, fly);
+  E("skillCd = 0; eqRanged = 'pistol'"); b.invul = 0;
+  fly(); a.fire();
+  const f0 = a.peek().fist;
+  ok("v57: 주먹이 쏜 순간의 가로 속도를 이어받는다", f0 && Math.abs(Math.hypot(f0.vx - f0.cvx, f0.vy) - 33) < 0.5 && f0.cvx === 25, f0 ? "cvx=" + f0.cvx : "주먹 없음");
+  stepN(40, fly);
+  let hits = 0;
+  const rel = Math.round(b.x - P.x);
+  for(let k=0;k<6;k++){
+    E("skillCd = 0; fist = null"); b.invul = 0; b.hp = 3;
+    fly(); a.fire();
+    stepN(30, fly);
+    if(b.hp < 3) hits++;
+  }
+  ok("v57: 최고 속도(25)로 날며 쏴도 앞서 나란히 나는 약점에 맞는다", hits >= 5, hits + "/6 · 거리 " + rel);
+  // 조준 보정 — 살짝 빗나가게 쏜 주먹도 약점 쪽으로 휘어 간다
+  fresh();
+  b = a.spawnBoss(false, 14);
+  P = T().P();
+  b.st = "rest"; b.stT = 999; b.x = P.x + 300; b.y = 175;
+  a.setRope(null); P.vx = 0; P.vy = 0; P.y = 175;
+  stepN(2, () => { a.setRope(null); P.vx = 0; P.vy = 0; P.y = 175; });
+  E("fist = { x:p.x, y:p.y, px:p.x, py:p.y, cvx:0, cvy:0, vx:Math.cos(-0.25)*33, vy:Math.sin(-0.25)*33, life:26, back:false, pierce:false, hitBoss:false, snake:false, spd:33, hits:0, hitSet:[], ox:p.x, oy:p.y }");
+  const hpF = b.hp;
+  stepN(20, () => { a.setRope(null); P.vx = 0; P.vy = 0; P.y = 175; b.stT = 999; });
+  ok("v57: 약간 빗나간 주먹도 앞쪽 약점으로 휘어 간다(보정 유도)", b.hp < hpF, "hp " + hpF + "→" + b.hp);
+
+  // 2) 제한 시간
+  fresh();
+  b = a.spawnBoss(false, 3);
+  ok("v57: 일반 보스 제한 시간 60초 · 네임드 100초 · 대형 120초", b.tMax === 3600 && a.spawnBoss(false, 6).tMax === 6000 && a.spawnBoss(true, 5).tMax === 7200);
+  b = a.spawnBoss(false, 3);
+  E("bossIntro = { type:3, t:0 }");
+  const tl0 = b.tLeft; H.step();
+  ok("v57: 등장 컷인 동안엔 시간이 줄지 않는다", b.tLeft === tl0);
+  E("bossIntro = null");
+  const kills0 = a.peek().bossKills, tr0 = a.peek().treasure;
+  b.tLeft = 1.5;
+  stepN(3);
+  ok("v57: 시간이 다 되면 보스가 달아난다(격파·현상금 없음)", !a.boss() && a.peek().bossKills === kills0 && a.peek().treasure <= tr0 + 20 && E("sinkBanner && sinkBanner.fled") === true);
+  ok("v57: 달아난 뒤 연습 보스는 곧 다시 나온다", a.diff().bossAt < a.peek().dist + 100);
+  // 빠른 격침 보너스
+  b = a.spawnBoss(false, 3); E("bossIntro = null");
+  b.hp = 1; b.invul = 0; b.tLeft = 30 * 60 + 10;
+  const tr1 = a.peek().treasure;
+  T().dmg(true, "t");
+  const gain = a.peek().treasure - tr1, bounty = 150 + (a.peek().bossKills - 1) * 40;
+  ok("v57: 빨리 잡으면 남은 1초마다 보물(일반 4)", gain === bounty + 40 + 30 * 4, "얻은 보물 " + gain + " (현상금 " + bounty + ")");
+  // 스토리 보스 스테이지·보스 러시에선 시간 초과 = 실패
+  E("practiceMode = null; storyMode = { ch:3, st:2 }; reset(); state = STATE.PLAY");
+  b = a.spawnBoss(false, 14); E("bossIntro = null"); b.tLeft = 1;
+  stepN(2);
+  ok("v57: 스토리 보스 스테이지에서 시간 초과면 실패", a.peek().state === 2 && a.peek().deathReason === "시간 초과", "state=" + a.peek().state + " " + a.peek().deathReason);
+  E("storyMode = null; storyResult = null");
+  a.startRush(); H.step(); a.hold(true); H.step();
+  E("state = STATE.PLAY");
+  b = a.spawnBoss(false, 0); E("bossIntro = null"); b.tLeft = 1;
+  stepN(2);
+  ok("v57: 보스 러시에서 시간 초과면 끝", a.peek().state === 2 && a.peek().deathReason === "시간 초과");
+  E("rushMode = false");
+  // 탈옥전 마젤란 — 본게임에서 시간 초과면 다시 감옥
+  E("practiceMode = null; reset(); state = STATE.PLAY");
+  b = a.spawnBoss(false, 20); E("bossIntro = null"); b.tLeft = 1;
+  stepN(2);
+  ok("v57: 탈옥전에서 시간 안에 마젤란을 못 꺾으면 끝(간수)", a.peek().state === 2 && a.peek().deathReason === "간수");
+
+  // 3) 작살잡이 — 고래잡이 보트
+  fresh();
+  b = a.spawnBoss(false, 1);
+  ok("v57: 작살잡이 체력 3 · 보트를 타고 앞에서 맞선다", b.maxHp === 3 && b.st === "idle" && b.x > T().P().x && a.weak().length === 0);
+  b.stT = 0.5; b.next = "aim"; stepN(2);
+  ok("v57: 작살 줄기 셋을 겨눈다", b.st === "aim" && b.angs.length === 3);
+  const sh0 = a.peek().shots.filter(q => q.kind === 2).length;
+  b.stT = 0.5; stepN(2);
+  ok("v57: 겨눈 줄기로 작살 셋이 날아온다", a.peek().shots.filter(q => q.kind === 2).length - sh0 === 3);
+  // 고리 낚기 — 앞쪽 고리를 끌어내리고, 그동안 몸·감개가 약점
+  P = T().P();
+  const ring = { x: P.x + 200, y: 150, kind: 0 };
+  a.peek().anchors.push(ring); b.x = P.x + 280;
+  b.st = "idle"; b.stT = 0.5; b.next = "hook";
+  stepN(2, () => { a.setRope(null); P.vx = 0; P.vy = 0; });
+  ok("v57: 앞쪽 고리 하나를 노린다('!' 예고)", b.st === "hook" && b.tgt && b.tgt.x > P.x + 100, "st=" + b.st);
+  b.tgt = ring; b.stT = 0.5;
+  stepN(2, () => { a.setRope(null); P.vx = 0; P.vy = 0; });
+  stepN(30, () => { a.setRope(null); P.vx = 0; P.vy = 0; });
+  ok("v57: 작살이 박힌 고리가 바다 쪽으로 끌려 내려간다", b.st === "reel" && ring.y > 160 && a.weak().map(w => w.mark).join() === "작살잡이,감개", "st=" + b.st + " y=" + Math.round(ring.y));
+  // 감는 밧줄을 주먹으로 끊으면 나자빠진다
+  const o = E("hpOrigin(boss)");
+  E("fist = { x:" + ((o.x + ring.x) / 2) + ", y:" + ((o.y + ring.y) / 2) + ", px:0, py:0, cvx:0, cvy:0, vx:0, vy:0, life:20, back:false, pierce:false, hitBoss:true, snake:false, spd:33, hits:0, hitSet:[], ox:p.x, oy:p.y }");
+  stepN(1, () => { a.setRope(null); P.vx = 0; P.vy = 0; });
+  ok("v57: 밧줄을 끊으면 나자빠져 몸이 크게 드러난다 · 고리는 제자리로", b.st === "tumble" && a.weak().some(w => w.mark === "나자빠진 몸" && w.r >= 40) && ring.y === 150, "st=" + b.st + " y=" + ring.y);
+
+  // 4) 흑조호 — 체인샷 · 재장전 때만 약점
+  fresh();
+  b = a.spawnBoss(false, 2);
+  ok("v57: 흑조호는 평소엔 약점이 없다", b.st === "idle" && a.weak().length === 0);
+  b.stT = 0.5; b.shot = 0; stepN(2);
+  ok("v57: 체인샷 장전 예고(불씨)", b.st === "fuse");
+  b.stT = 0.5; stepN(2);
+  ok("v57: 사슬로 이은 포탄이 빙글빙글 날아온다", b.bolas.length === 1);
+  const bo = b.bolas[0], ang0 = bo.a;
+  E("fist = { x:" + bo.x + ", y:" + bo.y + ", px:" + bo.x + ", py:" + bo.y + ", cvx:0, cvy:0, vx:0, vy:0, life:20, back:false, pierce:false, hitBoss:true, snake:false, spd:33, hits:0, hitSet:[], ox:p.x, oy:p.y }");
+  H.step();
+  ok("v57: 주먹이 닿으면 체인샷이 깨진다(주먹은 그대로)", b.bolas.length === 0 && a.peek().fist && !a.peek().fist.back);
+  E("fist = null");
+  b.shot = 2; b.st = "fuse"; b.stT = 0.5; stepN(2);
+  ok("v57: 공격 셋을 퍼부은 뒤 재장전 — 화약통·포수가 약점", b.st === "reload" && a.weak().map(w => w.mark).join() === "화약통,포수", "st=" + b.st);
+  // 체인샷에 닿으면 휘청
+  fresh();
+  b = a.spawnBoss(false, 2); P = T().P(); a.setRope(null); T().setShield(0); T().setIframes(0);
+  b.bolas.push({ x:P.x, y:P.y, vx:0, vy:0, g:0, a:0, t:0, hit:false });
+  P.vx = 0; P.vy = 0; H.step();
+  ok("v57: 체인샷(사슬 포함)에 닿으면 휘청", a.peek().stun > 0);
+
+  // 5) 아귀 — 아가리를 벌린 채 앞자리로 나란히 헤엄친다
+  fresh();
+  b = a.spawnBoss(false, 16);
+  P = T().P();
+  b.st = "gape"; b.stT = 140; b.x = P.x - 40; b.y = a.peek().SEA - 46;
+  stepN(60, () => { a.setRope(null); P.vx = 20; P.vy = 0; P.y = 200; T().setShield(9); a.peek().coins.length = 0; });
+  ok("v57: 아귀 — 벌린 아가리로 앞자리(플레이어 앞)까지 따라 나와 약점이 앞에 있다", b.st === "gape" && b.x > T().P().x + 100 && a.weak().every(w => w.x > T().P().x), "rel=" + Math.round(b.x - T().P().x));
+
+  // 6) 리메이크한 보스들 — 오래 싸워도 오류 없음
+  for(const idx of [1, 2, 15, 17]){
+    let err = null;
+    a.startPractice(idx); H.step(); a.hold(true); H.step();
+    try{
+      for(let i=0;i<3000;i++){
+        const st = a.peek();
+        if(st.state === 9) a.decline(); if(st.state === 10) a.pickCard(0);
+        if(st.state === 2) break;
+        swing(a, st); T().setShield(9);
+        if(st.skillCd <= 0 && st.boss) a.fire();
+        if(st.gunCd <= 0 && st.boss) a.fireGun();
+        H.step();
+      }
+    }catch(e){ err = e.message; }
+    ok("v57: 연습 " + idx + "번을 오래 싸워도 오류 없음", !err, err || ("격파 " + a.peek().bossKills));
+  }
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");
@@ -3123,7 +3288,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     /new Audio|AudioContext|<audio|navigator\.vibrate/.test(l) && !l.trim().startsWith("/*"));
   ok("오디오 코드 없음", audio.length === 0, audio.join(" | "));
   ok("외부 라이브러리 없음", !/src="http|cdn\./.test(src));
-  ok("보스(중간·대형)는 시간 초과로 퇴각하지 않는다", !src.includes("물러났다"));
+  ok("v57: 보스마다 제한 시간이 있다(시간 초과면 달아난다)", src.includes("function bossFlee") && src.includes("b.tLeft -= dt"));
   ok("직전과 같은 중간보스 종류도 다시 나올 수 있다 (lastBossType 필터 제거)", !src.includes("lastBossType"));
   ok("베리어/돌진 스킬 코드 없음", !/fireBarrier|fireDash|BARRIER_CD|DASH_CD/.test(src));
   const ver = (src.match(/const GAME_VER = "v(\d+)"/) || [])[1];
