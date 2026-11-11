@@ -338,7 +338,7 @@ const STUN_MOB     = 15; // 식인 물고기에 스쳤을 때만 이 시간
 const STUN_FLOOR = 0.4;
 function stunRed(){
   const def = buff() ? buff().def : 0;
-  const m = (1 - def) * (1 - 0.2 * pk("tough")) * (1 - crewK("doctor", 0.3, 0.04));
+  const m = (1 - def) * (1 - 0.2 * pk("tough")) * (1 - crewK("doctor", 0.35, 0.04));
   return Math.min(1 - STUN_FLOOR, 1 - m);
 }
 
@@ -566,35 +566,35 @@ const fusenMax = () => FUSEN_MAX + pk("pouch");
 // boss는 BOSSES 번호(여기선 아직 상수가 없어서 숫자로): 6 문어 · 7 유령선 · 8 해군 대장 · 11 무상 · 13 풀무
 const CREW = [
   { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1 · ★ 50초마다 풍선을 새로 불어 준다" },
-  { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 절반 · 해군 감속 · ★ 해군 추격 8초 · 수갑 절반 · 25초마다 순풍" },
+  { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 절반 · 해군 감속 · 해군 추격 8초 · 수갑 절반 · ★ 18초마다 5초 순풍 — 바람 줄기를 타고 밀려 간다" },
   { id:"sword",  name:"검객",   cost:0, boss:11, stage:"2-4", col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다",
     tease:"빙하 해역의 검호 무상과 겨룬 자에게만 칼을 맡긴다",
     story:["무상의 기세가 꺾이자, 얼음 위에서 결투를 지켜보던 젊은 검객이 칼집을 들고 다가왔다.",
            "\"스승님이 무릎 꿇는 건 처음 봅니다. 그 고무팔이 어디까지 닿는지 곁에서 보고 싶습니다.\"",
            "그날부터 검객은 곁으로 날아드는 물고기와 갈매기를 대신 베어 주었다."] },
-  { id:"sniper", name:"저격수", cost:0, boss:8, stage:"5-4", col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다 · ★ 18초마다 보스 약점을 저격(피해 1)",
+  { id:"sniper", name:"저격수", cost:0, boss:8, stage:"5-4", col:"#ffd76a", desc:"3초마다 앞쪽 멀리(620)까지 적·보물 통을 쏜다 · ★ 14초마다 보스 약점을 저격(피해 1) — 예광탄이 그어진다",
     tease:"해군 대장 군함의 망루에서 누군가 총을 겨누고 있다",
     story:["군함이 기울자 망루에서 백기가 올라왔다. 해군 제복을 벗어 던진 저격수였다.",
            "\"명령대로만 쏘는 건 지겨웠어. 네 배에선 내가 고른 걸 쏘겠다.\"",
            "저격수는 앞쪽의 적과 보물 통을 먼저 노려 준다."] },
-  { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -30% · 출발할 때 보호막 1 · ★ 보호막이 없으면 40초마다 다시 감아 준다" },
-  { id:"arch",   name:"고고학자", cost:0, boss:7, stage:"4-4", col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50% · ★ 판이 끝나면 창고 보물 +20%",
+  { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -35% · 출발 보호막 1 · 보호막이 없으면 30초마다 다시 · ★ 응급 처치 — 크게 휘청이면 그 자리에서 깨운다(45초)" },
+  { id:"arch",   name:"고고학자", cost:0, boss:7, stage:"4-4", col:"#c9a27a", desc:"지도 조각 2배 · 보물 통 +50% · 판이 끝나면 창고 보물 +25% · ★ 30초마다 앞바다에 유물 통(3배)을 찾아 띄우고 통 자리를 짚어 준다",
     tease:"망령의 유령선 선창에서 누군가 해도를 붙들고 있다",
     story:["유령선이 가라앉기 직전, 선창에서 낡은 해도 더미를 끌어안은 학자가 기어 나왔다.",
            "\"백 년 동안 이 배의 지도만 읽었지. 이제 진짜 바다에서 맞춰 보고 싶군.\"",
            "고고학자가 고른 보물 통은 더 무겁고, 지도 조각도 더 자주 눈에 띈다."] },
-  { id:"wright", name:"조선공", cost:0, boss:13, stage:"3-4", col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20% · ★ 낮게 떨어지면 앞에 임시 돛대를 세운다(20초마다)",
+  { id:"wright", name:"조선공", cost:0, boss:13, stage:"3-4", col:"#d98f4e", desc:"삭은 돛대가 2.5배 버틴다 · 항구 값 -20% · ★ 낮게 떨어지면 망치질 한 번에 앞에 임시 돛대(14초마다)",
     tease:"용암 대장장이 풀무의 대장간에 사슬에 묶인 일꾼이 있다",
     story:["풀무의 망치가 식자, 대장간 구석에서 사슬에 묶인 채 배를 고치던 조선공이 고개를 들었다.",
            "\"삭은 돛대도 내 손을 거치면 한참 버티지. 풀어 주면 네 배를 맡아 주마.\"",
            "항구 상인들도 조선공의 얼굴을 보면 값을 깎아 준다."] },
-  { id:"music",  name:"음악가", cost:0, boss:6, stage:"1-4", col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25% · ★ 기어 지속 +30% · 게이지 40% 채우고 출발",
+  { id:"music",  name:"음악가", cost:0, boss:6, stage:"1-4", col:"#e6a8f0", desc:"콤보 +40% 오래 · 기어 게이지 +25% · 지속 +30% · 게이지 절반 채우고 출발 · ★ 앙코르 — 기어 중엔 음표가 흐르고 콤보 배율 +1",
     tease:"먹물 장군 문어의 먹물 속에서 바이올린 소리가 들린다",
     story:["문어가 먹물을 거두자, 촉수에 감겨 춤 반주를 하던 악사가 바이올린을 든 채 떨어졌다.",
            "\"장군님 춤 반주는 이제 그만! 당신 스윙에 맞춰 켜게 해 줘요.\"",
            "음악가의 박자에 맞추면 콤보가 길게 이어지고 기어 게이지도 빨리 찬다."] },
-  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 2배 · 라이벌 감속 · ★ 공중에서 ↑ 로 한 번 더 도약(10초)" },
-  { id:"jack",   name:"갈고리 잭", cost:0, stage:"F-2", col:"#f0a24e", desc:"바다로 떨어지면 앞 고리에 갈고리를 걸어 건져 준다(25초마다) · 라이벌 판돈 +20%",
+  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +25% · 갈림길 2배 · 라이벌 감속 · ★ 공중에서 ↑ 로 한 번 더 크게 도약(7초) — 키가 돌며 궤적이 남는다" },
+  { id:"jack",   name:"갈고리 잭", cost:0, stage:"F-2", col:"#f0a24e", desc:"★ 바다로 떨어지면 사슬 갈고리로 앞 고리에 걸어 건져 올린다(18초마다) · 라이벌 판돈 +20%",
     tease:"라이벌의 갈고리가 언젠가 널 구해 줄지도",
     story:["외눈 바론과의 경주가 끝나자, 갈고리 잭이 뱃전에 갈고리를 걸고 올라탔다.",
            "\"이번만은 같은 배다, 고무 꼬맹이. 떨어지면 갈고리로 건져 주지.\"",
@@ -608,10 +608,13 @@ const storyReady = (c) => isStoryCrew(c) && crewOwned.indexOf(c.id) < 0 && story
 const crewNewsCount = () => CREW.filter(storyReady).length;
 // 새 선원 5명의 효과 — 레벨이 오를수록 조금씩 세진다(Lv.1 기준값에서 단계마다 더한다)
 const crewK = (id, base, per) => crewOn(id) ? base + per * (crewLv(id) - 1) : 0;
-const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 240, CREW_SNIPE_R = 520;
+const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 180, CREW_SNIPE_R = 620;   // v60: 저격 4초→3초 · 520→620px
 // v50 동료 고유 능력(★) — 검객만 쓸모 있다는 피드백으로 나머지에게도 하나씩. 쿨타임은 선원 레벨마다 -8%(crewCdMul)
-const CREW_SKILL = { cook: 60*50, nav: 60*25, sniper: 60*18, doctor: 60*40, wright: 60*20, helm: 60*10 };
-const CREW_ARCH_LOOT = 0.2, CREW_MUSIC_GEAR_T = 0.3, CREW_MUSIC_START = 0.4, CREW_NAV_WIND_T = 240, CREW_HELM_JUMP = 11;
+// v60 동료 버프(검객·요리사는 그대로): 항해사 25→18초 · 저격수 18→14초 · 선의 40→30초 · 조선공 20→14초 · 조타수 10→7초 + 고고학자 유물 통 30초(신규)
+const CREW_SKILL = { cook: 60*50, nav: 60*18, sniper: 60*14, doctor: 60*30, wright: 60*14, helm: 60*7, arch: 60*30 };
+const CREW_ARCH_LOOT = 0.25, CREW_MUSIC_GEAR_T = 0.3, CREW_MUSIC_START = 0.5, CREW_NAV_WIND_T = 300, CREW_NAV_PUSH = 0.13, CREW_NAV_VMAX = 18, CREW_HELM_JUMP = 12;
+// v60 신규 능동 효과 — 선의 응급 처치(휘청이 CREW_AID_MIN 넘게 걸리면 바로 깨운다), 고고학자 유물 통(보물 3배), 음악가 앙코르(기어 중 콤보 배율 +1)
+const CREW_AID_CD = 60*45, CREW_AID_MIN = 18, CREW_RELIC_AHEAD = 520, CREW_RELIC_K = 3, CREW_ENCORE = 1, CREW_WRIGHT_H = 230, CREW_ACT_T = 40;
 const crewSkillCd = (id) => CREW_SKILL[id] * crewCdMul(id);
 // 고고학자 — 판이 끝나 창고로 옮길 때 보물 +20%(레벨마다 +4%)
 const crewLoot = () => 1 + crewK("arch", CREW_ARCH_LOOT, 0.04);
@@ -2694,7 +2697,7 @@ function reset(){
   routes = []; routeLeft = 0; routeSeq = 0; routesDone = { up:0, low:0 };
   nextRouteAt = ROUTE_FIRST + genRand()*200;
   nextPortAt = PORT_FIRST; portIdx = 0; portAt = null; portPending = null; portBought = {}; portMsg = null;
-  crewMate = { x:150 - 50, y:120, cd:90, skill: 60*8, wind: 0 }; crewFx = []; crewKills = 0; crewLvUp = null; crewNews = null;
+  crewMate = { x:150 - 50, y:120, cd:90, skill: 60*8, wind: 0, aid: 0, act: null, encore: false }; crewFx = []; crewKills = 0; crewLvUp = null; crewNews = null;
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null; gearForm = null; boundLeft = 0;
@@ -2960,7 +2963,8 @@ function breakBarrel(b, how){
   b.gone = true;
   barrelsBroken++;
   const y = barrelY(b);
-  const bv = Math.round((wk("barrel") ? 60 : 30) * (1 + crewK("arch", 0.5, 0.1)));
+  const bv = Math.round((wk("barrel") ? 60 : 30) * (1 + crewK("arch", 0.5, 0.1))) * (b.relic ? CREW_RELIC_K : 1);
+  if(b.relic){ pops.push({ x:b.x, y:y - 46, t:80, text:"유물 통! +" + bv, color:"#c9a27a" }); for(let i=0;i<14;i++) spark(b.x, y - 6, i % 2 ? "#ffd76a" : "#c9a27a"); }
   treasure += bv;
   const n = 6;
   for(let i=0;i<n;i++){
@@ -3759,7 +3763,7 @@ function grab(){
     if(a.rot && !a.dex){ a.dex = true; dexSee("rot"); }
     if(a.port && !a.dex){ a.dex = true; dexSee("port"); }
     if(a.rot && !a.creak){
-      a.creak = a.creakMax = ROT_T * (1 + crewK("wright", 1, 0.2));   // 조선공이 덧대 주면 두 배 버틴다
+      a.creak = a.creakMax = ROT_T * (1 + crewK("wright", 1.5, 0.2));   // 조선공이 덧대 주면 2.5배 버틴다(v60: 2배 → 2.5배)
       pops.push({ x:a.x, y:a.y-26, t:50, text:"삐걱…", color:"#c9a27a" });
     }
     if(airTime > 34){
@@ -4374,7 +4378,9 @@ function cardRect(i, n){
 }
 
 function chainMult(){
-  return Math.min(CHAIN_CAP, Math.max(1, chain));
+  // 음악가 앙코르(v60) — 기어 발동 중엔 콤보 배율 +1(상한도 하나 위)
+  const enc = crewOn("music") && buff() ? CREW_ENCORE : 0;
+  return Math.min(CHAIN_CAP, Math.max(1, chain)) + (chain > 0 ? enc : 0);
 }
 
 /* 보스 처치 칭호 — 누적 처치 수 기준, 약한 순서로 나열 (마지막으로 만족하는 게 현재 칭호) */
@@ -6526,10 +6532,10 @@ function crewKillFish(m){
   for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
 }
 // 갈고리 잭 — 바다로 떨어지는 중이고 팔이 비어 있으면 가장 가까운 앞 고리에 갈고리를 걸어 준다
-const JACK_CD = 60*25;
+const JACK_CD = 60*18, JACK_H = 140;      // v60: 25초 → 18초 · 수면 120 → 140px 위부터 건진다
 function updateJack(dt){
   if(jackCd > 0){ jackCd -= dt; return; }
-  if(rope || p.vy <= 0 || p.y < SEA - 120 || stun > 0) return;
+  if(rope || p.vy <= 0 || p.y < SEA - JACK_H || stun > 0) return;
   let best = null, bd = reach() * 1.3;
   for(const a of anchors){
     if(a.cut || a.broken || a.x < p.x - 40) continue;
@@ -6538,10 +6544,11 @@ function updateJack(dt){
   }
   if(!best) return;
   rope = { a: best, len: Math.max(REEL_MIN, Math.min(bd * 0.85, SEA - 52 - best.y)) };
-  p.vy = Math.min(p.vy, -4); p.vx = Math.max(p.vx, 5);
+  p.vy = Math.min(p.vy, -4); p.vx = Math.max(p.vx, 7);
   airTime = 0; holding = false;
   jackCd = JACK_CD * (1 - 0.075 * (crewLv("jack") - 1));
-  crewFx.push({ x1:crewMate.x, y1:crewMate.y, x2:best.x, y2:best.y, t:20, col:"#f0a24e" });
+  crewFx.push({ x1:crewMate.x, y1:crewMate.y, x2:best.x, y2:best.y, t:26, t0:26, col:"#f0a24e", kind:"hook" });
+  crewAct("jack");
   pops.push({ x:p.x, y:p.y - 44, t:70, text:"잭의 구명 갈고리!", color:"#f0a24e" });
 }
 // 조타수 — 공중에서 ↑ 를 누르면 한 번 더 도약
@@ -6551,41 +6558,69 @@ function helmJump(){
   p.vy = Math.min(p.vy, -CREW_HELM_JUMP); p.vx = Math.max(p.vx, 0) + 2.5;
   c.skill = crewSkillCd("helm");
   airTime = 0;
+  crewFx.push({ x1:p.x, y1:p.y, x2:p.x, y2:p.y, t:30, t0:30, col:"#8fb8e0", kind:"wheel" });
+  crewAct("helm");
   pops.push({ x:p.x, y:p.y - 40, t:50, text:"조타수: 키를 꺾어라!", color:"#8fb8e0" });
   for(let i=0;i<12;i++) spark(p.x, p.y + 10, "#8fb8e0");
   return true;
 }
+// 동료가 나서는 순간 — 곁의 동료가 잠깐 커지고 먹 고리가 번진다(drawCrew). 판정과 무관
+function crewAct(id){ if(crewMate) crewMate.act = { id, t: 0 }; }
 // ★ 고유 능력 — 공격(c.cd)과 따로 도는 쿨타임(c.skill)
 function updateCrewSkill(c, dt){
-  if(c.wind > 0){ c.wind -= dt; if(state === STATE.PLAY) p.vx += 0.11 * dt; }   // 항해사가 불러온 순풍
+  if(c.act){ c.act.t += dt; if(c.act.t > CREW_ACT_T) c.act = null; }
+  if(c.wind > 0){ c.wind -= dt; if(state === STATE.PLAY && p.vx < MAXV * 0.92) p.vx += CREW_NAV_PUSH * dt; }   // 항해사가 불러온 순풍(최고 속도 직전까지만 민다 — 불꽃이 공짜로 붙지 않게)
+  if(c.aid > 0) c.aid -= dt;
+  const live = state === STATE.PLAY && !(practiceMode && crewSel !== "sniper");
+  // 선의 응급 처치 — 크게 휘청이면 그 자리에서 깨운다(보호막과 따로 도는 쿨타임)
+  if(live && crewOn("doctor") && !(c.aid > 0) && stun > CREW_AID_MIN){
+    stun = 0; iframes = Math.max(iframes, 40); c.aid = CREW_AID_CD * crewCdMul("doctor");
+    crewFx.push({ x1:c.x, y1:c.y, x2:p.x, y2:p.y, t:28, t0:28, col:"#9fe0a0", kind:"aid" });
+    crewAct("doctor");
+    pops.push({ x:p.x, y:p.y - 60, t:80, text:"선의: 정신 차려! 응급 처치", color:"#9fe0a0" });
+  }
+  // 음악가 앙코르 — 기어가 켜지는 순간 나선다(배율은 chainMult가 본다)
+  if(crewOn("music")){
+    const on = !!buff();
+    if(on && !c.encore && live){ crewAct("music"); pops.push({ x:p.x, y:p.y - 60, t:80, text:"음악가: 앙코르! 콤보 배율 +" + CREW_ENCORE, color:"#e6a8f0" }); }
+    c.encore = on;
+  }
   if(c.skill > 0){ c.skill -= dt; return; }
-  if(state !== STATE.PLAY || practiceMode && crewSel !== "sniper") return;
+  if(!live) return;
   const say = (text, col) => pops.push({ x:p.x, y:p.y - 60, t:80, text, color:col });
   if(crewOn("cook")){
     if(fusen < FUSEN_MAX){ fusen++; fusenAnim = 46; say("요리사: 새 풍선 불었어요!", "#f7a8a0"); c.skill = crewSkillCd("cook"); }
   } else if(crewOn("nav")){
-    if(!boss && p.vx < 16){ c.wind = CREW_NAV_WIND_T; say("항해사: 순풍이 온다!", "#8fd6d8"); c.skill = crewSkillCd("nav"); }
+    if(!boss && p.vx < CREW_NAV_VMAX){ c.wind = CREW_NAV_WIND_T; say("항해사: 순풍이 온다!", "#8fd6d8"); c.skill = crewSkillCd("nav"); crewAct("nav"); }
   } else if(crewOn("doctor")){
-    if(shield <= 0){ shield = 1; say("선의: 붕대 다시 감았어", "#f4f6f8"); for(let i=0;i<10;i++) spark(p.x, p.y, "#8fd6d8"); c.skill = crewSkillCd("doctor"); }
+    if(shield <= 0){ shield = 1; say("선의: 붕대 다시 감았어", "#f4f6f8"); for(let i=0;i<10;i++) spark(p.x, p.y, "#8fd6d8"); c.skill = crewSkillCd("doctor"); crewAct("doctor"); }
+  } else if(crewOn("arch")){
+    // 고고학자 — 앞바다에서 유물 통을 찾아 띄운다(보스·해군·보물섬 중엔 쉰다). 난수를 쓰지 않아 오늘의 항해 코스는 그대로
+    if(!boss && !navy && !bonusOn && !blitzMode && !barrels.some(b => !b.gone && b.relic)){
+      const b = { x: p.x + CREW_RELIC_AHEAD + Math.max(0, p.vx) * 8, gone:false, relic:true, born: time };
+      barrels.push(b);
+      crewFx.push({ x1:c.x, y1:c.y, x2:b.x, y2:SEA - 14, t:30, t0:30, col:"#c9a27a", kind:"find" });
+      say("고고학자: 저 앞에 유물 통이오!", "#c9a27a"); c.skill = crewSkillCd("arch"); crewAct("arch");
+    }
   } else if(crewOn("sniper")){
     const b = boss;
     if(b && b.invul <= 0 && !b.dive && b.hp > 0){
       const wp = weakPoints(b).filter(w => w.x > cam.x && w.x < cam.x + W);
       if(wp.length){
         const w = wp[0];
-        crewFx.push({ x1:c.x, y1:c.y, x2:w.x, y2:w.y, t:16, col:"#ffd76a" });
-        c.skill = crewSkillCd("sniper");
+        crewFx.push({ x1:c.x, y1:c.y, x2:w.x, y2:w.y, t:26, t0:26, col:"#ffd76a", kind:"snipe", big:true });
+        c.skill = crewSkillCd("sniper"); crewAct("sniper");
         say("저격수: " + w.mark + " 명중!", "#ffd76a");
         damageBoss(true, "저격");
       }
     }
   } else if(crewOn("wright")){
-    if(!rope && p.vy > 2 && p.y > SEA - 200 && !anchors.some(a => !a.cut && !a.broken && a.x > p.x - 20 && Math.hypot(a.x - p.x, a.y - p.y) < reach())){
+    if(!rope && p.vy > 2 && p.y > SEA - CREW_WRIGHT_H && !anchors.some(a => !a.cut && !a.broken && a.x > p.x - 20 && Math.hypot(a.x - p.x, a.y - p.y) < reach())){
       const a = { x: p.x + 150 + Math.max(0, p.vx) * 4, y: Math.max(90, p.y - 150), kind:0, temp:true };
       anchors.push(a);
-      crewFx.push({ x1:c.x, y1:c.y, x2:a.x, y2:a.y, t:20, col:"#d98f4e" });
+      crewFx.push({ x1:c.x, y1:c.y, x2:a.x, y2:a.y, t:30, t0:30, col:"#d98f4e", kind:"build" });
       say("조선공: 임시 돛대 세웠다!", "#d98f4e");
-      c.skill = crewSkillCd("wright");
+      c.skill = crewSkillCd("wright"); crewAct("wright");
     }
   }
 }
@@ -6619,7 +6654,7 @@ function updateCrew(dt){
     if(tgt){
       c.cd = CREW_SNIPE_CD * (1 - 0.3 * pk("drill")) * crewCdMul("sniper");
       const ty2 = kind === 2 ? barrelY(tgt) : tgt.y;
-      crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:ty2, t:12, col:"#ffd76a" });
+      crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:ty2, t:18, t0:18, col:"#ffd76a", kind:"snipe" });
       if(kind === 1){ killGull(tgt, 20); crewKills++; }
       else if(kind === 0) crewKillFish(tgt);
       else { breakBarrel(tgt, "저격수"); crewKills++; }
@@ -7089,7 +7124,7 @@ function update(dt){
     airTime = 0;
   } else {
     const ak = buff() ? 1 + (buff().spd - 1) * 2.5 : 1;
-    const airK = ak * (1 + 0.25 * pk("air")) * (1 + crewK("helm", 0.2, 0.03));
+    const airK = ak * (1 + 0.25 * pk("air")) * (1 + crewK("helm", 0.25, 0.03));
     if(keys.left)  p.vx -= AIR*airK*dt;
     if(keys.right) p.vx += AIR*airK*dt;
     if(keys.down)  p.vy += DIVE*dt;
@@ -8532,10 +8567,11 @@ function drawBarrel(b){
   ctx.fillRect(-12, -19, 6, 38);
   ctx.strokeStyle = "#3a2618"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(-15, -9); ctx.lineTo(15, -9); ctx.moveTo(-15, 9); ctx.lineTo(15, 9); ctx.stroke();
+  if(b.relic){ ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 16, 21, 0, 0, Math.PI*2); ctx.stroke(); }   // 유물 통 — 금테
   ctx.fillStyle = "#ffd76a";
   ctx.font = "700 11px 'Gowun Batang', 'Pretendard', serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("$", 2, 0);
+  ctx.fillText(b.relic ? "★" : "$", 2, 0);
   ctx.restore();
 }
 
@@ -11368,9 +11404,12 @@ function drawCrew(){
   const c = crewMate, cd = crewDef(crewSel);
   if(!cd) return;
   const x = c.x - cam.x, y = c.y;
+  drawCrewAura(c, cd, x, y);
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(p.face || 1, 1);
+  // 나서는 순간 — 통통 튀며 잠깐 커진다
+  const actK = c.act && !settings.calm ? Math.sin(clamp01(c.act.t / CREW_ACT_T) * Math.PI) : 0;
+  ctx.scale((p.face || 1) * (1 + 0.55 * actK), 1 + 0.55 * actK);
   ctx.fillStyle = "rgba(244,236,217,.85)";                 // 작은 구름에 올라탄다
   ctx.beginPath(); ctx.ellipse(0, 14, 15, 5, 0, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = "#3a2a3a"; ctx.fillRect(-5, 0, 10, 12);   // 몸
@@ -11432,6 +11471,7 @@ function drawCrew(){
   ctx.stroke();
   ctx.restore();
   for(const f of crewFx){
+    if(f.kind){ drawCrewFx(f); continue; }
     ctx.save();
     ctx.globalAlpha = Math.min(1, f.t / 8);
     ctx.strokeStyle = f.col; ctx.lineWidth = f.slash ? 4 : 2;
@@ -11443,6 +11483,110 @@ function drawCrew(){
   }
 }
 
+// v60 동료 연출 — 나설 때의 먹 고리, 항해사의 바람 줄기, 음악가의 음표, 고고학자의 통 표시
+function drawCrewAura(c, cd, x, y){
+  const calm = settings.calm;
+  ctx.save(); ctx.lineCap = "round";
+  if(c.act){
+    const k = clamp01(c.act.t / CREW_ACT_T);
+    ctx.globalAlpha = (1 - k) * 0.8; ctx.strokeStyle = cd.col; ctx.lineWidth = 4 * (1 - k) + 1;
+    ctx.beginPath(); ctx.arc(x, y, 14 + 34 * ease.outCubic(k), 0, Math.PI*2); ctx.stroke();
+    if(!calm) inkSplat(x, y, k, c.act.t * 0 + cd.name.length * 1.7, 6, "40,26,16", 52);
+  }
+  if(c.wind > 0 && cd.id === "nav"){
+    // 순풍 — 화면을 가로지르는 바람 줄기와 화살촉(왼쪽에서 오른쪽으로 흐른다)
+    const al = Math.min(1, c.wind / 30, (CREW_NAV_WIND_T - c.wind) / 12 + 0.2), vw = W / cam.z;
+    for(let i=0;i<7;i++){
+      const sp = 9 + hash(i*3.1) * 6, len = 70 + hash(i*5.7) * 90;
+      const wx = ((time * sp + hash(i*9.3) * vw * 1.4) % (vw + 260)) - 130, wy = 60 + i * 52 + Math.sin(time*0.05 + i) * 10;
+      ctx.globalAlpha = al * (0.35 + 0.3 * hash(i*2.2)); ctx.strokeStyle = "#cfeff0"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(wx - len, wy); ctx.quadraticCurveTo(wx - len*0.4, wy - 9, wx, wy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(wx - 12, wy - 8); ctx.lineTo(wx + 2, wy); ctx.lineTo(wx - 12, wy + 8); ctx.stroke();
+    }
+    // 항해사가 가리키는 쪽
+    ctx.globalAlpha = al; ctx.strokeStyle = "#8fd6d8"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x + 8, y - 2); ctx.lineTo(x + 30, y - 10); ctx.stroke();
+  }
+  if(cd.id === "music" && buff()){
+    // 앙코르 — 음표가 동료에게서 플레이어 쪽으로 흘러 오른다
+    for(let i=0;i<5;i++){
+      const u = ((time * 0.022 + i / 5) % 1), nx = x + (p.x - cam.x - x) * u + Math.sin(u * 7 + i) * 14, ny = y - 10 + (p.y - 30 - y) * u - Math.sin(u * Math.PI) * 34;
+      ctx.globalAlpha = Math.sin(u * Math.PI) * 0.95;
+      drawEmblem("note", nx, ny, 8 + 2 * Math.sin(i), i % 2 ? "#e6a8f0" : "#ffd76a");
+    }
+  }
+  if(cd.id === "arch"){
+    // 통 자리 — 화면 안 통 위엔 ▼, 화면 오른쪽 밖(900px까지)은 가장자리에 ▶ 와 거리
+    for(const b of barrels){
+      if(b.gone) continue;
+      const bx = b.x - cam.x, vw = W / cam.z, col = b.relic ? "#ffd76a" : "#c9a27a";
+      if(bx > 0 && bx < vw){
+        const by = barrelY(b) - 40 - Math.abs(Math.sin(time * 0.1)) * 6;
+        ctx.globalAlpha = 0.9; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.moveTo(bx - 7, by - 9); ctx.lineTo(bx + 7, by - 9); ctx.lineTo(bx, by); ctx.closePath(); ctx.fill();
+        if(b.relic){ ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 2; ctx.globalAlpha = 0.5 + 0.4 * Math.sin(time * 0.15); ctx.beginPath(); ctx.arc(bx, barrelY(b), 27, 0, Math.PI*2); ctx.stroke(); }
+      } else if(bx >= vw && bx < vw + 900){
+        const ey = SEA - 34;
+        ctx.globalAlpha = 0.85; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.moveTo(vw - 26, ey - 8); ctx.lineTo(vw - 12, ey); ctx.lineTo(vw - 26, ey + 8); ctx.closePath(); ctx.fill();
+        ctx.font = UIF(700, 11); ctx.textAlign = "right"; ctx.textBaseline = "middle";
+        ctx.fillText((b.relic ? "유물 " : "통 ") + Math.round((bx - vw) / 22 + 1) + "m", vw - 32, ey);
+      }
+    }
+  }
+  ctx.restore();
+}
+function drawCrewFx(f){
+  const k = 1 - f.t / f.t0, x1 = f.x1 - cam.x, y1 = f.y1, x2 = f.x2 - cam.x, y2 = f.y2, calm = settings.calm;
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  if(f.kind === "snipe"){
+    // 예광탄 — 굵은 빛줄기가 가늘어지며 남고, 맞은 자리에 조준 고리
+    const w = (f.big ? 7 : 4) * (1 - k);
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = INK; ctx.lineWidth = w + 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = "#fff3c4"; ctx.lineWidth = Math.max(0.5, w); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = f.col; ctx.lineWidth = 2.5; const r = (f.big ? 30 : 18) * (0.5 + 0.5 * ease.outCubic(k));
+    ctx.beginPath(); ctx.arc(x2, y2, r, 0, Math.PI*2); ctx.moveTo(x2 - r - 6, y2); ctx.lineTo(x2 - r + 8, y2); ctx.moveTo(x2 + r + 6, y2); ctx.lineTo(x2 + r - 8, y2); ctx.moveTo(x2, y2 - r - 6); ctx.lineTo(x2, y2 - r + 8); ctx.moveTo(x2, y2 + r + 6); ctx.lineTo(x2, y2 + r - 8); ctx.stroke();
+    ctx.globalAlpha = Math.max(0, 1 - k * 4); ctx.fillStyle = "#fff3c4"; ctx.beginPath(); ctx.arc(x1 + 12, y1, 9, 0, Math.PI*2); ctx.fill();   // 총구 불꽃
+    if(f.big && !calm) inkSplat(x2, y2, k, f.x2 * 0.01, 7, "40,26,16", 60);
+  } else if(f.kind === "hook"){
+    // 사슬 갈고리 — 동료에게서 고리로 날아가 걸린다
+    const e = ease.outCubic(clamp01(k * 2.2)), hx = x1 + (x2 - x1) * e, hy = y1 + (y2 - y1) * e - Math.sin(e * Math.PI) * 26;
+    ctx.globalAlpha = Math.min(1, f.t / 6); ctx.strokeStyle = INK; ctx.lineWidth = 4.5; ctx.setLineDash([7, 5]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + hx)/2, Math.min(y1, hy) - 20, hx, hy); ctx.stroke();
+    ctx.strokeStyle = "#c9ccd2"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + hx)/2, Math.min(y1, hy) - 20, hx, hy); ctx.stroke(); ctx.setLineDash([]);
+    drawEmblem("hook", hx, hy, 13, INK); drawEmblem("hook", hx, hy, 11, f.col);
+    if(e >= 1 && !calm) inkSplat(x2, y2, clamp01((k - 0.45) * 2), 4.2, 6, "240,162,78", 46);
+  } else if(f.kind === "wheel"){
+    // 조타 키가 돌고, 도약한 궤적이 붓 자국으로 남는다
+    ctx.globalAlpha = 1 - k;
+    ctx.save(); ctx.translate(x1, y1 + 14); ctx.rotate(k * 7); drawEmblem("wheel", 0, 0, 20 + 16 * ease.outCubic(k), f.col); ctx.restore();
+    const px = p.x - cam.x, py = p.y;
+    ctx.strokeStyle = "rgba(143,184,224," + (0.8 * (1 - k)).toFixed(2) + ")"; ctx.lineWidth = 9 * (1 - k) + 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1 + 10); ctx.quadraticCurveTo((x1 + px)/2 - 10, Math.max(y1, py) + 26, px, py + 8); ctx.stroke();
+  } else if(f.kind === "aid"){
+    // 응급 처치 — 초록 십자와 번지는 고리
+    const px = p.x - cam.x, py = p.y;
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = f.col; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(px, py, 16 + 40 * ease.outCubic(k), 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = "#f4f6f8"; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    const s = 9 + 5 * ease.outBack(clamp01(k * 3)), cy = py - 44 - 14 * k;
+    ctx.beginPath(); ctx.rect(px - s/3, cy - s, s/1.5, s*2); ctx.rect(px - s, cy - s/3, s*2, s/1.5); ctx.fill();
+    ctx.fillStyle = "#3fae5a"; ctx.fillRect(px - s/3 + 1.5, cy - s + 1.5, s/1.5 - 3, s*2 - 3); ctx.fillRect(px - s + 1.5, cy - s/3 + 1.5, s*2 - 3, s/1.5 - 3);
+  } else if(f.kind === "build"){
+    // 망치질 — 동료에게서 못이 날아가 박히고 나무 조각이 튄다
+    ctx.globalAlpha = Math.min(1, f.t / 8); ctx.strokeStyle = f.col; ctx.lineWidth = 3; ctx.setLineDash([3, 7]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.save(); ctx.translate(x2 + 16, y2 - 6); ctx.rotate(-0.9 + Math.abs(Math.sin(k * Math.PI * 3)) * 1.1); drawEmblem("hammer", 0, -12, 14, INK); ctx.restore();
+    ctx.strokeStyle = "#f4ecd9"; ctx.lineWidth = 2;
+    for(let i=0;i<6;i++){ const a = i * 1.05 + 0.3, r0 = 10 + 24 * k; ctx.beginPath(); ctx.moveTo(x2 + Math.cos(a)*r0, y2 + Math.sin(a)*r0); ctx.lineTo(x2 + Math.cos(a)*(r0 + 8), y2 + Math.sin(a)*(r0 + 8)); ctx.stroke(); }
+  } else if(f.kind === "find"){
+    // 돋보기 빛이 앞바다를 짚는다
+    ctx.globalAlpha = (1 - k) * 0.7; ctx.strokeStyle = f.col; ctx.lineWidth = 2; ctx.setLineDash([10, 8]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + x2)/2, Math.min(y1, y2) - 60, x2, y2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x2, y2, 12 + 26 * ease.outCubic(k), 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
 // 해군 군함 — 흰 선체에 파란 줄, 갈매기 문양 돛
 function drawNavy(){
   if(!navy) return;
@@ -14609,6 +14753,7 @@ window.__swing = {
   pickCard: (i) => choosePick(i || 0),
   pick2: () => ({ offer: pickOffer, pending: pickPending, perks, back: pickReturn }),
   slingStart: startSling, slingFire: fireSling, sling: () => ({ s: sling, cd: slingCd, n: slings, target: slingTarget() }),
+  crewK: () => ({ SKILL: CREW_SKILL, SNIPE_CD: CREW_SNIPE_CD, SNIPE_R: CREW_SNIPE_R, JACK_CD, AID_CD: CREW_AID_CD, RELIC_K: CREW_RELIC_K, ENCORE: CREW_ENCORE, HELM_JUMP: CREW_HELM_JUMP, START: CREW_MUSIC_START, fx: crewFx, mult: chainMult, list: CREW }),
   crew: () => ({ owned: crewOwned, sel: crewSel, mate: crewMate, loot: crewLoot(), navyT: navyT(), helmJump, kills: crewKills, hire: (i) => hireCrew(CREW[i]), cycle: cycleCrew, set: (id) => { if(id && crewOwned.indexOf(id) < 0) crewOwned.push(id); crewSel = id; } }),
   navy: () => ({ n: navy, next: nextNavyAt, esc: navyEscapes, chases: navyChases, beaten: navyBeaten, setNext: (v) => { nextNavyAt = v; }, setChases: (v) => { navyChases = v; },
                  caught: navyCaught, setCaught: (v) => { navyCaught = v; }, cuff: cuffT, setCuff: (v) => { cuffT = v; }, ranks: NAVY_RANKS, jail: NAVY_JAIL, jailEsc: jailEscaped }),

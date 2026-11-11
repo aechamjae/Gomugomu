@@ -2010,7 +2010,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("창고 선원 탭은 10명이 한 화면(1~9, 0)", crewRows === 10, crewRows);
   const stunWith = (id) => { C.set(id); a.startMain(); H.step(); a.hold(true); H.step(); return T().hit(false); };
   const s0 = stunWith(null), s1 = stunWith("doctor");
-  ok("선의 — 휘청 시간 -30%", Math.abs(s1 - s0 * 0.7) < 0.01, s0.toFixed(1) + " → " + s1.toFixed(1));
+  ok("선의 — 휘청 시간 -35%(v60)", Math.abs(s1 - s0 * 0.65) < 0.01, s0.toFixed(1) + " → " + s1.toFixed(1));
   C.set("doctor"); a.startMain(); H.step();
   ok("선의 — 출발할 때 보호막 1", CT().shield() === 1);
   C.set(null); a.startMain(); H.step();
@@ -2025,7 +2025,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("조선공 — 항구 값 -20%", pr1 === Math.round(pr0 * 0.8 / 10) * 10, pr0 + " → " + pr1);
   a.hold(true); H.step(); a.hold(false);
   const rot = CT().grabRot();
-  ok("조선공 — 삭은 돛대가 두 배 오래 버틴다", rot.creak === 144, "creak=" + rot.creak);
+  ok("조선공 — 삭은 돛대가 2.5배 오래 버틴다(v60)", rot.creak === 180, "creak=" + rot.creak);
   // 음악가 — 기어 게이지
   C.set(null); a.startMain(); H.step(); a.hold(true); H.step(); T().setGear(0); const g0 = CT().gearAdd("kill");
   C.set("music"); a.startMain(); H.step(); a.hold(true); H.step(); T().setGear(0); const g1 = CT().gearAdd("kill");
@@ -3748,6 +3748,74 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   for(const k of Object.keys(tc().lv)) delete tc().lv[k];
   Object.assign(tc().lv, lv0); tc().equip(eqM0); tc().equip(eqR0); a.shop().setBank(0);
   clear(); a.toMenu();
+}
+/* --- v60 systems: 동료 버프 (검객·요리사 제외) --- */
+{
+  const a = A(), C = () => a.crew(), K = () => a.crewK(), E = (x) => T().ev(x);
+  const sel0 = C().sel, owned0 = C().owned.slice();
+  const go = (id) => { C().set(id); a.startMain(); H.step(); a.hold(true); H.step(); T().teleport(300 * 22); E("boss = null; navy = null; stun = 0; iframes = 0"); };
+  const ready = () => { C().mate.skill = 0; };
+  const S = K().SKILL;
+  ok("v60 동료: 쿨타임 — 항해사 18초 · 저격수 14초 · 선의 30초 · 조선공 14초 · 조타수 7초 · 잭 18초, 요리사 50초는 그대로",
+     S.nav === 1080 && S.sniper === 840 && S.doctor === 1800 && S.wright === 840 && S.helm === 420 && K().JACK_CD === 1080 && S.cook === 3000);
+  ok("v60 동료: 저격수 평타 3초 · 620px", K().SNIPE_CD === 180 && K().SNIPE_R === 620);
+  const desc = (id) => K().list.find(c => c.id === id).desc;
+  ok("v60 동료: 검객·요리사 설명은 그대로", desc("sword") === "3초마다 곁의 물고기·갈매기를 벤다" && /고기가 2배로 자주/.test(desc("cook")) && /50초마다/.test(desc("cook")));
+  ok("v60 동료: 나머지 여덟 명 설명에 ★ 능동 효과가 있고 옛 숫자가 남아 있지 않다",
+     ["nav","sniper","doctor","arch","wright","music","helm","jack"].every(id => /★/.test(desc(id))) && !/25초마다 순풍|18초마다 보스|40초마다|20초마다\)|\(10초\)|25초마다\)/.test(K().list.map(c => c.desc).join(" ")));
+  // 항해사
+  go("nav"); T().P().vx = 8; ready(); H.step();
+  ok("v60 동료: 항해사 — 순풍 5초, 나서는 연출(act)", C().mate.wind > 290 && C().mate.act && C().mate.act.id === "nav" && Math.round(C().mate.skill) >= 1070);
+  // 저격수
+  go("sniper");
+  const b = a.spawnBoss(false, 0); b.invul = 0; b.x = a.peek().x + 300;
+  ready(); const hp0 = b.hp; H.step();
+  ok("v60 동료: 저격수 — 보스 저격에 예광탄(snipe) 연출", b.hp === hp0 - 1 && K().fx.some(f => f.kind === "snipe" && f.big) && C().mate.act.id === "sniper");
+  T().setBoss(null);
+  // 선의 — 응급 처치
+  go("doctor"); T().setShield(0); C().mate.skill = 9999; C().mate.aid = 0;
+  E("stun = 40; iframes = 0"); H.step();
+  ok("v60 동료: 선의 — 크게 휘청이면 그 자리에서 깨운다(응급 처치)", a.peek().stun === 0 && C().mate.aid > 1800 && K().fx.some(f => f.kind === "aid"), "stun=" + a.peek().stun + " aid=" + Math.round(C().mate.aid));
+  E("stun = 40; iframes = 0"); H.step();
+  ok("v60 동료: 선의 — 응급 처치는 45초에 한 번", a.peek().stun > 30);
+  E("stun = 0"); C().mate.aid = 0; E("stun = 12"); H.step();
+  ok("v60 동료: 선의 — 가벼운 휘청(18프레임 이하)엔 쓰지 않는다", a.peek().stun > 0 && !(C().mate.aid > 0));
+  E("stun = 0");
+  // 고고학자 — 유물 통
+  go("arch"); a.peek().barrels.length = 0; ready(); H.step();
+  const rb = a.peek().barrels.find(q => q.relic);
+  ok("v60 동료: 고고학자 — 앞바다에 유물 통을 띄운다(30초마다)", !!rb && rb.x > T().P().x + 400 && Math.round(C().mate.skill) >= 1790 && C().mate.act.id === "arch");
+  ready(); H.step();
+  ok("v60 동료: 고고학자 — 유물 통이 떠 있는 동안엔 또 띄우지 않는다", a.peek().barrels.filter(q => q.relic).length === 1);
+  const tr0 = a.peek().treasure; a.peek().barrels.push({ x: T().P().x + 100, gone:false }); const nb = a.peek().barrels[a.peek().barrels.length - 1];
+  E("breakBarrel(barrels[barrels.length - 1])"); const plain = a.peek().treasure - tr0;
+  E("breakBarrel(barrels.find(q => q.relic))"); const relic = a.peek().treasure - tr0 - plain;
+  ok("v60 동료: 고고학자 — 유물 통은 보물 3배", plain > 0 && relic === plain * 3, plain + " vs " + relic);
+  ok("v60 동료: 고고학자 — 창고 보물 +25%", Math.abs(C().loot - 1.25) < 0.001 || C().loot > 1.25);
+  // 조선공
+  go("wright"); a.hold(false); a.setRope(null); a.peek().anchors.length = 0;
+  const P = T().P(); P.y = a.peek().SEA - 220; P.vy = 4; ready(); H.step();
+  ok("v60 동료: 조선공 — 수면 230px 위부터 임시 돛대, 망치질 연출(build)", a.peek().anchors.some(an => an.temp && an.x > P.x) && K().fx.some(f => f.kind === "build") && Math.round(C().mate.skill) >= 830);
+  // 음악가 — 앙코르
+  go("music"); H.step();
+  ok("v60 동료: 음악가 — 기어 게이지 절반을 채우고 출발", a.peek().gear >= a.gearInfo().max * 0.49, Math.round(a.peek().gear) + "/" + a.gearInfo().max);
+  T().setChain(3);
+  const m0 = K().mult();
+  T().setGear(a.gearInfo().max); a.fireGear(); H.step(); T().setChain(3);
+  ok("v60 동료: 음악가 — 기어 중 콤보 배율 +1(앙코르), 나서는 연출", !!a.gearInfo().buff && K().mult() === m0 + 1 && C().mate.encore === true, m0 + " → " + K().mult());
+  C().set(null);
+  ok("v60 동료: 음악가가 없으면 기어 중에도 배율은 그대로", K().mult() === m0);
+  // 조타수
+  go("helm"); a.hold(false); a.setRope(null); T().P().vy = 5; ready();
+  ok("v60 동료: 조타수 — 더 크게 도약(vy -12), 7초, 키 연출(wheel)", C().helmJump() && T().P().vy <= -12 && Math.round(C().mate.skill) === 420 && K().fx.some(f => f.kind === "wheel"));
+  // 잭
+  go("jack"); a.hold(false); a.setRope(null); E("jackCd = 0");
+  { const P2 = T().P(); P2.y = a.peek().SEA - 130; P2.vy = 5; P2.vx = 3; a.peek().anchors.push({ x: P2.x + 120, y: P2.y - 150, kind: 0 }); E("updateJack(1)"); }
+  ok("v60 동료: 잭 — 수면 140px 위부터 건지고(18초), 사슬 갈고리 연출(hook), 앞으로 밀어 준다", !!a.peek().rope && Math.round(E("jackCd")) === 1080 && K().fx.some(f => f.kind === "hook") && T().P().vx >= 7);
+  for(let i=0;i<50;i++) H.step();
+  ok("v60 동료: 연출이 도는 동안 그리기 오류 없음", a.peek().state === 1 || a.peek().state === 2 || a.peek().state === 9);
+  C().set(sel0); C().owned.length = 0; owned0.forEach(id => C().owned.push(id));
+  a.toMenu();
 }
 /* ===================== v60 systems 끝 ===================== */
 

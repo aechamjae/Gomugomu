@@ -4,11 +4,13 @@ const H = require("./harness.js");
 const MAX_FRAMES = parseInt(process.argv[2] || "10800", 10);   // 기본 3분
 const RUNS = parseInt(process.argv[3] || "5", 10);
 const USE_SKILL = process.argv[4] !== "noskill";
+const CREW_ID = process.argv[5] || null;      // 동료 한 명을 데리고(예: node test/bot.js 10800 40 skill nav) — 동료 밸런스 비교용
 
 const api = () => H.api();
 
 function playOne(){
   const a = api();
+  if(CREW_ID) a.crew().set(CREW_ID);
   (a.reset || H.evalIn("window.__test").reset)();
   H.step();
   a.hold(true); H.step(); a.hold(false);      // READY → PLAY
