@@ -155,7 +155,8 @@ function swing(a, st){
       if(st.boss){
         met++;
         // v58: 보스가 늘 앞자리(약 300px)를 지켜서, 채찍(250)이 닿을 만큼 가까울 때 쓰고 빗나가면 재사용 뒤 다시
-        if(st.gunCd <= 0 && st.boss.x > st.x && st.boss.x - st.x < 250 && Math.abs(st.boss.y - st.y) < 220){
+        //   v60: 보스 몸이 아니라 '열린 약점'이 닿을 거리일 때만 쓴다 — 약점이 닫힌 보스에게 헛치고 재사용만 기다리다 가끔 실패했다
+        if(st.gunCd <= 0 && st.boss.invul <= 0 && a.weak().some(w => w.x > st.x - 20 && Math.hypot(w.x - st.x, w.y - st.y) < 235)){
           hpBefore = st.boss.hp; firedAt = i; a.fireGun();
         }
         if(hpBefore !== null && st.boss.hp < hpBefore) hitOk = true;
@@ -3645,6 +3646,24 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     K.st = "charge"; K.charge = E("MU_CHARGE"); K.frost = 0; let f0 = 0;
     for(let i=0;i<70;i++){ calm(); H.step(); f0 = Math.max(f0, K.frost); }
     ok("v60 bosses: 무상 — 기세를 모으면 발밑 바다가 얼어붙는다", f0 > 0.4, "frost " + f0);
+  }
+
+  /* --- 용암 대장장이 풀무(13): 갑옷 3단계 · 모루 불똥 --- */
+  {
+    let K = fresh(13);
+    const stage = () => E("smStage(boss)");
+    ok("v60 bosses: 풀무 — 체력 5·4는 1단계, 3·2는 2단계, 1은 3단계", (() => { const r = []; for(const h of [5, 4, 3, 2, 1]){ K.hp = h; r.push(stage()); } return r.join("") === "11223"; })());
+    K.hp = 5; calm(); H.step();
+    K.hp = 3; calm(); H.step();
+    ok("v60 bosses: 풀무 — 단계가 오르면 갑옷 파편이 튄다", K.stg === 2 && K.shards.length >= 5, "stg " + K.stg);
+    K.hp = 1; K.st = "idle"; K.wait = 0; K.hotCd = 1e6; K.meltCd = 1e6; calm(); H.step(); H.step();
+    ok("v60 bosses: 풀무 — 가장 빠른 3단계에서도 망치 예고는 45프레임 이상", K.st === "wind" && K.stT >= 43 && E("SM_EMBER_T") >= 45, K.st + " " + K.stT);
+    ok("v60 bosses: 풀무 — 3단계 전엔 불똥이 없다", !(K.embers || []).length);
+    for(let i=0;i<60 && K.st === "wind";i++){ calm(); pin(P().x, 60); H.step(); }
+    ok("v60 bosses: 풀무 — 3단계에서 내리치면 모루 불똥 셋", K.st === "slam" && K.embers.length === 3);
+    const e = K.embers[0]; let early = false, hit = false;
+    for(let i=0;i<E("SM_EMBER_T") + 6 && !hit;i++){ calm(); K.cols.length = 0; pin(e.tx, e.ty); H.step(); if(a.peek().stun > 0){ if(e.t < E("SM_EMBER_T") - 1) early = true; hit = true; } }
+    ok("v60 bosses: 풀무 — 불똥은 떨어질 자리에서만, 떨어진 뒤에만 터진다", hit && !early, "hit " + hit + " early " + early);
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }

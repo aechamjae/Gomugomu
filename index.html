@@ -9306,16 +9306,24 @@ function drawSmithBody(b, x, hurt){
   const lg = ctx.createRadialGradient(0, 58, 6, 0, 58, 110); lg.addColorStop(0, lava(0.5*glow)); lg.addColorStop(1, "rgba(255,90,40,0)");
   ctx.fillStyle = lg; ctx.beginPath(); ctx.ellipse(0, 58, 110, 16, 0, 0, Math.PI*2); ctx.fill();
   const raft = () => { ctx.beginPath(); ctx.moveTo(-84, 44); ctx.lineTo(-70, 26); ctx.lineTo(-30, 22); ctx.lineTo(20, 24); ctx.lineTo(66, 22); ctx.lineTo(88, 42); ctx.quadraticCurveTo(60, 62, 0, 64); ctx.quadraticCurveTo(-60, 62, -84, 44); ctx.closePath(); };
+  ctx.save(); ctx.translate(0, 12);
   inkShape(raft, rock, { shade: () => { ctx.beginPath(); ctx.rect(-90, 44, 180, 30); }, shadeCol:"rgba(0,0,0,.3)", pool:"rgba(255,110,50,.25)", poolW:5, line:2.6 });
   ctx.save(); raft(); ctx.clip(); ctx.lineCap = "round"; ctx.lineJoin = "round";
   for(const pass of [0, 1]){ ctx.strokeStyle = pass ? "rgba(255,226,150," + (0.6*glow).toFixed(2) + ")" : lava(0.55*glow); ctx.lineWidth = pass ? 1.2 : 4;
     ctx.beginPath(); ctx.moveTo(-64, 34); ctx.lineTo(-40, 46); ctx.lineTo(-12, 34); ctx.lineTo(8, 50); ctx.lineTo(38, 36); ctx.lineTo(70, 46); ctx.moveTo(-12, 34); ctx.lineTo(-20, 24); ctx.moveTo(38, 36); ctx.lineTo(46, 24); ctx.stroke(); }
   ctx.restore();
+  ctx.restore();
+  // 물에 잠긴 아랫부분 — 물결 선으로 덮는다
+  ctx.fillStyle = "rgba(20,60,74,.55)"; ctx.beginPath(); ctx.moveTo(-96, 66);
+  for(let i=0;i<=12;i++) ctx.lineTo(-96 + i*16, 64 + Math.sin(time*0.08 + i*1.1)*2.2);
+  ctx.lineTo(96, 80); ctx.lineTo(-96, 80); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "rgba(235,246,248,.7)"; ctx.lineWidth = 1.6; ctx.beginPath();
+  for(let i=0;i<=12;i++){ const wx = -96 + i*16, wy = 64 + Math.sin(time*0.08 + i*1.1)*2.2; if(i) ctx.lineTo(wx, wy); else ctx.moveTo(wx, wy); } ctx.stroke();
   // 모루와 달군 쇳덩이
-  inkShape(() => { ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(74, 0); ctx.lineTo(66, 9); ctx.lineTo(58, 10); ctx.lineTo(60, 24); ctx.lineTo(40, 24); ctx.lineTo(42, 10); ctx.lineTo(30, 8); ctx.closePath(); }, hurt ? "#f4ecd9" : "#56565f", { shade: () => { ctx.beginPath(); ctx.rect(26, 5, 50, 20); }, shadeCol:"rgba(0,0,0,.28)", pool:false, line:2.2 });
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(74, 0); ctx.lineTo(66, 9); ctx.lineTo(58, 10); ctx.lineTo(60, 34); ctx.lineTo(40, 34); ctx.lineTo(42, 10); ctx.lineTo(30, 8); ctx.closePath(); }, hurt ? "#f4ecd9" : "#56565f", { shade: () => { ctx.beginPath(); ctx.rect(26, 5, 50, 20); }, shadeCol:"rgba(0,0,0,.28)", pool:false, line:2.2 });
   inkShape(() => { ctx.beginPath(); ctx.rect(40, -5, 22, 5); }, b.st === "slam" ? "#fff0b0" : "#ff9a4a", { pool:false, line:1.4 });
   // 다리
-  inkShape(() => { ctx.beginPath(); ctx.moveTo(-22, 2); ctx.lineTo(20, 2); ctx.lineTo(24, 26); ctx.lineTo(6, 27); ctx.lineTo(0, 12); ctx.lineTo(-8, 27); ctx.lineTo(-26, 26); ctx.closePath(); }, hurt ? "#f4ecd9" : "#3a2c26", { line:2.2 });
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-22, 2); ctx.lineTo(20, 2); ctx.lineTo(24, 36); ctx.lineTo(6, 37); ctx.lineTo(0, 12); ctx.lineTo(-8, 37); ctx.lineTo(-26, 36); ctx.closePath(); }, hurt ? "#f4ecd9" : "#3a2c26", { line:2.2 });
   // 가죽 앞치마
   inkShape(() => { ctx.beginPath(); ctx.moveTo(-6, -8); ctx.lineTo(24, -6); ctx.lineTo(26, 18); ctx.lineTo(0, 20); ctx.closePath(); }, hurt ? "#f4ecd9" : "#5a3a22", { pool:false, line:1.8 });
   // 풀무(약점) — 등에 멘 주름 풀무. 숨 고를 땐 벌겋게 부풀어 김을 내뿜는다
