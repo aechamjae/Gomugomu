@@ -814,6 +814,7 @@ function openPack(cat, rnd){
     res = { kind:"mat", n, text: c.mat + " +" + n + "  (보유 " + mats[cat] + ")" };
   }
   shopMsg = { text: res.text, t: res.rare ? 220 : 140, good: true, rare: res.rare };
+  UIK.pack = { res, cat, t: 0 };                // 상자가 열리는 연출(그리기 전용, v60)
   saveShop();
   return res;
 }
@@ -899,7 +900,7 @@ function spring(o, target, k, damp, dt){
 const smoothNoise = (t, seed) => (Math.sin(t*0.77 + seed*12.9) + Math.sin(t*1.31 + seed*4.1) * 0.6 + Math.sin(t*2.09 + seed*7.7) * 0.3) / 1.9;
 const sv = () => ({ x: 0, v: 0 });
 const fx = { clock: 0, dt: 1, lean: sv(), sq: sv(), coatX: sv(), coatY: sv(), knot: sv(), zoom: sv(), blink: 200, blinkT: 0,
-             prevRope: null, armT: 99, snap: null, hitstop: 0, rings: [], prevStun: 0, wipe: 0, resT: 0, mapT: 0 };
+             prevRope: null, armT: 99, snap: null, hitstop: 0, rings: [], prevStun: 0, wipe: 0, wipeT: 27, resT: 0, mapT: 0, menuT: 0 };
 const WIPE_T = 27, HITSTOP_HIT = 3.5, HITSTOP_SINK = 6;
 function fxReset(){
   for(const k of ["lean","sq","coatX","coatY","knot","zoom"]){ fx[k].x = 0; fx[k].v = 0; }
@@ -909,6 +910,7 @@ function fxReset(){
 function fxStep(real, g){
   fx.dt = real; fx.clock += real;
   if(fx.wipe > 0) fx.wipe -= real;
+  fx.menuT += real;
   spring(fx.zoom, 0, 0.16, 0.3, real);
   if(!p || g <= 0 || state === STATE.PAUSE) return;
   spring(fx.lean, Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012)), 0.22, 0.5, g);
@@ -955,7 +957,7 @@ function brushBand(x0, x1, y, h, seed){
 // 화면 전환 — 잉크가 번지며 덮었다 걷힌다(상태는 이미 바뀌어 있고 그림만 덮는다)
 function drawWipe(){
   if(fx.wipe <= 0) return;
-  const k = 1 - fx.wipe / WIPE_T, a = k < 0.3 ? ease.outCubic(k / 0.3) : 1 - ease.inOutCubic((k - 0.3) / 0.7);
+  const k = 1 - fx.wipe / (fx.wipeT || WIPE_T), a = k < 0.3 ? ease.outCubic(k / 0.3) : 1 - ease.inOutCubic((k - 0.3) / 0.7);
   const pu = paperUI; paperUI = false;
   ctx.save();
   ctx.fillStyle = "rgba(34,24,16," + (a * 0.9).toFixed(2) + ")"; ctx.fillRect(0, 0, W, H);
@@ -1888,14 +1890,13 @@ const storyGoalText = (s) => {
   return g.list.map(t => BOSSES[t].name).join(" → ") + " 연전";
 };
 function drawStoryMap(){
-  ctx.fillStyle = "rgba(10,20,30,0.9)";
-  ctx.fillRect(0, 0, W, H);
+  drawMenuBg(0.84);
   // 바탕 — 낡은 해도 줄
   ctx.save(); ctx.strokeStyle = "rgba(217,184,119,.08)"; ctx.lineWidth = 1;
   for(let x = 0; x < W; x += 60){ ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
   for(let y = 0; y < H; y += 60){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
   ctx.restore();
-  centerText("스토리 — 대항해도", 30, UIF(800, 24), "#f4ecd9");
+  drawHeading("스토리 — 대항해도", 32, 22);
   uiText("★ " + storyStarTotal() + "/" + STORY_STAR_MAX, W - 20, 30, "700 16px 'Gowun Batang', serif", "#ffd76a", "right");
   // 등장 연출 — 장을 바꾸면 카드 묶음이 옆에서 미끄러져 들어오고, 카드는 차례로 위에서 내려앉는다
   const M = fx.map || (fx.map = { ch: storyCh, slide: sv(), hov: [] });
@@ -2584,8 +2585,9 @@ function menuRows(){
 }
 function menuRowsRaw(){
   if(state === STATE.MENU){
-    const top = H/2 - 108, rh = 33;
+    const top = 166, rh = 41;
     const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
+    const ICON = ["map", "anchor", "skull", "chest", "compass", "cog", "person", "jelly"];
     return btnRows([
       { y: top,        label: "1) 📜 스토리 모드 — ★" + storyStarTotal() + "/" + STORY_STAR_MAX, action: openStoryMap, story: true },
       { y: top + rh,   label: "2) 무한 모드" + (diffSel !== "normal" ? " — " + DIFFS[diffSel].name : "") + (best ? " — 최고 " + Math.floor(best) + "m" : ""), action: startMainGame },
@@ -2596,7 +2598,7 @@ function menuRowsRaw(){
       { y: top + rh*5, label: "6) 설정", action: () => { state = STATE.SETTINGS; } },
       { y: top + rh*6, label: "7) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount, acct: true },
       { key: 0, y: top + rh*7, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
-    ], 480, 31);
+    ].map((r, i) => Object.assign(r, { icon: ICON[i] })), 500, 35);
   }
   if(state === STATE.CHALLENGE){
     const top = H/2 - 92, rh = 44;
@@ -2706,10 +2708,9 @@ function titleRows(){
   return rows;
 }
 function drawTitles(){
-  ctx.fillStyle = "rgba(13,27,38,0.9)";
-  ctx.fillRect(0,0,W,H);
+  drawMenuBg();
   fx.titleT = (fx.titleT || 0) + fx.dt;
-  centerText("칭호", 32, UIF(800, 26), "#f4ecd9");
+  drawHeading("칭호", 33, 22);
   const cur = currentTitle();
   if(cur){
     ctx.font = UIF(700, 14);
@@ -3409,9 +3410,8 @@ function updateDex(dt){
 }
 let dexPage = false;
 function drawDex(){
-  ctx.fillStyle = "rgba(13,27,38,0.92)";
-  ctx.fillRect(0,0,W,H);
-  centerText("바다 도감", 40, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
+  drawMenuBg(0.86);
+  drawHeading("바다 도감", 36, 22);
   const found = dexFound();
   centerText("발견 " + found + "/" + DEX.length + "  ·  처음 만나면 보물 +" + DEX_FIRST + " · 만난 횟수(보스는 격침)만큼 별 · 다 채우면 칭호와 박물학자 두건",
              68, "600 13px 'Gowun Batang', 'Pretendard', serif", found === DEX.length ? "#ffd76a" : "#9fe0a0");
@@ -4001,7 +4001,7 @@ window.addEventListener("keydown", (e)=>{
       // 줄에 key가 있으면 그 번호, 없으면 순서대로 1부터 — 페이지를 나눈 연습 목록은 8·9가 고정 번호다(0도 쓴다, -1은 클릭 전용)
       const n = parseInt(m[1], 10), rows = menuRows();
       const row = rows.find((r, i) => (r.key !== undefined ? r.key : i + 1) === n);
-      if(row && row.action) row.action();
+      if(row && row.action){ if(row.w !== undefined) uiPress({ x: row.x + row.w/2, y: row.y + row.h/2 }); row.action(); }
     }
     return;
   }
@@ -4091,6 +4091,8 @@ canvas.addEventListener("pointerdown", (e)=>{
     miniDown();
     return;
   }
+  uiPress(canvasPos(e));                         // 놋쇠 버튼이 눌려 내려앉는 그림(v60)
+  if(UIK.pack && state === STATE.SHOP){ UIK.pack = null; return; }   // 팩 열기 연출은 누르면 바로 걷힌다
   {
     const pos = canvasPos(e);
     for(const B of screenButtons()){
@@ -4754,7 +4756,7 @@ const RUSH_FLIP0 = 18, RUSH_FLIP_GAP = 16, RUSH_FLIP_T = 20;
 function drawRushBracket(){
   const cw = 152, ch = 214, gap = 12, x0 = W/2 - (RUSH_N*cw + (RUSH_N - 1)*gap)/2, y0 = 104, calm = settings.calm;
   fx.rushT = (fx.rushT || 0) + fx.dt;
-  centerText("보스 러시 — 이번 대진", 44, UIF(800, 26), "#f4ecd9");
+  drawHeading("보스 러시 — 이번 대진", 40, 22);
   centerText("판마다 무작위 다섯 상대 · 잡몹 없이 보스만 · 시간 초과면 끝", 74, UIF(500, 13), "rgba(244,236,217,.72)");
   const pu = paperUI;
   rushList.forEach((t, i) => {
@@ -11931,13 +11933,7 @@ function drawPort(){
     ctx.restore();
   });
   const L = B[items.length];
-  ctx.save();
-  ctx.fillStyle = "rgba(19,37,50,.9)"; ctx.fillRect(L.x, L.y, L.w, L.h);
-  ctx.strokeStyle = "#9fe0a0"; ctx.lineWidth = 2; ctx.strokeRect(L.x, L.y, L.w, L.h);
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "800 16px 'Gowun Batang', 'Pretendard', serif"; ctx.fillStyle = "#9fe0a0";
-  ctx.fillText((items.length + 1) + ") 출항 (Enter)", L.x + L.w/2, L.y + L.h/2 + 1);
-  ctx.restore();
+  drawBrassBtn(asBrass(Object.assign({ label: (items.length + 1) + ") 출항 (Enter)", col: "#a8ecaa", icon: "anchor" }, L)), UIF(800, 16));
   if(portMsg){
     centerText(portMsg.text, L.y + L.h + 26, "700 14px 'Gowun Batang', 'Pretendard', serif", portMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, portMsg.t/20));
     portMsg.t -= 1; if(portMsg.t <= 0) portMsg = null;
@@ -12930,19 +12926,8 @@ function screenButtons(){
   return [];
 }
 function drawScreenButtons(){
-  for(const B of screenButtons()){
-    ctx.save();
-    ctx.fillStyle = B.sel ? "rgba(40,30,50,.85)" : "rgba(13,27,38,.72)"; ctx.fillRect(B.x, B.y, B.w, B.h);
-    ctx.strokeStyle = B.col; ctx.lineWidth = B.sel ? 3 : 1.5; ctx.strokeRect(B.x, B.y, B.w, B.h);
-    ctx.fillStyle = B.col; ctx.font = "700 14px 'Gowun Batang', 'Pretendard', serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    if(B.sub){
-      ctx.fillText(B.label, B.x + B.w/2, B.y + 14);
-      ctx.font = "500 11px 'Gowun Batang', 'Pretendard', serif";
-      ctx.fillText(B.sub, B.x + B.w/2, B.y + 31);
-    } else ctx.fillText(B.label, B.x + B.w/2, B.y + B.h/2 + 1);
-    ctx.restore();
-  }
+  // v60: 놋쇠 버튼으로(흐린 색 = 못 고르는 칸)
+  for(const B of screenButtons()) drawBrassBtn(asBrass(B), UIF(700, 14));
   if(state === STATE.READY){
     const t = gearMsg ? gearMsg.text : GEARS[gearSel].name + " — " + GEARS[gearSel].desc + "  (숫자 키 2~5로도 고른다)";
     centerText(t, H - 124, "600 13px 'Gowun Batang', 'Pretendard', serif", gearMsg ? (gearMsg.good ? "#9fe0a0" : "#f7a8a0") : GEARS[gearSel].col);
@@ -13382,22 +13367,424 @@ function drawPanel(r, rad){
   rrPath(r.x, r.y, r.w, r.h, R);
   ctx.strokeStyle = edge; ctx.lineWidth = r.on || hot || r.sel ? 2.4 : 1.6; ctx.lineJoin = "round";
   ctx.stroke();
+  // v60: 큰 카드는 놋쇠 모서리, 마우스를 올리면 금빛이 테를 따라 흐른다
+  if(r.w >= 90 && r.h >= 56){
+    if(hot && !r.dim){ const pu = paperUI; paperUI = false; rrPath(r.x + 2, r.y + 2, r.w - 4, r.h - 4, Math.max(2, R - 2)); ctx.strokeStyle = brassFill(r.x, r.y, r.w, r.h, true, false); ctx.lineWidth = 2.2; ctx.stroke(); paperUI = pu; }
+    brassCorners(r.x, r.y, r.w, r.h, hot || r.sel);
+  }
 }
 // 기본 버튼 — 글자 한 줄(+작은 줄). 키 번호가 있으면 왼쪽 위에 작게
+// v60: 카드(r.draw)는 양피지 카드, 탭은 깃발, 나머지는 놋쇠 테 버튼(drawBrassBtn)
 function drawBtn(r, font){
+  if(r.tab){ drawFlagTab(r, font); return; }
+  if(!r.draw){ drawBrassBtn(r, font); return; }
   drawPanel(r, r.rad);
-  if(r.draw){ r.draw(r); return; }
-  const col = r.on ? "#9fe0a0" : r.dim ? "rgba(217,184,119,.45)" : r.col || "#d9b877";
-  const f = font || UIF(700, 15);
-  if(r.sub){
-    uiText(r.label, r.x + r.w/2, r.y + r.h/2 - 8, f, col, "center");
-    uiText(r.sub, r.x + r.w/2, r.y + r.h/2 + 11, UIF(500, 11), r.dim ? "rgba(244,236,217,.35)" : "rgba(244,236,217,.65)", "center");
-  } else uiText(r.label, r.x + r.w/2, r.y + r.h/2 + 1, f, col, "center");
+  r.draw(r);
 }
 // 가운데 줄 메뉴(본 메뉴·설정·연습·미니게임) — y는 줄 가운데, 폭 w짜리 버튼으로 만든다
 function btnRows(rows, w, h){
   rows.forEach(r => { if(r.w === undefined){ r.x = W/2 - w/2; r.w = w; r.h = h; r.cy = r.y; r.y = r.y - h/2; } });
   return rows;
+}
+
+/* ---------- 대항해 UI (v60) — 놋쇠 버튼 · 깃발 탭 · 메인 메뉴 바다 · 금박 제목 ----------
+   drawBtn이 줄 모양을 보고 고른다: 카드(r.draw) → 양피지 카드(drawPanel, 놋쇠 모서리) · 탭(r.tab) → 깃발 · 나머지 → 놋쇠 테 버튼.
+   놋쇠 버튼은 짙은 나무 판에 밝은 글씨라 paperUI의 바꿔 칠하기를 끄고 그린다(양피지 영역으로 적지도 않는다).
+   반짝임(금빛이 테를 따라 흐름)은 마우스를 올렸거나 고른·켜진 버튼만. 누르면 2px 내려앉는다(uiPress — 그리기 전용).
+   전부 fx.clock(실제 시간) 기준이고 연출 줄이기면 흐름·등장 애니메이션 없이 정지 그림. */
+const UIK = { press: null };
+function uiPress(pos){ if(pos) UIK.press = { x: pos.x, y: pos.y, t: fx.clock }; }
+// 눌림 정도 0~1 — 누른 뒤 3프레임 꽉 눌렸다가 8프레임에 걸쳐 돌아온다
+function pressK(r){
+  const q = UIK.press;
+  if(!q || !inRect(q, r)) return 0;
+  const a = fx.clock - q.t;
+  return a < 0 ? 0 : a < 3 ? 1 : Math.max(0, 1 - (a - 3) / 8);
+}
+const UI_EMOJI = /^(\d\)\s*)?(?:[\u{1F300}-\u{1FAFF}☀-➿]️?\s*)/u;
+// 놋쇠 결 — lit이면 밝은 띠가 왼쪽에서 오른쪽으로 흐른다
+function brassFill(x, y, w, h, lit, dim){
+  const g = ctx.createLinearGradient(x, y, x + w*0.35, y + h*1.6);
+  if(dim){ g.addColorStop(0, "#9a8458"); g.addColorStop(0.5, "#6e5a36"); g.addColorStop(1, "#3e311c"); return g; }
+  const c0 = lit ? "#fff0b0" : "#ecd08a", c1 = lit ? "#d9a63c" : "#b08436", c2 = lit ? "#8a5a14" : "#6a4818";
+  if(!lit || settings.calm){ g.addColorStop(0, c0); g.addColorStop(0.45, c1); g.addColorStop(1, c2); return g; }
+  const s = ((fx.clock * 0.012 + (x * 0.0007)) % 1.4) - 0.2, cl = (v) => Math.max(0, Math.min(1, v));
+  g.addColorStop(0, c0); g.addColorStop(cl(s - 0.12), c1); g.addColorStop(cl(s), "#fffbe0"); g.addColorStop(cl(s + 0.12), c1); g.addColorStop(1, c2);
+  return g;
+}
+// 리벳 — 놋쇠 못 머리
+function rivet(x, y, r){
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = "#6a4818"; ctx.fill();
+  ctx.beginPath(); ctx.arc(x - r*0.15, y - r*0.15, r*0.72, 0, Math.PI*2); ctx.fillStyle = "#e8c878"; ctx.fill();
+  ctx.beginPath(); ctx.arc(x - r*0.35, y - r*0.35, r*0.28, 0, Math.PI*2); ctx.fillStyle = "rgba(255,250,220,.9)"; ctx.fill();
+}
+// 밧줄 감개 — 버튼 양 끝 테를 감은 밧줄 몇 바퀴
+function ropeWrap(x, y, h){
+  const n = Math.max(3, Math.round(h / 7)), wd = 7;
+  ctx.save();
+  rrPath(x - wd/2, y - 2, wd, h + 4, 2.5); ctx.fillStyle = "#b8925a"; ctx.fill();
+  ctx.strokeStyle = "#3b2a1e"; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.beginPath(); rrPath(x - wd/2, y - 2, wd, h + 4, 2.5); ctx.clip();
+  ctx.strokeStyle = "rgba(70,44,20,.85)"; ctx.lineWidth = 1.3;
+  for(let i=0;i<=n;i++){ const yy = y - 2 + i * (h + 4) / n; ctx.beginPath(); ctx.moveTo(x - wd/2, yy + 3); ctx.lineTo(x + wd/2, yy - 2); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(255,236,190,.45)"; ctx.lineWidth = 0.8;
+  for(let i=0;i<n;i++){ const yy = y - 2 + (i + 0.5) * (h + 4) / n; ctx.beginPath(); ctx.moveTo(x - wd/2 + 1, yy + 1.6); ctx.lineTo(x + wd/2 - 1, yy - 1); ctx.stroke(); }
+  ctx.restore();
+}
+// 얼굴(판) 색 — 짙은 나무. 켜짐은 짙은 초록, 새 소식은 짙은 보라, 예전 r.fill(어두운 색)은 그 색조로
+function faceCols(r, hot){
+  if(r.on) return ["#2c5232", "#14281a"];
+  if(r.glow) return ["#4a2a58", "#24132c"];
+  if(r.fill){ const c = parseCol(r.fill); if(c){ const [h, s] = toHsl(c[0], c[1], c[2]); const S = Math.round(Math.min(0.45, s)*100), H2 = Math.round(h);
+    return ["hsl(" + H2 + "," + S + "%," + (hot ? 26 : 21) + "%)", "hsl(" + H2 + "," + S + "%,10%)"]; } }
+  return hot ? ["#563720", "#2a1a0e"] : ["#432a17", "#1f130a"];
+}
+// 화면 버튼({x,y,w,h,label,sub,act,col,sel}) → 놋쇠 버튼 줄. 알파가 낮은 글씨색은 '못 고르는 칸'
+function asBrass(B){
+  const c = typeof B.col === "string" ? parseCol(B.col) : null;
+  return { x: B.x, y: B.y, w: B.w, h: B.h, label: B.label, sub: B.sub, sel: B.sel, icon: B.icon, action: B.act || B.action,
+           dim: !!c && c[3] < 0.5, col: c && c[3] < 1 ? "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + Math.max(0.9, c[3]).toFixed(2) + ")" : B.col };
+}
+function drawBrassBtn(r, font){
+  const pu = paperUI; paperUI = false;
+  const hot = !!r.action && !r.dim && inRect(hoverPos, r), lit = hot || r.sel || (r.on && r.back !== true) || r.glow;
+  const pk = r.action && !r.dim ? pressK(r) : 0, dy = pk * 2;
+  const x = r.x, y = r.y + dy, w = r.w, h = r.h, R = Math.min(r.rad === undefined ? 8 : r.rad, h/2), fi = h >= 30 ? 3.5 : 2.5;
+  ctx.save();
+  if(r.dim) ctx.globalAlpha *= 0.82;
+  // 깊이 — 아래로 떨어진 그림자. 누르면 판이 내려앉아 그림자가 짧아진다
+  rrPath(x + 1, y + 4 - dy, w, h, R); ctx.fillStyle = "rgba(6,3,1," + (0.55 - pk*0.25).toFixed(2) + ")"; ctx.fill();
+  if(r.glow && !settings.calm){ ctx.save(); ctx.shadowColor = "#c77ad8"; ctx.shadowBlur = 10 + 6*Math.sin(fx.clock/16); rrPath(x, y, w, h, R); ctx.fillStyle = "#c77ad8"; ctx.fill(); ctx.restore(); }
+  else if(lit && !settings.calm){ ctx.save(); ctx.shadowColor = "rgba(255,200,90,.55)"; ctx.shadowBlur = 12; rrPath(x, y, w, h, R); ctx.fillStyle = "#b08436"; ctx.fill(); ctx.restore(); }
+  // 놋쇠 테
+  rrPath(x, y, w, h, R); ctx.fillStyle = brassFill(x, y, w, h, lit, r.dim); ctx.fill();
+  ctx.strokeStyle = "#24160a"; ctx.lineWidth = 1.2; ctx.stroke();
+  // 판
+  const fx0 = x + fi, fy0 = y + fi, fw = w - 2*fi, fh = h - 2*fi, fr = Math.max(2, R - fi);
+  const fc = faceCols(r, hot);
+  const g = ctx.createLinearGradient(0, fy0, 0, fy0 + fh); g.addColorStop(0, fc[0]); g.addColorStop(1, fc[1]);
+  rrPath(fx0, fy0, fw, fh, fr); ctx.fillStyle = g; ctx.fill();
+  ctx.save();
+  rrPath(fx0, fy0, fw, fh, fr); ctx.clip();
+  // 나뭇결 — 버튼 자리로 정해지는 몇 줄
+  ctx.strokeStyle = "rgba(255,220,170,.06)"; ctx.lineWidth = 1;
+  for(let i=0;i<3;i++){ const yy = fy0 + fh * (0.25 + i*0.25) + (hash(x*0.13 + i) - 0.5) * 4; ctx.beginPath(); ctx.moveTo(fx0, yy);
+    ctx.bezierCurveTo(fx0 + fw*0.3, yy - 3, fx0 + fw*0.6, yy + 3, fx0 + fw, yy - 1); ctx.stroke(); }
+  // 윗면 빛 · 아랫면 그늘(눌리면 뒤집힌다)
+  ctx.fillStyle = pk > 0.5 ? "rgba(0,0,0,.28)" : "rgba(255,236,190,.10)"; ctx.fillRect(fx0, fy0, fw, Math.max(2, fh*0.38));
+  ctx.restore();
+  ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.lineWidth = 1; rrPath(fx0 + 0.5, fy0 + 0.5, fw - 1, fh - 1, fr); ctx.stroke();
+  // 리벳 — 판 네 귀퉁이(작은 버튼은 생략)
+  if(h >= 28 && w >= 70){ const rv = h >= 40 ? 2.4 : 2, m = fi + 4.5;
+    rivet(x + m, y + m, rv); rivet(x + w - m, y + m, rv); rivet(x + m, y + h - m, rv); rivet(x + w - m, y + h - m, rv); }
+  // 밧줄 감개 — 넓은 버튼 양 끝
+  if(w >= 300 && h >= 26){ ropeWrap(x + 1, y, h); ropeWrap(x + w - 1, y, h); }
+  // 문장 — 왼쪽 놋쇠 메달
+  let tx = x + w/2, label = r.label || "";
+  if(r.icon){
+    const mr = Math.min(h*0.36, 15), mx = x + (w >= 300 ? 14 : fi + 3) + mr + 4;
+    drawMedal(mx, y + h/2, mr, r.on ? 3 : 0, { kind: r.icon, face: "#1c120a", col: r.dim ? "#9a8458" : "#f3dc98" });
+    label = label.replace(UI_EMOJI, "$1");
+    if(r.back) label = label.replace(/^←\s*/, "");
+    tx = x + w/2 + (w < 140 ? mr + 2 : 0);
+  }
+  // 글씨 — 어두운 테두리 + 밝은 색(대비)
+  const col = r.on ? "#a8ecaa" : r.dim ? "rgba(226,206,160,.62)" : r.col || "#f0d79a";
+  const f = font || UIF(700, 15);
+  const txt = (s, yy, ff, cc) => {
+    ctx.font = ff; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    let mw = w - (r.icon ? Math.min(h*0.72, 30) + 26 : 16);
+    ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(10,5,2,.85)"; ctx.lineWidth = 3;
+    ctx.strokeText(s, tx, yy, mw); ctx.fillStyle = cc; ctx.fillText(s, tx, yy, mw);
+  };
+  if(r.sub){ txt(label, y + h/2 - 8, f, col); txt(r.sub, y + h/2 + 11, UIF(600, 11), r.dim ? "rgba(226,206,160,.5)" : "rgba(244,232,205,.82)"); }
+  else txt(label, y + h/2 + 1, f, col);
+  ctx.restore();
+  paperUI = pu;
+}
+// 깃발 탭 — 위 가로대에 매달린 천, 아래가 제비꼬리로 갈라진다. 고른 탭은 붉은 천이 더 길게 내려오고 금실 테
+function drawFlagTab(r, font){
+  const pu = paperUI; paperUI = false;
+  const hot = !!r.action && inRect(hoverPos, r), sel = !!r.sel, pk = r.action ? pressK(r) : 0;
+  const x = r.x, y = r.y + pk*1.5, w = r.w, h = r.h + (sel ? 5 : 0), notch = Math.min(8, h*0.22);
+  const wave = settings.calm ? 0 : (hot || sel ? 1.6 : 0.6) * Math.sin(fx.clock/14 + x*0.05);
+  const path = () => {
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w + wave*0.4, y + h); ctx.lineTo(x + w*0.5, y + h - notch + wave); ctx.lineTo(x - wave*0.4, y + h); ctx.closePath();
+  };
+  ctx.save();
+  // 그림자
+  ctx.save(); ctx.translate(2, 3); path(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fill(); ctx.restore();
+  if(r.glow && !settings.calm){ ctx.save(); ctx.shadowColor = "#c77ad8"; ctx.shadowBlur = 10 + 6*Math.sin(fx.clock/16); path(); ctx.fillStyle = "#c77ad8"; ctx.fill(); ctx.restore(); }
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  if(sel){ g.addColorStop(0, "#9a2a22"); g.addColorStop(1, "#5a1410"); }
+  else if(hot){ g.addColorStop(0, "#2e5260"); g.addColorStop(1, "#18303a"); }
+  else { g.addColorStop(0, "#22404c"); g.addColorStop(1, "#12242c"); }
+  path(); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); path(); ctx.clip();
+  // 천 주름 — 세로로 옅은 줄
+  ctx.fillStyle = "rgba(255,255,255,.05)"; for(let i=1;i<4;i++) ctx.fillRect(x + w*i/4 - 1, y, 2, h);
+  ctx.restore();
+  // 테두리 — 고른 탭은 금실
+  path(); ctx.strokeStyle = sel ? "#f0c860" : hot ? "#c8a050" : "#8a6a38"; ctx.lineWidth = sel ? 2 : 1.3; ctx.stroke();
+  if(sel){ ctx.save(); path(); ctx.clip(); path(); ctx.strokeStyle = "rgba(255,230,150,.35)"; ctx.lineWidth = 6; ctx.stroke(); ctx.restore(); }
+  // 가로대(놋쇠 막대)와 고리
+  rrPath(x - 3, y - 3, w + 6, 5, 2.5); ctx.fillStyle = brassFill(x - 3, y - 3, w + 6, 5, sel || hot, false); ctx.fill();
+  ctx.strokeStyle = "#24160a"; ctx.lineWidth = 0.8; ctx.stroke();
+  rivet(x + 5, y, 2); rivet(x + w - 5, y, 2);
+  // 글씨
+  const col = sel ? "#ffe08a" : r.col ? r.col.replace(/,\s*\.?\d*\.?\d+\)$/, ",.95)") : "#e8d4a2";
+  ctx.font = font || UIF(800, 14); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(8,4,2,.85)"; ctx.lineWidth = 3;
+  const ty = y + (h - notch*0.6)/2 + 1;
+  ctx.strokeText(r.label, x + w/2, ty, w - 12); ctx.fillStyle = col; ctx.fillText(r.label, x + w/2, ty, w - 12);
+  ctx.restore();
+  paperUI = pu;
+}
+// 양피지 카드의 놋쇠 모서리 — 귀퉁이마다 ㄱ자 쇠붙이와 못 하나
+function brassCorners(x, y, w, h, lit){
+  const L = Math.min(18, w*0.18, h*0.3), t = 4;
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  for(const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]){
+    ctx.beginPath(); ctx.moveTo(cx - sx*1, cy - sy*1); ctx.lineTo(cx + sx*L, cy - sy*1); ctx.lineTo(cx + sx*L, cy + sy*(t - 1)); ctx.lineTo(cx + sx*(t + 0.5), cy + sy*(t + 0.5));
+    ctx.lineTo(cx + sx*(t - 1), cy + sy*L); ctx.lineTo(cx - sx*1, cy + sy*L); ctx.closePath();
+    ctx.fillStyle = brassFill(cx - L, cy - L, L*2, L*2, lit, false); ctx.fill();
+    ctx.strokeStyle = "#24160a"; ctx.lineWidth = 0.9; ctx.stroke();
+    rivet(cx + sx*4.5, cy + sy*4.5, 1.7);
+  }
+  ctx.restore();
+  paperUI = pu;
+}
+// 화면 제목 — 짙은 천 띠(양 끝 제비꼬리) 위 금박 글씨
+function drawHeading(text, y, size, o){
+  o = o || {};
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  const f = UIF(800, size || 24);
+  ctx.font = f;
+  const tw = ctx.measureText(text).width, bw = Math.max(160, tw + 90), bx = W/2 - bw/2, bh = (size || 24) + 18, by = y - bh/2;
+  const band = () => { ctx.beginPath(); ctx.moveTo(bx - 18, by); ctx.lineTo(bx + bw + 18, by); ctx.lineTo(bx + bw + 4, by + bh/2); ctx.lineTo(bx + bw + 18, by + bh);
+    ctx.lineTo(bx - 18, by + bh); ctx.lineTo(bx - 4, by + bh/2); ctx.closePath(); };
+  ctx.save(); ctx.translate(0, 3); band(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fill(); ctx.restore();
+  const g = ctx.createLinearGradient(0, by, 0, by + bh); g.addColorStop(0, o.cloth ? o.cloth[0] : "#5a1c16"); g.addColorStop(1, o.cloth ? o.cloth[1] : "#2e0c08");
+  band(); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = "#d9aa48"; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.save(); band(); ctx.clip(); ctx.strokeStyle = "rgba(240,200,96,.5)"; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(bx - 10, by + 4); ctx.lineTo(bx + bw + 10, by + 4); ctx.moveTo(bx - 10, by + bh - 4); ctx.lineTo(bx + bw + 10, by + bh - 4); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  goldText(text, W/2, y + 1, f, tw);
+  ctx.restore();
+  paperUI = pu;
+}
+// 금박 글씨 — 먹 테두리 + 위아래 금 그러데이션 + 흐르는 빛(연출 줄이기면 멈춤)
+function goldText(text, x, y, f, tw, sh){
+  ctx.font = f; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  const sz = parseFloat(/(\d+)px/.exec(f)[1]);
+  ctx.strokeStyle = "rgba(14,7,3,.95)"; ctx.lineWidth = Math.max(3, sz*0.16); ctx.strokeText(text, x, y);
+  const g = ctx.createLinearGradient(0, y - sz*0.55, 0, y + sz*0.5);
+  g.addColorStop(0, "#fff6cf"); g.addColorStop(0.45, "#f2c55a"); g.addColorStop(0.55, "#c48a24"); g.addColorStop(1, "#f6d27a");
+  ctx.fillStyle = g; ctx.fillText(text, x, y);
+  if(!settings.calm && sh !== false){
+    const s = ((fx.clock * 0.006) % 1.6) - 0.3, cl = (v) => Math.max(0, Math.min(1, v));
+    const L = x - tw/2, g2 = ctx.createLinearGradient(L, y - sz, L + tw, y + sz);
+    g2.addColorStop(0, "rgba(255,255,240,0)"); g2.addColorStop(cl(s - 0.08), "rgba(255,255,240,0)"); g2.addColorStop(cl(s), "rgba(255,255,240,.75)");
+    g2.addColorStop(cl(s + 0.08), "rgba(255,255,240,0)"); g2.addColorStop(1, "rgba(255,255,240,0)");
+    ctx.fillStyle = g2; ctx.fillText(text, x, y);
+  }
+}
+// 하위 메뉴 바탕 — 짙은 호두나무(뒤 장면은 거의 안 비친다) + 화면 둘레 놋쇠 이중선과 모서리 장식
+function drawMenuBg(a){
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  drawMenuSea(true);
+  ctx.fillStyle = "rgba(26,17,10," + (a === undefined ? 0.8 : a) + ")"; ctx.fillRect(0, 0, W, H);
+  if(paperPat){ ctx.globalAlpha = 0.6; ctx.fillStyle = paperPat; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.35, W/2, H/2, H*0.9);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.45)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  paperUI = pu;
+  drawScreenFrame();
+}
+function drawScreenFrame(){
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  ctx.strokeStyle = "rgba(200,160,80,.55)"; ctx.lineWidth = 1.2; ctx.strokeRect(5.5, 5.5, W - 11, H - 11);
+  ctx.strokeStyle = "rgba(200,160,80,.25)"; ctx.strokeRect(9.5, 9.5, W - 19, H - 19);
+  ctx.restore();
+  paperUI = pu;
+  for(const [cx, cy, sx, sy] of [[5, 5, 1, 1], [W - 5, 5, -1, 1], [5, H - 5, 1, -1], [W - 5, H - 5, -1, -1]]){
+    const pu2 = paperUI; paperUI = false;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + sx*34, cy); ctx.lineTo(cx + sx*34, cy + sy*4); ctx.quadraticCurveTo(cx + sx*12, cy + sy*6, cx + sx*6, cy + sy*12);
+    ctx.quadraticCurveTo(cx + sx*4, cy + sy*24, cx + sx*4, cy + sy*34); ctx.lineTo(cx, cy + sy*34); ctx.closePath();
+    ctx.fillStyle = brassFill(cx - 34, cy - 34, 68, 68, false, false); ctx.fill(); ctx.strokeStyle = "#24160a"; ctx.lineWidth = 0.9; ctx.stroke();
+    rivet(cx + sx*5, cy + sy*5, 2.2);
+    ctx.restore();
+    paperUI = pu2;
+  }
+}
+/* 메인 메뉴 바다 — 밤하늘·달·구름 두 겹·먼 섬·수평선을 지나는 배·파도 세 겹(패럴랙스).
+   dim이면(하위 메뉴 바탕) 움직임만 남기고 위에 짙은 막을 덮는다. 밝은 막은 쓰지 않는다 */
+function drawMenuSea(dim){
+  const T = settings.calm ? 0 : fx.clock, hz = H*0.64;
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  let g = ctx.createLinearGradient(0, 0, 0, hz);
+  g.addColorStop(0, "#0b121a"); g.addColorStop(0.5, "#16222e"); g.addColorStop(0.82, "#3a3034"); g.addColorStop(1, "#7a4e30");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, hz + 1);
+  // 별
+  for(let i=0;i<34;i++){ const sx = hash(i*7.1) * W, sy = hash(i*3.3) * hz*0.6, tw = 0.35 + 0.35*Math.sin(T*0.04 + i*1.7);
+    ctx.fillStyle = "rgba(255,244,214," + tw.toFixed(2) + ")"; ctx.fillRect(sx, sy, 1.6, 1.6); }
+  // 달과 달무리
+  const mx = W*0.82, my = 84;
+  const mg = ctx.createRadialGradient(mx, my, 8, mx, my, 120); mg.addColorStop(0, "rgba(255,230,170,.32)"); mg.addColorStop(1, "rgba(255,230,170,0)");
+  ctx.fillStyle = mg; ctx.fillRect(mx - 120, my - 120, 240, 240);
+  ctx.beginPath(); ctx.arc(mx, my, 26, 0, Math.PI*2); ctx.fillStyle = "#f4e2b0"; ctx.fill();
+  ctx.beginPath(); ctx.arc(mx + 9, my - 5, 23, 0, Math.PI*2); ctx.fillStyle = "#111b25"; ctx.fill();
+  // 구름 — 먼 겹은 느리게, 가까운 겹은 빠르게
+  const cloud = (cx, cy, s, col, rim) => {
+    ctx.fillStyle = col; ctx.beginPath();
+    ctx.ellipse(cx, cy, 70*s, 16*s, 0, 0, Math.PI*2); ctx.ellipse(cx - 34*s, cy - 8*s, 30*s, 16*s, 0, 0, Math.PI*2);
+    ctx.ellipse(cx + 18*s, cy - 14*s, 36*s, 20*s, 0, 0, Math.PI*2); ctx.ellipse(cx + 54*s, cy - 4*s, 24*s, 12*s, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = rim; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(cx + 18*s, cy - 14*s, 36*s, 20*s, 0, Math.PI*1.1, Math.PI*1.75); ctx.stroke();
+  };
+  for(let i=0;i<4;i++){ const sp = 0.05, span = W + 360, cx = ((hash(i*5.5)*span + T*sp) % span) - 180; cloud(cx, 60 + hash(i*2.2)*90, 0.8 + hash(i)*0.5, "rgba(34,40,52,.85)", "rgba(255,210,150,.18)"); }
+  // 먼 섬
+  ctx.fillStyle = "#1a1e26";
+  ctx.beginPath(); ctx.moveTo(40, hz); ctx.quadraticCurveTo(110, hz - 46, 170, hz - 18); ctx.quadraticCurveTo(210, hz - 30, 260, hz); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(W - 300, hz); ctx.quadraticCurveTo(W - 250, hz - 24, W - 200, hz - 12); ctx.quadraticCurveTo(W - 160, hz - 34, W - 110, hz); ctx.fill();
+  // 수평선을 지나는 배 — 아주 천천히 오른쪽으로, 파도에 흔들
+  {
+    const span = W + 240, sx = ((T * 0.12 + W*0.15) % span) - 120, sy = hz - 2 + Math.sin(T*0.03)*1.5, s = 1;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(Math.sin(T*0.025)*0.05); ctx.scale(s, s);
+    ctx.fillStyle = "#0e1218";
+    ctx.beginPath(); ctx.moveTo(-46, -10); ctx.lineTo(48, -10); ctx.lineTo(36, 4); ctx.lineTo(-38, 4); ctx.closePath(); ctx.fill();
+    ctx.fillRect(-46, -16, 14, 7); ctx.fillRect(-2, -78, 3, 68); ctx.fillRect(-26, -62, 2.5, 52); ctx.fillRect(22, -58, 2.5, 48);
+    ctx.beginPath(); ctx.moveTo(1, -74); ctx.quadraticCurveTo(22, -58, 1, -36); ctx.closePath(); ctx.moveTo(1, -32); ctx.quadraticCurveTo(26, -24, 1, -14); ctx.closePath();
+    ctx.moveTo(-24, -58); ctx.quadraticCurveTo(-8, -46, -24, -30); ctx.closePath(); ctx.moveTo(24, -54); ctx.quadraticCurveTo(40, -42, 24, -26); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(1, -78); ctx.lineTo(14, -74 + Math.sin(T*0.1)*1.5); ctx.lineTo(1, -70); ctx.fill();
+    ctx.restore();
+  }
+  // 바다
+  g = ctx.createLinearGradient(0, hz, 0, H); g.addColorStop(0, "#2a2a30"); g.addColorStop(0.3, "#14222a"); g.addColorStop(1, "#081014");
+  ctx.fillStyle = g; ctx.fillRect(0, hz, W, H - hz);
+  // 달빛 기둥 — 흔들리는 짧은 붓질
+  for(let i=0;i<14;i++){ const yy = hz + 4 + i*8, ww = (30 - i) * (0.8 + 0.3*Math.sin(T*0.05 + i)), xx = mx + Math.sin(T*0.03 + i*1.3)*6;
+    ctx.fillStyle = "rgba(255,226,160," + (0.28 - i*0.016).toFixed(2) + ")"; ctx.fillRect(xx - ww/2, yy, ww, 1.6); }
+  // 파도 세 겹 — 멀수록 느리고 낮다
+  const layers = [[hz + 16, 4, 0.25, "#16262e", 0.10], [hz + 52, 7, 0.5, "#0f1d24", 0.13], [hz + 100, 10, 0.9, "#09141a", 0.16]];
+  layers.forEach(([by, amp, sp, col, hl], li) => {
+    const off = T * sp, wl = 120 + li*40;
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for(let xx=0; xx<=W; xx+=12) ctx.lineTo(xx, by + Math.sin((xx + off) / wl * Math.PI*2) * amp + Math.sin((xx - off*0.6) / (wl*0.45)) * amp*0.35);
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    ctx.strokeStyle = "rgba(255,220,160," + hl + ")"; ctx.lineWidth = 1.4; ctx.beginPath();
+    for(let xx=0; xx<=W; xx+=12){ const yy = by + Math.sin((xx + off) / wl * Math.PI*2) * amp + Math.sin((xx - off*0.6) / (wl*0.45)) * amp*0.35; if(xx) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); }
+    ctx.stroke();
+  });
+  if(!dim){
+    const vg = ctx.createRadialGradient(W/2, H*0.46, H*0.3, W/2, H*0.5, H*0.95);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.5)");
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+  paperUI = pu;
+}
+// 메인 메뉴 제목 — 붓 먹 자국 위 금박 붓글씨. 들어올 때 도장처럼 커졌다 자리 잡는다
+function drawMenuLogo(y){
+  const pu = paperUI; paperUI = false;
+  const k = settings.calm ? 1 : clamp01(fx.menuT / 22), sc = settings.calm ? 1 : 0.6 + 0.4*ease.outBack(k, 2.2);
+  ctx.save();
+  ctx.globalAlpha = settings.calm ? 1 : Math.min(1, k*2);
+  // 먹 자국
+  ctx.fillStyle = "rgba(8,5,3,.62)"; brushBand(W/2 - 250, W/2 + 250 * (settings.calm ? 1 : ease.outCubic(k)), y - 30, 58, 3.7); ctx.fill();
+  ctx.translate(W/2, y); ctx.scale(sc, sc);
+  const f = UIF(800, 46), t1 = "고무팔", t2 = "대항해";
+  ctx.font = f;
+  const w1 = ctx.measureText(t1).width, w2 = ctx.measureText(t2).width, gap = 46;
+  const x1 = -(w1 + gap + w2)/2 + w1/2, x2 = (w1 + gap + w2)/2 - w2/2;
+  // 붓 자국처럼 거친 가장자리 — 먹을 살짝 어긋나게 두 번
+  ctx.fillStyle = "rgba(12,6,2,.7)"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(t1, x1 + 2.5, 3); ctx.fillText(t2, x2 + 2.5, 3);
+  goldText(t1, x1, 0, f, w1); goldText(t2, x2, 0, f, w2);
+  // 가운데 닻 문장
+  drawMedal(0, 2, 15, 3, { kind: "anchor", face: "#1c120a" });
+  // 금박 부스러기
+  if(!settings.calm) for(let i=0;i<10;i++){ const a = 0.4 + 0.6*Math.abs(Math.sin(fx.clock*0.03 + i*2.1)), px = (hash(i*9.1) - 0.5) * (w1 + w2 + gap + 40), py = (hash(i*4.7) - 0.5) * 60;
+    ctx.save(); ctx.translate(px, py); ctx.rotate(hash(i)*3); ctx.fillStyle = "rgba(255,214,110," + (a*0.8).toFixed(2) + ")"; ctx.fillRect(-1.6, -1.6, 3.2, 3.2); ctx.restore(); }
+  ctx.restore();
+  // 아래 장식선 — 금줄 가운데 마름모
+  ctx.save(); ctx.globalAlpha = settings.calm ? 1 : clamp01((fx.menuT - 10) / 16);
+  ctx.strokeStyle = "rgba(230,190,100,.75)"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(W/2 - 170, y + 34); ctx.lineTo(W/2 - 10, y + 34); ctx.moveTo(W/2 + 10, y + 34); ctx.lineTo(W/2 + 170, y + 34); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W/2, y + 28); ctx.lineTo(W/2 + 6, y + 34); ctx.lineTo(W/2, y + 40); ctx.lineTo(W/2 - 6, y + 34); ctx.closePath(); ctx.fillStyle = "#e8c070"; ctx.fill();
+  ctx.restore();
+  paperUI = pu;
+}
+// 버튼 줄이 차례로 미끄러져 들어온다(그리기만 옮긴다 — 누르는 자리는 처음부터 제자리)
+function slideIn(i, t, fn){
+  if(settings.calm || t > 18 + i*4 + 2){ fn(); return; }
+  const k = clamp01((t - i*4) / 18);
+  if(k <= 0) return;
+  ctx.save(); ctx.translate((1 - ease.outBack(k, 1.4)) * -120, 0); ctx.globalAlpha *= Math.min(1, k*1.6);
+  fn();
+  ctx.restore();
+}
+/* 팩 열기 연출 — 상자가 들썩이다 열리며 빛살, 결과 카드가 솟는다. 그리기 전용(결과는 openPack이 이미 정했다).
+   화면 가운데만 어둡게(밝은 막 없음). 누르면 바로 걷힌다 */
+const PACK_T = 120;
+function drawPackReveal(){
+  const P = UIK.pack;
+  if(!P) return;
+  P.t += fx.dt;
+  if(P.t > PACK_T){ UIK.pack = null; return; }
+  const pu = paperUI; paperUI = false;
+  const t = P.t, calm = settings.calm, out = t > PACK_T - 16 ? (PACK_T - t) / 16 : 1;
+  const cx = W/2, cy = H/2 + 10, C = TECH_CATS[P.cat] || { col: "#ffd76a" };
+  ctx.save(); ctx.globalAlpha = out;
+  const vg = ctx.createRadialGradient(cx, cy, 40, cx, cy, 330); vg.addColorStop(0, "rgba(10,6,3,.88)"); vg.addColorStop(1, "rgba(10,6,3,0)");
+  ctx.fillStyle = vg; ctx.fillRect(cx - 330, cy - 330, 660, 660);
+  const open = clamp01((t - 24) / 10);
+  // 빛살
+  if(open > 0){
+    const rare = P.res.kind === "tech";
+    ctx.save(); ctx.translate(cx, cy - 20); if(!calm) ctx.rotate(t * 0.01);
+    for(let i=0;i<14;i++){ ctx.rotate(Math.PI*2/14); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -170*open); ctx.lineTo(10, -170*open); ctx.closePath();
+      ctx.fillStyle = rare ? "rgba(255,214,110,.22)" : "rgba(220,200,160,.12)"; ctx.fill(); }
+    ctx.restore();
+  }
+  // 상자
+  const shake = !calm && t < 24 ? Math.sin(t*1.7) * (t/24) * 4 : 0;
+  ctx.save(); ctx.translate(cx + shake, cy + 40);
+  rrPath(-46, -10, 92, 50, 6); ctx.fillStyle = "#5a3418"; ctx.fill(); ctx.strokeStyle = "#1c0e04"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = brassFill(-46, -10, 92, 50, true, false); ctx.fillRect(-46, 4, 92, 6); ctx.fillRect(-6, -10, 12, 50);
+  ctx.save(); ctx.translate(-46, -10); ctx.rotate(-open * 1.25);      // 뒤쪽 경첩(왼쪽 끝)을 축으로 젖혀진다
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(0, -26, 46, -28); ctx.quadraticCurveTo(92, -26, 92, 0); ctx.closePath();
+  ctx.fillStyle = "#6a3e1c"; ctx.fill(); ctx.strokeStyle = "#1c0e04"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+  // 결과 카드 — 상자에서 솟아 자리 잡는다
+  const up = calm ? 1 : ease.outBack(clamp01((t - 30) / 22), 1.6);
+  if(t > 30 || calm){
+    const bw = 340, bh = 104, bx = cx - bw/2, by = cy - 150 + (1 - up) * 90;
+    ctx.globalAlpha = out * Math.min(1, calm ? 1 : (t - 30) / 8);
+    rrPath(bx, by + 4, bw, bh, 10); ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fill();
+    rrPath(bx, by, bw, bh, 10); ctx.fillStyle = brassFill(bx, by, bw, bh, P.res.kind === "tech", false); ctx.fill();
+    rrPath(bx + 4, by + 4, bw - 8, bh - 8, 7); const g = ctx.createLinearGradient(0, by, 0, by + bh); g.addColorStop(0, "#3a2414"); g.addColorStop(1, "#1a0f07"); ctx.fillStyle = g; ctx.fill();
+    const t0 = P.res.kind === "tech" ? techOf(P.res.id) : null;
+    drawMedal(bx + 46, by + bh/2, 28, P.res.kind === "tech" ? 3 : 0, { kind: P.res.kind === "mat" ? "scroll" : P.cat === "gear" ? "cog" : P.cat === "ranged" ? "target" : "fist", face: "#1c120a" });
+    const head = P.res.kind === "tech" ? "★ 새 기술!" : P.res.kind === "dup" ? "이미 가진 기술" : (TECH_CATS[P.cat] ? TECH_CATS[P.cat].mat : "비급") + " +" + P.res.n;
+    const name = t0 ? t0.name : P.res.kind === "dup" ? (techOf(P.res.id) || {}).name + " → 비급 +" + P.res.n : "보유 " + (mats[P.cat] || 0) + "개";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    const tl = (s, x, y, f, c) => { ctx.font = f; ctx.strokeStyle = "rgba(8,4,2,.9)"; ctx.lineWidth = 3; ctx.strokeText(s, x, y, bw - 100); ctx.fillStyle = c; ctx.fillText(s, x, y, bw - 100); };
+    tl(head, bx + 86, by + 30, UIF(800, 15), P.res.kind === "tech" ? "#ffd76a" : C.col || "#f0d79a");
+    tl(name || "", bx + 86, by + 56, UIF(800, 19), "#f6ead0");
+    if(t0) tl(t0.desc.length > 30 ? t0.desc.slice(0, 29) + "…" : t0.desc, bx + 86, by + 80, UIF(500, 12), "rgba(244,232,205,.85)");
+    if(open > 0 && !calm && t < 60) inkSplat(cx, by + bh/2, (t - 30) / 30, 7.7, 9, "255,214,110", 160);
+  }
+  ctx.restore();
+  paperUI = pu;
 }
 
 /* ---------- 보물 창고 — 탭 + 카드 ---------- */
@@ -13552,10 +13939,9 @@ function shopUI(){
   return { cards, rows: modal || rows, base: rows, modal };
 }
 function drawShop(){
-  ctx.fillStyle = "rgba(10,20,30,0.9)";
-  ctx.fillRect(0, 0, W, H);
+  drawMenuBg();
   const ui = shopUI();
-  centerText("보물 창고", 33, UIF(800, 24), "#f4ecd9");
+  drawHeading("보물 창고", 33, 22);
   uiText("💰 " + bigNum(bank), W - 20, 33, "700 18px 'Gowun Batang', serif", "#ffd76a", "right");
   const hv = hoverPos;
   if(ui.modal) hoverPos = null;                // 이야기 창 뒤쪽 버튼은 밝아지지 않게
@@ -13592,20 +13978,27 @@ function drawShop(){
   const foot = shopPage === 4 ? "이야기 선원은 스토리 장 보스를 깨면 합류 · 고용 선원은 보물로 · 함께 항해한 거리만큼 레벨이 오른다(최고 Lv.5)"
              : "본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키·클릭 · ← → 탭 바꾸기 · Esc 메뉴로";
   centerText(foot, H - 16, UIF(400, 12), "rgba(244,236,217,.55)");
+  if(state === STATE.SHOP) drawPackReveal();
 }
 
 let uiState = -1;
+const MENU_SCREENS = [STATE.MENU, STATE.CHALLENGE, STATE.PRACTICE_SELECT, STATE.SHOP, STATE.LOG, STATE.SETTINGS, STATE.MINI_SELECT];
 // 상태가 바뀐 프레임 — 스토리 흐름의 화면 전환(잉크 덮개)과 화면별 등장 타이머를 건다. 상태는 이미 바뀌어 있고 그림만 따라간다
 function fxStateChange(from, to){
   const S = STATE;
   if(to === S.OVER) fx.resT = 0;
+  if(from === S.SHOP) UIK.pack = null;
   if(to === S.STORY_MAP && from !== S.STORY_TALK) fx.mapT = 0;
+  // v60: 메뉴 화면에 들어오면 버튼이 차례로 미끄러져 들어온다(fx.menuT)
+  if(MENU_SCREENS.indexOf(to) >= 0) fx.menuT = 0;
   if(from < 0) return;
+  // 메뉴끼리 옮길 때도 짧은 잉크 전환(스토리 흐름보다 짧게)
+  if(MENU_SCREENS.indexOf(from) >= 0 && MENU_SCREENS.indexOf(to) >= 0){ fx.wipe = fx.wipeT = 18; return; }
   if((to === S.STORY_MAP && (from === S.MENU || from === S.OVER || from === S.READY || from === S.STORY_END)) ||
      (from === S.STORY_MAP && (to === S.STORY_TALK || to === S.READY || to === S.MENU)) ||
      (from === S.STORY_TALK && to === S.STORY_END) ||
      (storyMode && from === S.OVER && (to === S.READY || to === S.STORY_TALK)) ||
-     (from === S.STORY_END)) fx.wipe = WIPE_T;
+     (from === S.STORY_END)){ fx.wipe = fx.wipeT = WIPE_T; }
 }
 function draw(){
   if(state !== uiState) fxStateChange(uiState, state);
@@ -13883,13 +14276,7 @@ function drawFrame(){
     const k = Math.max(0, reviveT / REVIVE_T);
     ctx.fillStyle = "rgba(244,236,217,.15)"; ctx.fillRect(W/2 - 150, H/2 - 8, 300, 6);
     ctx.fillStyle = "#ffd76a"; ctx.fillRect(W/2 - 150, H/2 - 8, 300 * k, 6);
-    const btn = (B, text, col) => {
-      ctx.fillStyle = "rgba(13,27,38,.7)"; ctx.fillRect(B.x, B.y, B.w, B.h);
-      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(B.x, B.y, B.w, B.h);
-      ctx.fillStyle = col; ctx.font = "700 15px 'Gowun Batang', 'Pretendard', serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(text, B.x + B.w/2, B.y + B.h/2 + 1);
-    };
+    const btn = (B, text, col) => drawBrassBtn(asBrass(Object.assign({ label: text, col, act: true }, B)), UIF(700, 15));
     btn(REVIVE_BTN, "부활 (Space)", "#ffd76a");
     btn(GIVEUP_BTN, "포기 (Esc)", "rgba(244,236,217,.7)");
   } else if(state === STATE.OVER){
@@ -13993,27 +14380,31 @@ function drawFrame(){
     drawScreenButtons();
     drawShareButton();
   } else if(state === STATE.MENU){
-    ctx.fillStyle = "rgba(13,27,38,0.72)";
-    ctx.fillRect(0,0,W,H);
-    centerText("고무팔 · 대항해", H/2 - 214, "700 30px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    for(const row of menuRows()){
-      row.col = row.mini ? "#e6a8f0" : row.story ? "#ffd76a" : row.acct ? "#8fd6d8" : row.glow ? "#e6a8f0" : "#f0a24e";
-      drawBtn(row, UIF(700, 17));
-    }
-    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + bigNum(bank), H/2 - 182, "600 14px 'Gowun Batang', serif", "#ffd76a");
+    // v60: 움직이는 밤바다 + 금박 붓글씨 제목 + 놋쇠 버튼이 차례로 미끄러져 들어온다
+    drawMenuSea(false);
+    drawMenuLogo(52);
+    const pu = paperUI; paperUI = false;
+    const sub = (t, y, f, c) => { ctx.font = f; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(8,4,2,.85)"; ctx.lineWidth = 3.5; ctx.strokeText(t, W/2, y); ctx.fillStyle = c; ctx.fillText(t, W/2, y); };
+    sub((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + bigNum(bank), 104, UIF(700, 14), "#ffd76a");
     const wkNow = weeklyNow();
-    centerText("🌊 이번 주 해류: " + wkNow.name + " — " + wkNow.desc, H/2 - 150, "600 13px 'Gowun Batang', 'Pretendard', serif", wkNow.col);
-    centerText("숫자 키 또는 클릭으로 선택", H/2 + 236, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
+    sub("🌊 이번 주 해류: " + wkNow.name + " — " + wkNow.desc, 126, UIF(600, 13), wkNow.col);
+    paperUI = pu;
+    menuRows().forEach((row, i) => {
+      row.col = row.mini ? "#efb8f6" : row.story ? "#ffd76a" : row.acct ? "#9ee0e2" : row.glow ? "#efb8f6" : "#f6c27a";
+      slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 16)));
+    });
+    centerText("숫자 키 또는 클릭으로 선택", H - 16, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)");
     drawVersion();
   } else if(state === STATE.SETTINGS){
-    ctx.fillStyle = "rgba(13,27,38,0.86)";
-    ctx.fillRect(0,0,W,H);
-    centerText("설정", H/2 - 140, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
+    drawMenuBg();
+    drawHeading("설정", H/2 - 150, 24);
     centerText("멀미나 번쩍임이 불편하면 연출을 끌 수 있다 — 게임 규칙은 그대로", H/2 - 110, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)");
-    for(const row of menuRows()){
+    menuRows().forEach((row, i) => {
       row.dim = /꺼짐/.test(row.label) && !/연출 줄이기/.test(row.label);
-      drawBtn(row, UIF(700, 16));
-    }
+      if(!row.back) row.icon = ["wave", "bolt", "wind", "eye", "book"][i];
+      slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 16)));
+    });
     if(shopMsg){
       shopMsg.t -= 1;
       centerText(shopMsg.text, H/2 + 204, "700 14px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0", Math.min(1, shopMsg.t/20));
@@ -14024,9 +14415,8 @@ function drawFrame(){
   } else if(state === STATE.LOG && titlePage){
     drawTitles();
   } else if(state === STATE.LOG){
-    ctx.fillStyle = "rgba(13,27,38,0.86)";
-    ctx.fillRect(0,0,W,H);
-    centerText("항해 일지", 44, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
+    drawMenuBg();
+    drawHeading("항해 일지", 38, 24);
     const L = lifeLog;
     const stats = [
       ["항해 횟수", L.runs + "판"], ["총 항해 거리", commas(L.dist) + "m"], ["최고 거리", Math.floor(best) + "m"],
@@ -14062,12 +14452,11 @@ function drawFrame(){
   } else if(state === STATE.SHOP){
     drawShop();
   } else if(state === STATE.MINI_SELECT){
-    ctx.fillStyle = "rgba(13,27,38,0.84)";
-    ctx.fillRect(0,0,W,H);
-    centerText("🪼 미니게임", H/2 - 180, "800 28px 'Gowun Batang', 'Pretendard', serif", "#e6a8f0");
+    drawMenuBg();
+    drawHeading("미니게임", H/2 - 186, 24, { cloth: ["#4a2058", "#22082c"] });
     centerText("짧게 한 판 — 보물은 메달을 처음 딸 때만(동 " + MINI_MEDAL_BONUS[0] + " · 은 " + MINI_MEDAL_BONUS[1] + " · 금 " + MINI_MEDAL_BONUS[2] + ") · 셋 다 금메달이면 '해파리 두건'",
                H/2 - 146, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.7)");
-    for(const row of menuRows()) drawBtn(row, UIF(700, 18));
+    menuRows().forEach((row, i) => { if(!row.back) row.icon = ["jelly", "gull", "chest", "star"][i] || "star"; slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 18))); });
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.STORY_MAP){
     drawStoryMap();
@@ -14076,17 +14465,15 @@ function drawFrame(){
   } else if(state === STATE.STORY_END){
     drawEnding();
   } else if(state === STATE.CHALLENGE){
-    ctx.fillStyle = "rgba(13,27,38,0.78)";
-    ctx.fillRect(0,0,W,H);
-    centerText("도전", H/2 - 160, "800 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    centerText("매일 바뀌는 바다 · 하루 한 판 보물 사냥 · 보스 9연전 · 연습", H/2 - 130, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.7)");
-    for(const row of menuRows()) drawBtn(row, UIF(700, 16));
+    drawMenuBg();
+    drawHeading("도전", H/2 - 166, 24);
+    centerText("매일 바뀌는 바다 · 하루 한 판 보물 사냥 · 무작위 보스 5연전 · 연습", H/2 - 130, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.7)");
+    menuRows().forEach((row, i) => { if(!row.back) row.icon = ["compass", "coin", "skull", "target"][i]; slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 16))); });
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.PRACTICE_SELECT){
-    ctx.fillStyle = "rgba(13,27,38,0.78)";
-    ctx.fillRect(0,0,W,H);
-    centerText("연습 모드 — 연습할 항목을 고르세요", H/2 - 196, "700 21px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    for(const row of menuRows()) drawBtn(row, UIF(600, 15));
+    drawMenuBg();
+    drawHeading("연습 모드", 36, 22);
+    menuRows().forEach((row, i) => slideIn(i, fx.menuT, () => drawBtn(row, UIF(600, 15))));
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
   }
 }
