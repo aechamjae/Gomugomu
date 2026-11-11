@@ -3720,6 +3720,30 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     K.st = "idle"; K.wait = 0; calm(); pin(P().x, 150); H.step();
     ok("v60 bosses: 그롬 — 격노하면 두 칸(위에서 내려온 창살 + 아래에서 솟은 창살)", K.gates.length === 2 && !K.gates[0].up && K.gates[1].up && K.stT >= 45);
   }
+
+  /* --- 심해의 크라켄(5): 각성편과 같은 몸 · 잠결 휩쓸기 · 잠결 내려찍기 --- */
+  {
+    let K = fresh(5); calm(); H.step();
+    ok("v60 bosses: 크라켄 — 잠결 패턴 예고는 45프레임 이상이고 각성편보다 길고 느리다", E("KR_SWEEP_WARN") >= 45 && E("KR_SLAM_WARN") >= 45 &&
+       E("KR_SWEEP_WARN") > E("AW_SWEEP_WARN") && E("KR_SLAM_WARN") > E("AW_SLAM_WARN") && E("KR_SWEEP_SPD") < E("AW_SWEEP_SPD"));
+    K.phase = 0; K.sub = 1e4; K.fire = 1e6; K.atkCd = 0; K.lastAtk = "slam"; calm(); pin(P().x, 200); H.step();
+    const w = K.sweep;
+    ok("v60 bosses: 크라켄 — 잠결 휩쓸기(느린 예고·속도)", !!w && w.warn === E("KR_SWEEP_WARN") && w.spd === E("KR_SWEEP_SPD"));
+    let early = false, hit = false;
+    for(let i=0;i<E("KR_SWEEP_WARN") + 60 && K.sweep;i++){ calm(); E("rope = null"); P().y = w.y; P().vy = 0; P().vx = 6; pin(P().x, w.y); H.step(); if(a.peek().stun > 0){ if(w.t < E("KR_SWEEP_WARN")) early = true; hit = true; } }
+    ok("v60 bosses: 크라켄 — 휩쓸기는 예고 동안 안 맞고, 띠 안에 있으면 지나갈 때 맞는다", hit && !early);
+    K = fresh(5); calm(); H.step(); K.phase = 0; K.sub = 1e4; K.fire = 1e6; K.atkCd = 0; K.lastAtk = "sweep"; calm(); pin(P().x, 200); H.step();
+    const q = K.slams[0];
+    ok("v60 bosses: 크라켄 — 그다음은 잠결 내려찍기(고리 하나만)", K.slams.length === 1 && q.warn === E("KR_SLAM_WARN") && !K.sweep);
+    let e2 = false;
+    for(let i=0;i<E("KR_SLAM_WARN") - 4;i++){ calm(); pin(q.x, 200); H.step(); if(a.peek().stun > 0) e2 = true; }
+    ok("v60 bosses: 크라켄 — 내려찍기 예고 동안엔 그 자리에 있어도 안 맞는다", !e2);
+    for(let i=0;i<20;i++){ calm(); pin(q.x - 300, 200); H.step(); }
+    ok("v60 bosses: 크라켄 — 박힌 촉수의 칼자국이 약점(각성편과 같다)", a.weak().some(x => x.mark === "칼자국"));
+    ok("v60 bosses: 크라켄 — 눈 약점 자리는 각성편과 같은 몸(awEyeX)", a.weak().some(x => x.mark === "눈" && Math.abs(x.x - E("awEyeX(boss)")) < 0.01));
+    let err = null; try{ E("drawBoss()"); }catch(e){ err = e.message; }
+    ok("v60 bosses: 크라켄 — 잠든 몸을 그려도 오류가 없다(사슬 셋 그대로, 균열 맥동 없음)", !err && !(K.chains < 3), err);
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 
