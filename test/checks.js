@@ -3817,6 +3817,92 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   C().set(sel0); C().owned.length = 0; owned0.forEach(id => C().owned.push(id));
   a.toMenu();
 }
+/* --- v60 systems: 칭호 개편 (등급·범주·문장·도장) --- */
+{
+  const a = A(), E = (x) => T().ev(x), TT = () => a.title(), U = T().titles();
+  const saved = [...U], sel0 = TT().sel, dex0 = E("JSON.stringify(lifeLog.dex || {})"), rush0 = a.rush().best;
+  const L = TT().list;
+  const OLD = ["novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","voyage_end","star81","jail"];
+  ok("v60 칭호: 30~40개, id가 겹치지 않는다", L.length >= 30 && L.length <= 40 && new Set(L.map(t => t.id)).size === L.length, L.length + "개");
+  ok("v60 칭호: 예전 18개 id가 모두 남아 있다(저장 호환)", OLD.every(id => L.some(t => t.id === id)));
+  ok("v60 칭호: 모두 등급(1~4)·범주(여섯 중 하나)·문장·설명이 있다", L.every(t => t.tier >= 1 && t.tier <= 4 && TT().cats.some(c => c.id === t.cat) && t.emb && t.desc && typeof t.need === "function"));
+  ok("v60 칭호: 범주 여섯에 모두 칭호가 있고, 등급 넷이 다 쓰인다", TT().cats.length === 6 && TT().cats.every(c => L.some(t => t.cat === c.id)) && [1,2,3,4].every(k => L.some(t => t.tier === k)));
+  ok("v60 칭호: 유명 만화 용어가 없다", !/그랑 ?라인|해적왕|원피스|패왕색/.test(L.map(t => t.name + t.desc).join(" ")) && L.find(t => t.id === "veteran").name === "먼바다의 폭풍");
+  ok("v60 칭호: 리메이크 보스 10종 첫 격파 칭호가 모두 있다", ["boss6","boss11","boss13","boss17","jail","kraken1","ghost1","boss18","boss19","admiral1"].every(id => L.some(t => t.id === id)));
+  ok("v60 칭호: 보스 칭호 설명은 BOSSES의 이름을 읽는다", [[6,"boss6"],[11,"boss11"],[13,"boss13"],[17,"boss17"],[18,"boss18"],[19,"boss19"],[20,"jail"],[5,"kraken1"],[7,"ghost1"]].every(q => L.find(t => t.id === q[1]).desc.includes(E("BOSSES[" + q[0] + "].name"))));
+  // 옛 저장 — 예전 id만 든 저장을 읽어도 그대로 인정
+  U.clear(); E("titleSel = null; titleFresh.clear(); titleToast = null");
+  E("(function(){ const r = JSON.parse(recTitles()); r.unlocked = ['novice','veteran','jail','없는칭호']; r.sel = 'veteran'; const v = JSON.stringify(r); const f = typeof applyTitlesRecord === 'function' ? applyTitlesRecord : null; if(f) f(v); else { unlockedTitles = new Set(r.unlocked); titleSel = r.sel; } })()");
+  const U2 = T().titles();
+  ok("v60 칭호: 옛 저장의 칭호(이름이 바뀐 것 포함)를 그대로 인정하고 고른 칭호도 유지", U2.has("novice") && U2.has("veteran") && U2.has("jail") && TT().name === "먼바다의 폭풍", TT().name);
+  E("titleSel = null");
+  ok("v60 칭호: 자동 = 등급이 가장 높은 것(모르는 id가 섞여 있어도 멀쩡하다)", TT().cur && TT().cur.tier === 3 && ["veteran","jail"].indexOf(TT().cur.id) >= 0, TT().name);
+  U2.clear();
+  // 보스 첫 격파 — 도감 격침 수로
+  E("lifeLog.dex = {}"); TT().check();                      // 다른 누적 기록으로 따는 칭호를 먼저 정리해 둔다
+  U2.delete("boss11"); U2.delete("boss6"); E("titleFresh.clear(); titleToast = null");
+  E("lifeLog.dex.boss11 = 1; lifeLog.dex.boss6 = 1");
+  const got = TT().check();
+  ok("v60 칭호: 도감에 격침 기록이 있으면 보스 칭호를 딴다 — 돌려주는 건 가장 높은 등급", T().titles().has("boss11") && T().titles().has("boss6") && got && got.id === "boss11", got ? got.id : "없음");
+  ok("v60 칭호: 새로 딴 칭호는 '새 도장' 목록과 화면 알림에 오른다", TT().fresh.has("boss11") && TT().fresh.has("boss6") && TT().toast && TT().toast.id === "boss11");
+  // 노 피격·빠른 격파 — 격침 순간에만
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);
+  T().titles().delete("flawless"); T().titles().delete("quick"); T().titles().delete("duel");
+  let b = a.spawnBoss(false, 0); E("bossIntro = null; stun = 0; iframes = 0; shield = 0; fire = 0");
+  E("knock(false)");
+  ok("v60 칭호: 보스전 중 휘청이면 표시가 남는다", b.hurt === true);
+  b.hp = 1; b.invul = 0; b.tLeft = b.tMax - 60*30; T().dmg(true, "테스트");
+  ok("v60 칭호: 휘청였고 30초 걸렸으면 '털끝 하나 안 다친'·'번개 같은 한 판'은 없다", !T().titles().has("flawless") && !T().titles().has("quick"));
+  E("pickPending = false; pickOffer = null; slowT = 0; boss = null; stun = 0; iframes = 0");
+  b = a.spawnBoss(false, 0); E("bossIntro = null");
+  b.hp = 1; b.invul = 0; b.tLeft = b.tMax - 60*10; T().dmg(true, "테스트");
+  ok("v60 칭호: 한 번도 안 휘청이고 10초 만에 잡으면 둘 다 딴다(일반 보스라 '상처 없는 결투'는 아님)", T().titles().has("flawless") && T().titles().has("quick") && !T().titles().has("duel"));
+  E("pickPending = false; pickOffer = null; slowT = 0; boss = null");
+  b = a.spawnBoss(false, 6); E("bossIntro = null");
+  b.hp = 1; b.invul = 0; T().dmg(true, "테스트");
+  ok("v60 칭호: 네임드를 노 피격으로 잡으면 '상처 없는 결투'", T().titles().has("duel"));
+  E("pickPending = false; pickOffer = null; slowT = 0; boss = null");
+  // 풍선 없이 3000m · 한 판 거리 · 러시
+  T().titles().delete("nofusen"); T().titles().delete("best2000");
+  E("dist = 3100; titleRun.fusen = 1");
+  TT().check();
+  ok("v60 칭호: 풍선으로 튕긴 판은 '맨몸의 항해'가 아니다(거리 칭호는 딴다)", !T().titles().has("nofusen") && T().titles().has("best2000"));
+  E("titleRun.fusen = 0"); TT().check();
+  ok("v60 칭호: 풍선 없이 3000m면 '맨몸의 항해'", T().titles().has("nofusen"));
+  E("dist = 0");
+  T().titles().delete("rush5"); T().titles().delete("rushfast");
+  a.rush().setBest(0); TT().check();
+  ok("v60 칭호: 러시 기록이 없으면 러시 칭호도 없다(옛 9연전 기록으로는 안 준다)", !T().titles().has("rush5"));
+  a.rush().setBest(60*60*7); TT().check();
+  ok("v60 칭호: 5연전 완주 → '다섯 고개를 넘은 자', 7분이면 '질풍 오연전'은 아직", T().titles().has("rush5") && !T().titles().has("rushfast"));
+  a.rush().setBest(60*60*5); TT().check();
+  ok("v60 칭호: 6분 안에 완주 → '질풍 오연전'", T().titles().has("rushfast"));
+  // 화면
+  a.toMenu(); TT().open();
+  let rows = a.rows();
+  ok("v60 칭호: 칭호 화면 — 범주 탭 여섯, 왼쪽 위 '← 이전', 자동 버튼", a.peek().state === 7 && rows.filter(r => r.tab).length === 6 && rows.some(r => r.back && r.x < 40 && r.y < 40 && /이전/.test(r.label)) && rows.some(r => r.key === 0 && /자동/.test(r.label)));
+  ok("v60 칭호: 새로 딴 칭호가 있는 범주부터 열린다", TT().page >= 1 && TT().cats[TT().page - 1].id === TT().list.find(t => TT().fresh.has(t.id)).cat);
+  TT().tab(0); rows = a.rows();
+  const cards = rows.filter(r => r.title);
+  ok("v60 칭호: 사냥 탭 카드 수 = 사냥 칭호 수, 화면 안에서 겹치지 않는다", cards.length === L.filter(t => t.cat === "hunt").length && cards.every(r => r.x >= 16 && r.x + r.w <= 884 && r.y + r.h <= 520) &&
+     cards.every((r, i) => cards.every((q, j) => i === j || r.x + r.w <= q.x || q.x + q.w <= r.x || r.y + r.h <= q.y || q.y + q.h <= r.y)), cards.length + "장, 맨 아래 " + Math.max(...cards.map(r => r.y + r.h)));
+  cards.find(r => r.title.id === "boss6").action();
+  ok("v60 칭호: 카드를 누르면 단다", TT().sel === "boss6" && TT().name === "무대를 빼앗은 자");
+  const lock = cards.find(r => !T().titles().has(r.title.id));
+  lock.action();
+  ok("v60 칭호: 못 딴 칭호는 달 수 없다", TT().sel === "boss6");
+  rows.find(r => r.key === 0).action();
+  ok("v60 칭호: 자동으로 되돌린다", TT().sel === null);
+  for(let i=0;i<60;i++) H.step();
+  ok("v60 칭호: 도장이 찍히는 동안 그리기 오류 없음", a.peek().state === 7 && a.fx().titleT > 30);
+  rows.find(r => r.back).action();
+  ok("v60 칭호: '← 이전'으로 일지에 돌아가면 새 도장 표시가 지워진다", TT().page === 0 && TT().fresh.size === 0 && a.rows().some(r => r.key === 3 && /칭호/.test(r.label)));
+  // 되돌리기
+  T().titles().clear(); saved.forEach(id => T().titles().add(id));
+  E("titleSel = " + JSON.stringify(sel0) + "; titleToast = null; titleFresh.clear(); lifeLog.dex = " + dex0);
+  a.rush().setBest(rush0);
+  a.toMenu();
+}
 /* ===================== v60 systems 끝 ===================== */
 
 /* --- 프로젝트 원칙 --- */

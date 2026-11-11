@@ -2585,26 +2585,13 @@ function menuRows(){
   if(state === STATE.LOG && dexPage){
     return [{ key: 9, y: H - 30, label: "9) ← 항해 일지", action: () => { dexPage = false; } }];
   }
-  if(state === STATE.LOG && titlePage > 0){
-    // 칭호 고르기 — 맨 앞은 '자동', 그 뒤로 칭호 목록. 숫자 키 1~7, 8) 페이지, 9) 일지로
-    const PER = 7, all = [null].concat(TITLES), pages = Math.ceil(all.length / PER), pg = titlePage - 1;
-    const top = 120, rowH = 36;
-    const rows = all.slice(pg*PER, pg*PER + PER).map((t, i) => {
-      const has = !t || unlockedTitles.has(t.id), on = t ? titleSel === t.id : !titleSel;
-      const label = (i+1) + ") " + (t ? (has ? "★ " : "☆ ") + t.name + " — " + t.desc : "자동 — 딴 칭호 중 가장 높은 것");
-      return { y: top + i*rowH, label: label + (on ? "  [장착 중]" : ""), action: () => pickTitle(t ? t.id : null), dim: !has, on };
-    });
-    rows.push({ key: 8, y: top + PER*rowH + 8, label: "8) " + (pg < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (pg+1) + "/" + pages + ")",
-                action: () => { titlePage = (pg + 1) % pages + 1; } });
-    rows.push({ key: 9, y: top + PER*rowH + 42, label: "9) ← 항해 일지", action: () => { titlePage = 0; } });
-    return rows;
-  }
+  if(state === STATE.LOG && titlePage > 0) return titleRows();
   if(state === STATE.LOG){
     const rows = [{ y: H - 44, label: "1) ← 뒤로가기", action: () => { state = STATE.MENU; } }];
     if(parrotUnlocked()) rows.push({ y: H - 74, label: "2) 앵무새 동료 " + (parrotOn ? "켜짐 — 끄기" : "꺼짐 — 켜기"),
                                      action: () => { parrotOn = !parrotOn; saveShop(); } });
     else rows.push({ y: H - 74, label: "앵무새 동료 — 보스 누적 " + PARROT_UNLOCK + "마리 격파 시 합류 (" + lifeBossKills + "/" + PARROT_UNLOCK + ")", action: () => {} });
-    rows.push({ key: 3, y: 236, label: "3) 칭호 고르기 →", action: () => { titlePage = 1; shopMsg = null; } });
+    rows.push({ key: 3, y: 236, label: "3) 칭호 보기·고르기 (" + unlockedTitles.size + "/" + TITLES.length + ") →" + (titleFresh.size ? "  ★ 새 칭호 " + titleFresh.size : ""), action: openTitles });
     rows.push({ key: 4, y: 260, label: "4) 바다 도감 (" + dexFound() + "/" + DEX.length + ") →", action: () => { dexPage = true; } });
     return rows;
   }
@@ -2625,6 +2612,66 @@ function menuRows(){
   return [];
 }
 
+// 칭호 화면 (v60) — 범주 탭 여섯 + 문장 카드(4열). 카드를 누르면 단다. 1~9는 숫자 키, 그 뒤는 클릭
+const TITLE_COLS = 4, TITLE_TOP = 138, TITLE_CH = 68, TITLE_GAP = 6;
+function openTitles(){
+  shopMsg = null; fx.titleT = 0;
+  // 새로 딴 칭호가 있으면 그 범주부터
+  const f = TITLES.find(t => titleFresh.has(t.id));
+  titlePage = f ? TITLE_CATS.findIndex(c => c.id === f.cat) + 1 : Math.max(1, titlePage);
+}
+function closeTitles(){ titlePage = 0; titleFresh.clear(); }
+function titleTab(i){ titlePage = (i + TITLE_CATS.length) % TITLE_CATS.length + 1; fx.titleT = 0; shopMsg = null; }
+function titleRows(){
+  const rows = [], cat = TITLE_CATS[titlePage - 1] || TITLE_CATS[0], list = TITLES.filter(t => t.cat === cat.id);
+  rows.push({ key: 9, back: true, x: 16, y: 16, w: 96, h: 34, label: "← 이전", action: closeTitles });
+  rows.push({ key: 0, x: W - 16 - 190, y: 16, w: 190, h: 34, label: "0) 자동 — 가장 높은 칭호", on: !titleSel, action: () => pickTitle(null) });
+  const tw = (W - 32 - 5*8) / 6;
+  TITLE_CATS.forEach((c, i) => {
+    const all = TITLES.filter(t => t.cat === c.id), got = all.filter(t => unlockedTitles.has(t.id)).length, fresh = all.some(t => titleFresh.has(t.id));
+    rows.push({ key: -1, tab: true, x: 16 + i*(tw + 8), y: 90, w: tw, h: 36, label: c.name + " " + got + "/" + all.length + (fresh ? " ★" : ""), sel: i === titlePage - 1, glow: fresh && i !== titlePage - 1,
+                col: i === titlePage - 1 ? "#ffd76a" : "rgba(217,184,119,.75)", action: () => titleTab(i) });
+  });
+  const cw = (W - 32 - (TITLE_COLS - 1)*8) / TITLE_COLS;
+  list.forEach((t, i) => {
+    const x = 16 + (i % TITLE_COLS)*(cw + 8), y = TITLE_TOP + Math.floor(i / TITLE_COLS)*(TITLE_CH + TITLE_GAP);
+    const has = unlockedTitles.has(t.id), on = titleSel === t.id, tr = TITLE_TIERS[t.tier];
+    rows.push({ key: i < 8 ? i + 1 : -1, x, y, w: cw, h: TITLE_CH, on, dim: !has, title: t, label: t.name, action: () => pickTitle(t.id),
+      draw: () => {
+        const fresh = titleFresh.has(t.id);
+        if(fresh) drawTitleStamp(t, x + 32, y + TITLE_CH/2 - 4, 20, ((fx.titleT || 0) - 10 - (i % 8) * 6) / 30);
+        else drawTitleMedal(t, x + 32, y + TITLE_CH/2 - 4, 20, { dim: !has });
+        uiText(t.name, x + 62, y + 17, UIF(800, 14), has ? "#f4ecd9" : "rgba(244,236,217,.5)");
+        // 등급은 메달 색이 말해 준다 — 오른쪽 아래엔 '장착'·'새로!'만(그때는 설명 폭을 줄여 겹치지 않게)
+        const tag = on ? "✓ 장착" : fresh ? "새로!" : "";
+        drawWrapped(t.desc, x + 62, y + 36, cw - 70 - (tag ? 44 : 0), 14, UIF(500, 11), has ? "rgba(244,236,217,.78)" : "rgba(244,236,217,.48)", 2);
+        if(tag) uiText(tag, x + cw - 10, y + TITLE_CH - 13, UIF(800, 11), on ? "#9fe0a0" : "#ffd76a", "right");
+        uiText((has ? "" : "🔒 ") + tr.name, x + 32, y + TITLE_CH - 7, UIF(700, 9), has ? tr.col : "rgba(244,236,217,.45)", "center");
+        if(i < 8) uiText((i + 1) + "", x + cw - 9, y + 11, UIF(600, 10), "rgba(244,236,217,.35)", "right");
+      } });
+  });
+  return rows;
+}
+function drawTitles(){
+  ctx.fillStyle = "rgba(13,27,38,0.9)";
+  ctx.fillRect(0,0,W,H);
+  fx.titleT = (fx.titleT || 0) + fx.dt;
+  centerText("칭호", 32, UIF(800, 26), "#f4ecd9");
+  const cur = currentTitle();
+  if(cur){
+    ctx.font = UIF(700, 14);
+    const txt = "지금 단 칭호 — " + cur.name + (titleSel ? "" : " (자동)"), tw = ctx.measureText(txt).width;
+    drawTitleMedal(cur, W/2 - tw/2 - 18, 66, 12);
+    uiText(txt, W/2 + 8, 66, UIF(700, 14), TITLE_TIERS[cur.tier].col, "center");
+  } else centerText("아직 딴 칭호가 없다 — 조건을 채우면 문장에 도장이 찍힌다", 66, UIF(600, 14), "rgba(244,236,217,.7)");
+  for(const r of menuRows()) drawBtn(r, r.tab ? UIF(800, 13) : UIF(700, 13));
+  if(shopMsg){
+    shopMsg.t -= 1;
+    centerText(shopMsg.text, H - 38, UIF(700, 14), shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
+    if(shopMsg.t <= 0) shopMsg = null;
+  }
+  centerText("모은 칭호 " + unlockedTitles.size + "/" + TITLES.length + " · 고른 칭호는 출항 화면·현상수배 포스터·결과에 붙는다 · ← → 범주 · 카드를 누르면 단다", H - 16, UIF(400, 12), "rgba(244,236,217,.6)");
+}
 function canvasPos(e){
   const r = canvas.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
@@ -2646,6 +2693,7 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
 function reset(){
   // 보스 러시 — 판마다 대진을 새로 뽑는다. 출항 화면에서 선원·기어만 바꿔 다시 꾸릴 땐(state가 READY) 같은 대진 그대로
   if(rushMode && (!rushList || state !== STATE.READY)){ rushList = rollRush(); fx.rushT = 0; }
+  titleRun = { fusen: 0 }; titleToast = null;
   // 60초 사냥은 하루 한 판 — 끝나고 R로 다시 시작하면 본게임으로 넘어간다
   if(blitzMode && !blitzFresh) blitzMode = false;
   blitzFresh = false;
@@ -3882,12 +3930,17 @@ window.addEventListener("keydown", (e)=>{
     if(k === "Escape"){
       e.preventDefault();
       if(state === STATE.LOG && dexPage) dexPage = false;          // 도감 → 일지
-      else if(state === STATE.LOG && titlePage) titlePage = 0;     // 칭호 고르기 → 일지
+      else if(state === STATE.LOG && titlePage) closeTitles();     // 칭호 → 일지
       else if(state === STATE.SHOP && crewStory) crewStory = null;   // 이야기 창 → 선원 탭
       else if(state === STATE.SHOP){ state = STATE.MENU; shopPage = 0; }   // 창고는 탭이라 한 번에 메뉴로
       else if(state === STATE.STORY_MAP) leaveStory();
       else if(state === STATE.PRACTICE_SELECT) state = STATE.CHALLENGE;
       else if(state !== STATE.MENU) state = STATE.MENU;
+      return;
+    }
+    if(state === STATE.LOG && titlePage && (k === "ArrowLeft" || k === "ArrowRight")){
+      e.preventDefault();
+      titleTab(titlePage - 1 + (k === "ArrowRight" ? 1 : -1));
       return;
     }
     if(state === STATE.SHOP && !crewStory && (k === "ArrowLeft" || k === "ArrowRight")){
@@ -4384,26 +4437,62 @@ function chainMult(){
 }
 
 /* 보스 처치 칭호 — 누적 처치 수 기준, 약한 순서로 나열 (마지막으로 만족하는 게 현재 칭호) */
+// v60 칭호 개편 — 등급(tier 1 동 · 2 은 · 3 금 · 4 전설) · 범주(cat) · 문장(emb, drawEmblem 종류).
+// 예전 18개의 id는 그대로다(저장된 unlocked·두건 해금 조건이 id를 본다). 이름만 손본 것: veteran(유명 만화 용어를 뺐다)·kraken1·kraken10.
+// 보스 첫 격파 칭호는 도감 격침 수(lifeLog.dex["boss" + 번호], 연습은 안 센다)를 본다 — 예전에 잡아 둔 보스는 다음 판정 때 바로 인정된다.
+// 설명의 보스 이름은 BOSSES에서 읽는다(이름이 바뀌어도 따라간다). **순서는 '자동' 칭호의 같은 등급 안 우선순위다(뒤가 높다) — 새 칭호는 범주 끝에.**
+const TITLE_TIERS = [null, { name:"동", col:"#e0a070" }, { name:"은", col:"#dfe6ee" }, { name:"금", col:"#ffd76a" }, { name:"전설", col:"#e2b0ff" }];
+const TITLE_CATS = [{ id:"hunt", name:"사냥" }, { id:"sail", name:"항해" }, { id:"skill", name:"기술" }, { id:"story", name:"스토리" }, { id:"collect", name:"수집" }, { id:"dare", name:"도전" }];
+const bossSunk = (s, t) => ((s.dex || {})["boss" + t] || 0) >= 1;
 const TITLES = [
-  { id:"novice",    name:"풋내기 사냥꾼",     desc:"보스 1마리 격파",        need:(s) => s.boss >= 1 },
-  { id:"gull20",    name:"하늘의 사냥꾼",     desc:"폭탄 갈매기 누적 20마리", need:(s) => (s.gulls || 0) >= 20 },
-  { id:"hunter",    name:"현상금 사냥꾼",     desc:"보스 누적 10마리",        need:(s) => s.boss >= 10 },
-  { id:"perfect50", name:"타이밍의 달인",     desc:"PERFECT 누적 50회",       need:(s) => (s.perfects || 0) >= 50 },
-  { id:"kraken1",   name:"크라켄 슬레이어",   desc:"크라켄 1마리 격파",       need:(s) => s.kraken >= 1 },
-  { id:"ghost1",    name:"유령선 퇴마사",     desc:"망령의 유령선 1척 격침",   need:(s) => (s.ghost || 0) >= 1 },
-  { id:"admiral1",  name:"정의를 꺾은 자",    desc:"해군 대장 군함 격침",      need:(s) => (s.admiral || 0) >= 1 },
-  { id:"veteran",   name:"그랑 라인의 폭풍",  desc:"보스 누적 30마리",        need:(s) => s.boss >= 30 },
-  { id:"dist10k",   name:"대항해자",          desc:"누적 항해 10000m",        need:(s) => (s.dist || 0) >= 10000 },
-  { id:"kraken3",   name:"심해의 재앙",       desc:"크라켄 누적 3마리",       need:(s) => s.kraken >= 3 },
-  { id:"ghost3",    name:"저승의 뱃사공",     desc:"유령선 누적 3척",         need:(s) => (s.ghost || 0) >= 3 },
-  { id:"mapper",    name:"전설의 보물 사냥꾼", desc:"보물 지도 완성",         need:(s) => (s.maps || 0) >= 1 },
-  { id:"kraken10",  name:"해왕을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 },
-  { id:"ghost10",   name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 },
-  { id:"naturalist", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length },
-  { id:"voyage_end", name:"대항해의 끝",      desc:"스토리 최종장을 깬다",     need:(s) => (s.storyEnd || 0) >= 1 },
-  { id:"star81",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX },
-  { id:"jail",      name:"탈옥수",            desc:"해저 감옥에서 마젤란을 꺾고 탈옥", need:(s) => ((s.dex || {}).boss20 || 0) >= 1 }
+  // 사냥
+  { id:"novice",    cat:"hunt", tier:1, emb:"dagger",   name:"풋내기 사냥꾼",     desc:"보스 1마리 격파",        need:(s) => s.boss >= 1 },
+  { id:"gull20",    cat:"hunt", tier:1, emb:"gull",     name:"하늘의 사냥꾼",     desc:"폭탄 갈매기 누적 20마리", need:(s) => (s.gulls || 0) >= 20 },
+  { id:"hunter",    cat:"hunt", tier:2, emb:"target",   name:"현상금 사냥꾼",     desc:"보스 누적 10마리",        need:(s) => s.boss >= 10 },
+  { id:"kraken1",   cat:"hunt", tier:2, emb:"tentacle", name:"잠든 재앙을 깨운 자", desc:BOSSES[5].name + "을 처음 물리친다", need:(s) => s.kraken >= 1 },
+  { id:"ghost1",    cat:"hunt", tier:2, emb:"ghost",    name:"유령선 퇴마사",     desc:"뒤집혀 올라오는 " + BOSSES[7].name + "을 가라앉힌다", need:(s) => (s.ghost || 0) >= 1 },
+  { id:"boss6",     cat:"hunt", tier:2, emb:"octo",     name:"무대를 빼앗은 자",   desc:"바다의 무희 장군 — " + BOSSES[6].name + "를 꺾는다", need:(s) => bossSunk(s, 6) },
+  { id:"boss13",    cat:"hunt", tier:2, emb:"hammer",   name:"모루를 식힌 자",     desc:"거인 대장장이 — " + BOSSES[13].name + "를 꺾는다", need:(s) => bossSunk(s, 13) },
+  { id:"admiral1",  cat:"hunt", tier:3, emb:"swords",   name:"정의를 꺾은 자",    desc:"군함 위 결투에서 드레이크 대장을 이긴다", need:(s) => (s.admiral || 0) >= 1 },
+  { id:"boss11",    cat:"hunt", tier:3, emb:"scarf",    name:"두건을 이은 자",     desc:"붉은 두건 조각을 지닌 늙은 검객 — " + BOSSES[11].name + "을 꺾는다", need:(s) => bossSunk(s, 11) },
+  { id:"boss17",    cat:"hunt", tier:3, emb:"lantern",  name:"꺼진 등불을 거둔 자", desc:"빛을 잃은 여왕 — " + BOSSES[17].name + "를 꺾는다", need:(s) => bossSunk(s, 17) },
+  { id:"boss18",    cat:"hunt", tier:3, emb:"island",   name:"섬에 오른 자",       desc:"등에 섬을 진 고래 — " + BOSSES[18].name + "을 꺾는다", need:(s) => bossSunk(s, 18) },
+  { id:"boss19",    cat:"hunt", tier:3, emb:"bone",     name:"해골 해룡을 재운 자", desc:"뼈만 남은 해룡 — " + BOSSES[19].name + "을 꺾는다", need:(s) => bossSunk(s, 19) },
+  { id:"veteran",   cat:"hunt", tier:3, emb:"skull",    name:"먼바다의 폭풍",     desc:"보스 누적 30마리",        need:(s) => s.boss >= 30 },
+  { id:"kraken3",   cat:"hunt", tier:3, emb:"tentacle", name:"심해의 재앙",       desc:"크라켄 누적 3마리",       need:(s) => s.kraken >= 3 },
+  { id:"ghost3",    cat:"hunt", tier:3, emb:"ghost",    name:"저승의 뱃사공",     desc:"유령선 누적 3척",         need:(s) => (s.ghost || 0) >= 3 },
+  { id:"boss15",    cat:"hunt", tier:4, emb:"eye",      name:"봉인을 다시 건 자",  desc:BOSSES[15].name + "을 물리친다", need:(s) => bossSunk(s, 15) },
+  { id:"kraken10",  cat:"hunt", tier:4, emb:"tentacle", name:"심연을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 },
+  { id:"ghost10",   cat:"hunt", tier:4, emb:"ghost",    name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 },
+  { id:"hunt100",   cat:"hunt", tier:4, emb:"crown",    name:"바다의 전설",       desc:"보스 누적 100마리",       need:(s) => s.boss >= 100 },
+  { id:"allboss",   cat:"hunt", tier:4, emb:"scroll",   name:"현상수배첩을 덮은 자", desc:"보스 " + BOSSES.length + "종을 모두 한 번씩 격침", need:(s) => BOSSES.every((b, t) => bossSunk(s, t)) },
+  // 항해
+  { id:"best2000",  cat:"sail", tier:2, emb:"wave",     name:"먼바다의 그네꾼",   desc:"한 판에 2000m",           need:(s) => (s.best || 0) >= 2000 },
+  { id:"dist10k",   cat:"sail", tier:2, emb:"ship",     name:"대항해자",          desc:"누적 항해 10000m",        need:(s) => (s.dist || 0) >= 10000 },
+  { id:"best5000",  cat:"sail", tier:3, emb:"compass",  name:"끝없는 바다",       desc:"한 판에 5000m",           need:(s) => (s.best || 0) >= 5000 },
+  { id:"best8000",  cat:"sail", tier:4, emb:"star",     name:"심연을 건넌 자",    desc:"한 판에 8000m — 네 해역을 모두 지난다", need:(s) => (s.best || 0) >= 8000 },
+  // 기술
+  { id:"perfect50", cat:"skill", tier:2, emb:"clock",   name:"타이밍의 달인",     desc:"PERFECT 누적 50회",       need:(s) => (s.perfects || 0) >= 50 },
+  { id:"combo15",   cat:"skill", tier:2, emb:"rope",    name:"끊기지 않는 그네",  desc:"연속 콤보 ×15",           need:(s) => (s.combo || 0) >= 15 },
+  { id:"flawless",  cat:"skill", tier:2, emb:"shield",  name:"털끝 하나 안 다친", desc:"한 번도 휘청이지 않고 보스를 격파", need:(s) => !!(s.kill && s.kill.flawless) },
+  { id:"quick",     cat:"skill", tier:3, emb:"bolt",    name:"번개 같은 한 판",   desc:"보스를 등장 20초 안에 격파", need:(s) => !!(s.kill && s.kill.sec <= 20) },
+  { id:"duel",      cat:"skill", tier:3, emb:"fist",    name:"상처 없는 결투",    desc:"네임드·대형 보스를 한 번도 휘청이지 않고 격파", need:(s) => !!(s.kill && s.kill.flawless && s.kill.heavy) },
+  // 스토리
+  { id:"voyage_end", cat:"story", tier:3, emb:"flag",   name:"대항해의 끝",      desc:"스토리 최종장을 깬다",     need:(s) => (s.storyEnd || 0) >= 1 },
+  { id:"crewall",   cat:"story", tier:3, emb:"wheel",   name:"한배를 탄 사람들",  desc:"동료 " + CREW.length + "명을 모두 맞이한다", need:(s) => (s.crewN || 0) >= CREW.length },
+  { id:"star81",    cat:"story", tier:4, emb:"star",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX },
+  // 수집
+  { id:"mapper",    cat:"collect", tier:2, emb:"map",   name:"전설의 보물 사냥꾼", desc:"보물 지도 완성",         need:(s) => (s.maps || 0) >= 1 },
+  { id:"medals",    cat:"collect", tier:2, emb:"jelly", name:"놀이터의 왕",       desc:"미니게임 셋 모두 금메달",  need:(s) => !!s.goldAll },
+  { id:"rich",      cat:"collect", tier:3, emb:"chest", name:"창고가 터질 듯",    desc:"창고 보물 1,000,000",     need:(s) => (s.bank || 0) >= 1000000 },
+  { id:"naturalist", cat:"collect", tier:4, emb:"book", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length },
+  // 도전
+  { id:"jail",      cat:"dare", tier:3, emb:"key",      name:"탈옥수",            desc:BOSSES[20].name + "을 꺾고 해저 감옥을 탈옥", need:(s) => bossSunk(s, 20) },
+  { id:"rush5",     cat:"dare", tier:3, emb:"swords",   name:"다섯 고개를 넘은 자", desc:"보스 러시 5연전 완주",    need:(s) => (s.rush || 0) > 0 },
+  { id:"nofusen",   cat:"dare", tier:3, emb:"balloon",  name:"맨몸의 항해",       desc:"풍선으로 한 번도 튕기지 않고 한 판 3000m", need:(s) => (s.bare || 0) >= 3000 },
+  { id:"rushfast",  cat:"dare", tier:4, emb:"bolt",     name:"질풍 오연전",       desc:"보스 러시를 6분 안에 완주", need:(s) => (s.rush || 0) > 0 && s.rush <= 60*60*6 }
 ];
+const titleDef = (id) => TITLES.find(t => t.id === id) || null;
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
 let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[], dex:{} };
@@ -4452,13 +4541,15 @@ async function saveLog(){
 }
 
 // 칭호 고르기 — titleSel이 비어 있으면(자동) 딴 것 중 가장 높은 칭호를 단다
-let titleSel = null, titlePage = 0;
-function currentTitleName(){
-  if(titleSel && unlockedTitles.has(titleSel)) return TITLES.find(t => t.id === titleSel).name;
-  let name = null;
-  for(const t of TITLES) if(unlockedTitles.has(t.id)) name = t.name;
-  return name;
+// v60: '가장 높은' = 등급이 높은 것, 같은 등급이면 목록에서 뒤에 있는 것. titlePage는 1~6 = 범주(TITLE_CATS) 차례
+let titleSel = null, titlePage = 0, titleFresh = new Set(), titleToast = null, titleRun = { fusen: 0 }, lastKill = null;
+function currentTitle(){
+  if(titleSel && unlockedTitles.has(titleSel) && titleDef(titleSel)) return titleDef(titleSel);
+  let top = null;
+  for(const t of TITLES) if(unlockedTitles.has(t.id) && (!top || t.tier >= top.tier)) top = t;
+  return top;
 }
+function currentTitleName(){ const t = currentTitle(); return t ? t.name : null; }
 function pickTitle(id){
   if(id && !unlockedTitles.has(id)){
     const t = TITLES.find(q => q.id === id);
@@ -4471,16 +4562,70 @@ function pickTitle(id){
   return true;
 }
 
+// 판정에 쓰는 값 — 누적 기록(lifeLog) + 지금 판의 값. kill은 방금 격침한 보스(damageBoss가 lastKill에 적어 둔다)
+function titleStats(){
+  const live = !practiceMode && typeof dist === "number";
+  const run = live && mainGame() ? dist : 0;
+  return Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone, dexN: dexFound(), storyEnd, stars: storyStarTotal(),
+    best: Math.max(best || 0, bestDiff.easy || 0, bestDiff.hard || 0, run), combo: Math.max(bestChain || 0, live && !storyMode ? maxChain || 0 : 0),
+    bare: run > 0 && titleRun.fusen === 0 ? run : 0, rush: rushBest, bank, crewN: crewOwned.length, goldAll: MINIS.every(q => (miniMedals[q.id] || 0) >= 3), kill: lastKill });
+}
+// 새로 딴 칭호 가운데 가장 높은 것을 돌려준다(없으면 null). 딴 것은 titleFresh(칭호 화면의 '새로 찍힌 도장')와 화면 알림(titleToast)에 올린다
 function checkTitles(){
-  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone, dexN: dexFound(), storyEnd, stars: storyStarTotal() });
+  const stats = titleStats();
   let unlocked = null;
   for(const t of TITLES){
     if(!unlockedTitles.has(t.id) && t.need(stats)){
       unlockedTitles.add(t.id);
-      unlocked = t;
+      titleFresh.add(t.id);
+      if(!unlocked || t.tier >= unlocked.tier) unlocked = t;
     }
   }
+  if(unlocked) titleToast = { id: unlocked.id, t: 0 };
   return unlocked;
+}
+// 칭호 문장 — 등급 색 메달에 문장 그림. o.dim이면 못 딴 칭호(흐리게)
+function drawTitleMedal(t, x, y, r, o){
+  drawMedal(x, y, r, t.tier, Object.assign({ kind: t.emb }, o || {}));
+  if(t.tier === 4 && !(o && o.dim)){               // 전설 — 작은 왕관 술
+    const pu = paperUI; paperUI = false;
+    drawEmblem("crown", x, y - r - r*0.16, r*0.34, "#ffd76a");
+    paperUI = pu;
+  }
+}
+// 도장 찍히는 연출 — k(0→1). 크게 떨어져 내려앉고(outBack) 먹이 튄다. 연출 줄이기면 그냥 그린다
+function drawTitleStamp(t, x, y, r, k){
+  const calm = settings.calm, kk = calm ? 1 : clamp01(k);
+  if(kk <= 0) return;
+  const sc = 1 + 1.3 * (1 - ease.outBack(clamp01(kk / 0.45), 1.6));
+  ctx.save(); ctx.globalAlpha *= clamp01(kk / 0.12);
+  ctx.translate(x, y); ctx.rotate(-0.22 * (1 - clamp01(kk / 0.45))); ctx.scale(sc, sc);
+  drawTitleMedal(t, 0, 0, r);
+  ctx.restore();
+  if(!calm && kk > 0.4){
+    const pu = paperUI; paperUI = false;
+    const u = clamp01((kk - 0.4) / 0.6);
+    inkSplat(x, y, u, t.id.length * 2.3 + t.tier, 9, "40,26,16", r * 3);
+    ctx.save(); ctx.globalAlpha = (1 - u) * 0.8; ctx.strokeStyle = TITLE_TIERS[t.tier].col; ctx.lineWidth = 3 * (1 - u) + 0.5;
+    ctx.beginPath(); ctx.arc(x, y, r * (1.1 + 1.2 * ease.outCubic(u)), 0, Math.PI*2); ctx.stroke(); ctx.restore();
+    paperUI = pu;
+  }
+}
+// 판 중에 칭호를 따면 위쪽에 꼬리표가 내려와 도장이 찍힌다(약 3초). 그리기 전용 타이머
+const TOAST_T = 190;
+function drawTitleToast(){
+  if(!titleToast) return;
+  const t = titleDef(titleToast.id);
+  titleToast.t += fx.dt;
+  if(!t || titleToast.t > TOAST_T){ titleToast = null; return; }
+  const k = titleToast.t, calm = settings.calm, inK = calm ? 1 : ease.outBack(clamp01(k / 16), 1.2), outK = clamp01((TOAST_T - k) / 18);
+  const w = 300, h = 56, x = W/2 - w/2, y = (boss ? 118 : 96) - 70 * (1 - inK);
+  ctx.save(); ctx.globalAlpha = outK;
+  drawPanel({ x, y, w, h, sel: true }, 10);
+  drawTitleStamp(t, x + 34, y + h/2, 20, (k - 12) / 34);
+  uiText("칭호 획득 · " + TITLE_TIERS[t.tier].name, x + 66, y + 18, UIF(700, 11), TITLE_TIERS[t.tier].col);
+  uiText(t.name, x + 66, y + 37, UIF(800, 17), "#f4ecd9");
+  ctx.restore();
 }
 
 function clearCuts(){
@@ -4836,6 +4981,7 @@ function knock(hard, mild){
     for(let i=0;i<14;i++) spark(p.x, p.y, "#8fd6d8");
     return;
   }
+  if(boss) boss.hurt = true;               // 칭호 '털끝 하나 안 다친' — 보스전 중 휘청였다
   // hard는 크라켄 촉수(true)·유령선 사슬("chain")에서만, mild는 오직 식인 물고기 피격에서만 들어온다
   const base = hard === "chain" ? STUN_CHAIN : hard ? STUN_KRAKEN : mild ? STUN_MOB : STUN_FRAMES;
   const onFire = fire > 0;
@@ -4940,11 +5086,11 @@ function damageBoss(ranged, mark, power){
       if(b.type === 7) lifeGhostKills++;
       if(b.type === ADMIRAL) lifeAdmiralKills++;
       dexSee("boss" + b.type);
+      // 이번 격침의 내용(노 피격·걸린 시간)은 이 판정 한 번에만 쓰인다
+      lastKill = { type: b.type, flawless: !b.hurt, heavy: !!(b.big || b.named), sec: ((b.tMax || 0) - (b.tLeft || 0)) / 60 };
       const unlocked = checkTitles();
-      if(unlocked){
-        newTitle = unlocked.name;
-        pops.push({ x:b.x, y:b.y-70, t:160, text:"칭호 획득: " + unlocked.name, color:"#ffd76a" });
-      }
+      lastKill = null;
+      if(unlocked) newTitle = unlocked.name;       // 알림은 위쪽 꼬리표(titleToast)가 맡는다
       saveTitles();
     }
     // 연습은 예전처럼 바로 무작위 보상, 그 밖에는 슬로모션이 끝나면 카드 3장 중에서 고른다(러시 마지막 보스는 곧 완주라 생략)
@@ -7339,6 +7485,7 @@ function update(dt){
     if(fusen > 0){
       // 고무고무 풍선 — 바다에 닿는 순간 몸을 부풀려 튕겨 오른다
       fusen--;
+      titleRun.fusen++;
       storyCount("fusenUsed");
       rope = null;
       p.y = SEA - 16;
@@ -7537,7 +7684,8 @@ const CODE_HEAD = "GOMU1-", CODE2_HEAD = "G2-";
 const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022",
   "story","st","seen","end","art","grab","sense","redhawk","puff","spin","jack","boss15","biome3","voyage_end","star81","captain","starlit",
   "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail",
-  "rush5","top","comet"];
+  "rush5","top","comet",
+  "hunt100","allboss","best2000","best5000","best8000","combo15","flawless","quick","duel","crewall","medals","rich","nofusen","rushfast"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -13572,6 +13720,7 @@ function drawFrame(){
   if(state === STATE.PLAY) drawRivalHud();
   if(state === STATE.PLAY) drawBossIntro();
   if(state === STATE.PLAY) drawSinkBanner();
+  if(state === STATE.PLAY) drawTitleToast();
   if(state === STATE.PLAY && !storyMode) drawMissions();
   if(state === STATE.PLAY && storyMode && storyRun) drawStoryHud();
   if(state === STATE.PLAY) drawArtScreen();
@@ -13665,7 +13814,12 @@ function drawFrame(){
     if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 84, "600 13px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0");
     if(tip) centerText("팁 · " + tip, H/2 + 106, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(255,215,106,.8)");
     const readyTitle = currentTitleName();
-    if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Gowun Batang', 'Pretendard', serif", "#ffd76a");
+    if(readyTitle){
+      const rt = currentTitle(), txt = "현재 칭호: " + readyTitle;
+      ctx.font = UIF(600, 14);
+      drawTitleMedal(rt, W/2 - ctx.measureText(txt).width/2 - 16, H/2 - 78, 10);
+      uiText(txt, W/2 + 8, H/2 - 78, UIF(600, 14), TITLE_TIERS[rt.tier].col, "center");
+    }
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(217,184,119,.8)");
     drawScreenButtons();
   } else if(state === STATE.PICK){
@@ -13778,7 +13932,12 @@ function drawFrame(){
       line((newChainRecord ? "★ 신기록 " : "") + "최고 콤보 ×" + maxChain, "600 14px 'Gowun Batang', 'Pretendard', serif",
            newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
-    if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Gowun Batang', 'Pretendard', serif", "#ffd76a", 26);
+    if(newTitle){
+      // 새 칭호 — 문장이 도장처럼 찍힌다
+      const nt = TITLES.find(q => q.name === newTitle);
+      if(nt) drawTitleStamp(nt, lx + 14, overY, 13, (fx.resT - 30) / 34);
+      leftText("새 칭호 획득: " + newTitle + (nt ? "  (" + TITLE_TIERS[nt.tier].name + ")" : ""), lx + (nt ? 36 : 0), overY, "700 15px 'Gowun Batang', 'Pretendard', serif", "#ffd76a"); overY += 30;
+    }
     if(crewNews) line("✉ 새 동료 소식: " + crewNews.name + " — 창고 → 선원 칸에서 맞이하기", "700 15px 'Gowun Batang', 'Pretendard', serif", "#e6a8f0", 24);
     if(crewLvUp) line("⚓ 선원 " + crewLvUp.name + " Lv." + crewLvUp.lv + " 승급!", "700 15px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0", 24);
     if(runXp > 0) drawXpBar(lx, H - 112);
@@ -13814,17 +13973,7 @@ function drawFrame(){
   } else if(state === STATE.LOG && dexPage){
     drawDex();
   } else if(state === STATE.LOG && titlePage){
-    ctx.fillStyle = "rgba(13,27,38,0.9)";
-    ctx.fillRect(0,0,W,H);
-    centerText("칭호 고르기", 50, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    centerText("지금 단 칭호: " + (currentTitleName() || "없음") + (titleSel ? "" : " (자동)"), 84, "600 14px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0");
-    for(const row of menuRows()) centerText(row.label, row.y, "500 15px 'Gowun Batang', 'Pretendard', serif", row.on ? "#9fe0a0" : row.dim ? "rgba(244,236,217,.35)" : "#d9b877");
-    if(shopMsg){
-      shopMsg.t -= 1;
-      centerText(shopMsg.text, H - 44, "700 14px 'Gowun Batang', 'Pretendard', serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
-      if(shopMsg.t <= 0) shopMsg = null;
-    }
-    centerText("출항 화면과 현상수배 포스터에 고른 칭호가 붙는다 · 숫자 키 또는 클릭 · Esc 뒤로", H - 18, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
+    drawTitles();
   } else if(state === STATE.LOG){
     ctx.fillStyle = "rgba(13,27,38,0.86)";
     ctx.fillRect(0,0,W,H);
@@ -13843,14 +13992,18 @@ function drawFrame(){
       leftText(st[0], cx, cy, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)");
       leftText(st[1], cx + 96, cy, "700 14px 'Gowun Batang', serif", "#ffd76a");
     });
-    const cur = currentTitleName();
-    TITLES.forEach((t, i) => {
-      // 칭호가 많아져 이름만 세 줄씩 — 조건은 '칭호 고르기'에서 본다. 아래 최근 기록 그래프(414)와 겹치지 않게
-      const cx = [W/2 - 310, W/2 - 95, W/2 + 120][i % 3], cy = 292 + Math.floor(i / 3) * 21;
-      const has = unlockedTitles.has(t.id);
-      leftText((has ? "★ " : "☆ ") + t.name, cx, cy, "700 13px 'Gowun Batang', 'Pretendard', serif",
-               t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
-    });
+    // 칭호 — 지금 단 것과 범주별 모은 수(목록·조건은 '칭호 보기'에서). 아래 최근 기록 그래프(414)와 겹치지 않게
+    {
+      const cur = currentTitle(), y0 = 300;
+      if(cur){ drawTitleMedal(cur, W/2 - 290, y0 + 26, 24); leftText(cur.name, W/2 - 256, y0 + 16, UIF(800, 17), TITLE_TIERS[cur.tier].col); leftText(cur.desc, W/2 - 256, y0 + 38, UIF(500, 12), "rgba(244,236,217,.7)"); }
+      else leftText("아직 딴 칭호가 없다", W/2 - 310, y0 + 26, UIF(600, 14), "rgba(244,236,217,.6)");
+      TITLE_CATS.forEach((c, i) => {
+        const all = TITLES.filter(t => t.cat === c.id), got = all.filter(t => unlockedTitles.has(t.id)).length;
+        const cx = W/2 - 20 + (i % 3) * 112, cy = y0 + 14 + Math.floor(i / 3) * 26;
+        leftText(c.name, cx, cy, UIF(600, 13), "rgba(244,236,217,.65)");
+        leftText(got + "/" + all.length, cx + 52, cy, UIF(800, 13), got === all.length ? "#9fe0a0" : got ? "#ffd76a" : "rgba(244,236,217,.4)");
+      });
+    }
     drawRecentChart(W/2 - 310, 414, 620, 32);
     menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 || row.key === 3 ? "600 16px 'Gowun Batang', 'Pretendard', serif" : "500 14px 'Gowun Batang', 'Pretendard', serif",
                                               i === 0 ? "#d9b877" : row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
@@ -14739,7 +14892,9 @@ window.__swing = {
   ghost: () => ({ best: ghostBest, rec: ghostRec }),
   tech: () => ({ lv: techLv, mats, eqR: eqRanged, eqM: eqMelee, open: openPack, up: upgradeTech, equip: equipTech,
                  set: (id, lv) => { techLv[id] = lv; }, rangedCd: rangedCd(), meleeCd: meleeCd(), volley, comet, shock, stamp: techStamp, K: { BAZOOKA_R, BAZOOKA_POW, AXE_W, AXE_POW, AXE_WAVE_R, GATLING_POW, TOP_R, TOP_T, COMET_R, COMET_T, COMET_RANGE }, list: TECHS, aim: (spd, range) => pickAimTarget(spd, range, PISTOL_BOSS_RANGE) }),
-  title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage }),
+  titleUnlock: (ids, fresh, toast) => { ids.concat(fresh || []).forEach(id => unlockedTitles.add(id)); (fresh || []).forEach(id => titleFresh.add(id)); if(toast && fresh && fresh.length) titleToast = { id: fresh[fresh.length - 1], t: 0 }; },
+  title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage, cur: currentTitle(), list: TITLES, cats: TITLE_CATS, tiers: TITLE_TIERS, fresh: titleFresh, toast: titleToast, check: checkTitles, stats: titleStats,
+                  open: () => { state = STATE.LOG; dexPage = false; openTitles(); }, close: closeTitles, tab: titleTab, run: titleRun, setKill: (k) => { lastKill = k; } }),
   rows: () => menuRows(),
   shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
   shopUi: () => ({ tab: (i) => { state = STATE.SHOP; shopTab(i); }, page: () => shopPage, cat: () => techCat, idx: shopTabIdx,
