@@ -3970,6 +3970,47 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("v60 이전: 계정 창에도 '← 이전' 버튼", /id="acctBack">← 이전</.test(src) && /on\("acctBack",\s*closeAccount\)/.test(src));
   a.toMenu();
 }
+/* --- v60 systems: 메뉴·버튼 비주얼 (놋쇠 버튼 · 깃발 탭 · 밤바다 메뉴 · 팩 열기 연출) --- */
+{
+  const a = A(), E = (x) => T().ev(x), st = () => a.peek().state;
+  a.toMenu(); const rows = a.rows();
+  ok("v60 메뉴: 메인 메뉴 여덟 줄 모두 왼쪽 문장(아이콘)", rows.length === 8 && rows.every(r => typeof r.icon === "string") && E("['map','anchor','skull','chest','compass','cog','person','jelly'].join()") === rows.map(r => r.icon).join(), rows.map(r => r.icon).join());
+  ok("v60 메뉴: 줄끼리 겹치지 않고 화면 안(제목 아래 · 바닥 안내 위)", rows.every((r, i) => r.y >= 140 && r.y + r.h <= 500 && (i === 0 || rows[i-1].y + rows[i-1].h < r.y)));
+  ok("v60 메뉴: 그리기 분기 — 카드는 양피지, 탭은 깃발, 나머지는 놋쇠 버튼", E("typeof drawBrassBtn === 'function' && typeof drawFlagTab === 'function' && typeof drawMenuSea === 'function' && typeof drawMenuLogo === 'function' && typeof drawHeading === 'function'") &&
+     /if\(r\.tab\)\{ drawFlagTab\(r, font\); return; \}/.test(E("drawBtn.toString()")) && /drawBrassBtn/.test(E("drawBtn.toString()")));
+  // 메뉴끼리 옮기면 짧은 잉크 전환 + 버튼 등장 타이머가 처음부터
+  E("fx.menuT = 99; fx.wipe = 0; uiState = STATE.MENU"); a.rows().find(r => /도전/.test(r.label)).action(); E("fxStateChange(STATE.MENU, STATE.CHALLENGE)");
+  ok("v60 메뉴: 메뉴 → 도전 — 잉크 전환(18프레임)과 등장 타이머 리셋", E("fx.wipe") === 18 && E("fx.wipeT") === 18 && E("fx.menuT") === 0);
+  E("fxStateChange(STATE.MENU, STATE.STORY_MAP)");
+  ok("v60 메뉴: 스토리 흐름 전환은 예전 길이(WIPE_T) 그대로", E("fx.wipe === WIPE_T && fx.wipeT === WIPE_T"));
+  // 눌림 — 그리기 전용, 판정·상태는 그대로
+  E("uiPress({ x: 50, y: 30 })");
+  ok("v60 메뉴: 누른 자리의 버튼만 눌림 표시(0~1)", E("pressK(BACK_BTN)") === 1 && E("pressK({ x: 400, y: 400, w: 50, h: 30 })") === 0);
+  E("fx.clock += 20");
+  ok("v60 메뉴: 눌림은 잠깐 뒤 돌아온다", E("pressK(BACK_BTN)") === 0);
+  // 팩 열기 연출 — 결과는 openPack이 정하고 그림만 따라간다. 창고를 떠나면 걷힌다
+  a.toMenu(); a.rows().find(r => /보물 창고/.test(r.label)).action(); a.shopUi().tab(1);
+  const bank0 = E("bank"); E("bank = 99999");
+  const res = E("openPack('melee', () => 0.9)");
+  ok("v60 메뉴: 팩을 열면 상자 연출이 걸린다(결과 그대로)", res && res.kind === "mat" && E("UIK.pack && UIK.pack.res") === res && E("UIK.pack.cat") === "melee");
+  for(let i = 0; i < 3; i++) H.step();
+  E("fxStateChange(STATE.SHOP, STATE.MENU)");
+  ok("v60 메뉴: 창고를 떠나면 팩 연출은 걷힌다", E("UIK.pack") === null);
+  E("bank = " + bank0 + "; mats.melee -= " + res.n);
+  // 화면 버튼(출항·일시정지·결과) → 놋쇠 버튼 줄로 바꿔 그린다. 흐린 글씨색은 '못 고르는 칸'
+  ok("v60 메뉴: 화면 버튼 변환 — 흐린 색은 dim, 행동은 그대로", E("asBrass({ x:0, y:0, w:10, h:10, label:'x', act:goToMenu, col:'rgba(244,236,217,.35)' }).dim") === true &&
+     E("asBrass({ x:0, y:0, w:10, h:10, label:'x', act:goToMenu, col:'#9fe0a0' }).action === goToMenu"));
+  // 연출 줄이기 — 흐르는 빛·등장 애니메이션 없이 그려도 오류 없음(가짜 캔버스로 한 번씩)
+  const calm0 = E("settings.calm");
+  for(const c of [true, false]){
+    E("settings.calm = " + c);
+    E("drawMenuSea(false); drawMenuLogo(52); drawMenuBg(); drawHeading('시험', 40, 22); drawBrassBtn({ x:10, y:10, w:320, h:36, label:'1) 📜 시험', icon:'map', sel:true, action(){} }); drawFlagTab({ x:10, y:60, w:120, h:36, tab:true, sel:true, label:'탭', action(){} }); UIK.pack = { res:{ kind:'tech', id:'top' }, cat:'melee', t:40 }; drawPackReveal(); UIK.pack = null");
+  }
+  E("settings.calm = " + calm0);
+  ok("v60 메뉴: 연출 줄이기 켜고/끄고 새 UI 그리기 오류 없음", true);
+  ok("v60 메뉴: 도전 화면 설명이 5연전으로", /무작위 보스 5연전/.test(require("fs").readFileSync(process.env.GAME || require("path").join(__dirname, "..", "index.html"), "utf8")));
+  a.toMenu();
+}
 /* ===================== v60 systems 끝 ===================== */
 
 /* --- 프로젝트 원칙 --- */

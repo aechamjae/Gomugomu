@@ -13407,10 +13407,29 @@ function brassFill(x, y, w, h, lit, dim){
   const g = ctx.createLinearGradient(x, y, x + w*0.35, y + h*1.6);
   if(dim){ g.addColorStop(0, "#9a8458"); g.addColorStop(0.5, "#6e5a36"); g.addColorStop(1, "#3e311c"); return g; }
   const c0 = lit ? "#fff0b0" : "#ecd08a", c1 = lit ? "#d9a63c" : "#b08436", c2 = lit ? "#8a5a14" : "#6a4818";
-  if(!lit || settings.calm){ g.addColorStop(0, c0); g.addColorStop(0.45, c1); g.addColorStop(1, c2); return g; }
-  const s = ((fx.clock * 0.012 + (x * 0.0007)) % 1.4) - 0.2, cl = (v) => Math.max(0, Math.min(1, v));
-  g.addColorStop(0, c0); g.addColorStop(cl(s - 0.12), c1); g.addColorStop(cl(s), "#fffbe0"); g.addColorStop(cl(s + 0.12), c1); g.addColorStop(1, c2);
+  g.addColorStop(0, c0); g.addColorStop(0.45, c1); g.addColorStop(1, c2);
   return g;
+}
+// 테를 따라 흐르는 금빛 — 테(바깥 둥근 사각형 − 안쪽)만 잘라 비스듬한 빛 띠가 왼쪽에서 오른쪽으로 지나간다
+function brassGlint(x, y, w, h, R, fi){
+  if(settings.calm) return;
+  const span = w + 160, gx = x - 60 + ((fx.clock * 5 + x * 0.7) % span);
+  ctx.save();
+  rrPath(x, y, w, h, R);
+  const ix = x + fi, iy = y + fi, iw = w - 2*fi, ih = h - 2*fi, ir = Math.max(0, Math.min(R - fi, iw/2, ih/2));
+  ctx.moveTo(ix + ir, iy); ctx.lineTo(ix, iy + ir); ctx.lineTo(ix, iy + ih - ir); ctx.lineTo(ix + ir, iy + ih); ctx.lineTo(ix + iw - ir, iy + ih); ctx.lineTo(ix + iw, iy + ih - ir); ctx.lineTo(ix + iw, iy + ir); ctx.lineTo(ix + iw - ir, iy); ctx.closePath();
+  ctx.clip("evenodd");
+  const g = ctx.createLinearGradient(gx - 30, 0, gx + 30, 0);
+  g.addColorStop(0, "rgba(255,252,225,0)"); g.addColorStop(0.5, "rgba(255,252,225,.95)"); g.addColorStop(1, "rgba(255,252,225,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(gx - 30 + h*0.4, y - 2); ctx.lineTo(gx + 30 + h*0.4, y - 2); ctx.lineTo(gx + 30 - h*0.4, y + h + 2); ctx.lineTo(gx - 30 - h*0.4, y + h + 2); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // 판 위로도 아주 옅게 한 번
+  ctx.save(); rrPath(x + fi, y + fi, w - 2*fi, h - 2*fi, Math.max(2, R - fi)); ctx.clip();
+  const g2 = ctx.createLinearGradient(gx - 40, 0, gx + 40, 0);
+  g2.addColorStop(0, "rgba(255,230,160,0)"); g2.addColorStop(0.5, "rgba(255,230,160,.10)"); g2.addColorStop(1, "rgba(255,230,160,0)");
+  ctx.fillStyle = g2; ctx.fillRect(gx - 40, y, 80, h);
+  ctx.restore();
 }
 // 리벳 — 놋쇠 못 머리
 function rivet(x, y, r){
@@ -13479,6 +13498,7 @@ function drawBrassBtn(r, font){
     rivet(x + m, y + m, rv); rivet(x + w - m, y + m, rv); rivet(x + m, y + h - m, rv); rivet(x + w - m, y + h - m, rv); }
   // 밧줄 감개 — 넓은 버튼 양 끝
   if(w >= 300 && h >= 26){ ropeWrap(x + 1, y, h); ropeWrap(x + w - 1, y, h); }
+  if(lit && !r.dim) brassGlint(x, y, w, h, R, fi);
   // 문장 — 왼쪽 놋쇠 메달
   let tx = x + w/2, label = r.label || "";
   if(r.icon){
@@ -13638,10 +13658,10 @@ function drawMenuSea(dim){
     ctx.fillStyle = "rgba(255,244,214," + tw.toFixed(2) + ")"; ctx.fillRect(sx, sy, 1.6, 1.6); }
   // 달과 달무리
   const mx = W*0.82, my = 84;
-  const mg = ctx.createRadialGradient(mx, my, 8, mx, my, 120); mg.addColorStop(0, "rgba(255,230,170,.32)"); mg.addColorStop(1, "rgba(255,230,170,0)");
-  ctx.fillStyle = mg; ctx.fillRect(mx - 120, my - 120, 240, 240);
   ctx.beginPath(); ctx.arc(mx, my, 26, 0, Math.PI*2); ctx.fillStyle = "#f4e2b0"; ctx.fill();
-  ctx.beginPath(); ctx.arc(mx + 9, my - 5, 23, 0, Math.PI*2); ctx.fillStyle = "#111b25"; ctx.fill();
+  ctx.beginPath(); ctx.arc(mx + 11, my - 6, 23, 0, Math.PI*2); ctx.fillStyle = "#10191f"; ctx.fill();
+  const mg = ctx.createRadialGradient(mx, my, 8, mx, my, 120); mg.addColorStop(0, "rgba(255,230,170,.26)"); mg.addColorStop(1, "rgba(255,230,170,0)");
+  ctx.fillStyle = mg; ctx.fillRect(mx - 120, my - 120, 240, 240);
   // 구름 — 먼 겹은 느리게, 가까운 겹은 빠르게
   const cloud = (cx, cy, s, col, rim) => {
     ctx.fillStyle = col; ctx.beginPath();
