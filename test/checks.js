@@ -2967,9 +2967,9 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   b = a.spawnBoss(true, 19);
   ok("해룡 군주 요르문 — 대형(체력 9)", b.big && b.maxHp === 9);
   b.archCd = 0; H.step();
-  ok("몸이 아치 셋으로 솟는다 — 역린은 하나", b.arches.length === 3 && b.arches.filter(c => c.gem).length === 1);
+  ok("몸이 아치 셋으로 솟는다 — 심장석은 하나", b.arches.length === 3 && b.arches.filter(c => c.gem).length === 1);
   for(const c of b.arches) c.t = 100;
-  ok("역린이 약점", a.weak().filter(w => w.mark === "역린").length === 1, marks());
+  ok("심장석(v60, 예전 역린)이 약점", a.weak().filter(w => w.mark === "심장석").length === 1, marks());
   P = T().P(); a.setRope(null); T().setShield(0);
   const c0 = b.arches[0]; P.x = c0.x; P.y = a.peek().SEA - c0.R; P.vx = 0; P.vy = 0; H.step();
   ok("아치 몸통에 닿으면 휘청", a.peek().stun > 0);
@@ -3789,6 +3789,25 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     ok("v60 bosses: 고래 — 가라앉기 시작하면 돛대에서 손이 풀리고, 잠긴 돛대는 못 잡는다", off && m.cut > 0 && a.peek().state === 1);
     T().setBoss(null); E("boss = null"); H.step();
     ok("v60 bosses: 고래 — 보스가 사라지면 등 돛대 고리도 걷힌다", !a.peek().anchors.some(an => an.x === m.x && an.y === m.y));
+  }
+
+  /* --- 해룡 군주 요르문(19): 해골 해룡 · 뼈 사이 틈 · 심장석 --- */
+  {
+    let K = fresh(19); calm(); H.step();
+    ok("v60 bosses: 해룡 — 아치가 솟기 전 예고·머리 겨누기는 45프레임 이상(격노해도)", E("SP_ARCH_WARN") >= 45 && E("Math.max(45, SP_AIM * 0.8)") >= 45);
+    K.archCd = 0; K.st = "idle"; K.stT = 1e6; calm(); H.step();
+    const c = K.arches[0];
+    ok("v60 bosses: 해룡 — 아치는 예고부터(t < 0), 그동안은 닿아도 안 맞는다", c.t < 0 && (() => { pin(c.x, E("SEA") - c.R); H.step(); return a.peek().stun <= 0; })());
+    for(const q of K.arches) q.t = 100;
+    const g = E("spGaps(boss.arches[0])"), R = c.R * E("spArchTop(boss.arches[0])"), ang = (g[1][0] + g[1][1]) / 2;
+    E("stun = 0; iframes = 0"); pin(c.x + Math.cos(ang) * R, E("SEA") - Math.sin(ang) * R); H.step();
+    ok("v60 bosses: 해룡 — 살이 썩어 떨어진 틈(왼쪽·오른쪽)으로는 아치를 지나가도 안 맞는다", g.length === 2 && g[1][0] > Math.PI/2 && g[0][1] < Math.PI/2 && a.peek().stun <= 0, JSON.stringify(g));
+    E("stun = 0; iframes = 0"); pin(c.x, E("SEA") - R); H.step();
+    ok("v60 bosses: 해룡 — 틈이 아닌 등뼈(꼭대기)에 닿으면 휘청", a.peek().stun > 0);
+    const gemC = K.arches.find(q => q.gem), w = a.weak().find(q => q.mark === "심장석");
+    ok("v60 bosses: 해룡 — 약점은 갈비뼈 사이 심장석(아치 가운데, 틈으로 들어가야 닿는다)", !!w && Math.abs(w.x - gemC.x) < gemC.R * 0.2 && w.y < E("SEA") - 30 && Math.hypot(w.x - gemC.x, E("SEA") - w.y) < gemC.R - 16 - w.r);
+    let err = null; try{ E("drawBoss()"); K.st = "stuck"; K.dx0 = K.hx = K.x; K.hy = E("SEA") - 34; E("drawBoss()"); K.st = "aim"; E("drawBoss()"); }catch(e){ err = e.message; }
+    ok("v60 bosses: 해룡 — 아치·해골 머리를 그려도 오류가 없다", !err, err);
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }

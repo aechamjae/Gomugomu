@@ -4150,7 +4150,7 @@ const BOSSES = [
   { name:"심해 아귀 등불",      tag:"등불에 끌려가지 마라 — 물어뜯은 뒤 벌린 아가리의 등불·아가미를 쳐라" },
   { name:"해파리 여왕 루미나",  tag:"여왕의 빛이 닿는 곳만 환하다 — 전기 해파리·촉수 장막을 피하고 빛이 꺼질 때 핵을", named:true },
   { name:"폭풍고래 뇌경",       tag:"등 돛대에 매달려 숨구멍을, 솟구칠 땐 흰 배를 쳐라 — 잠수 예고엔 손을 떼라", big:true },
-  { name:"해룡 군주 요르문",    tag:"아치처럼 솟은 몸을 빠져나가며 역린을 — 덮친 머리가 박힌 틈을 노려라", big:true },
+  { name:"해룡 군주 요르문",    tag:"뼈 사이 틈으로 아치를 빠져나가며 심장석을 — 박힌 머리도 노려라", big:true },
   { name:"간수장 그롬",         tag:"열쇠로 수갑을 풀고 쇠창살은 틈으로 — 숨 고를 때 열린 자물쇠를 쳐라", named:true }
 ];
 const ANGLER = 16, JELLYQ = 17, WHALE = 18, SERPENT = 19, MAGELLAN = 20;   // 간수장 그롬(v60에 이름·능력 교체 — 상수 이름만 예전 그대로) — 해저 감옥 탈옥전에만 나온다
@@ -10790,8 +10790,14 @@ function drawWhale(b, x, hurt){
 //   아치 하나엔 빛나는 역린이 붙어 몸을 따라 미끄러진다 — 아치를 빠져나가며 역린을 쳐라.
 //   틈틈이 머리가 물밑에서 겨눴다가(SP_AIM, 마지막 SP_LOCK 고정) 한 줄로 덮친다 — 빗나가면 머리가 수면에 박혀 SP_STUCK 동안 약점.
 //   체력 4 이하면 아치가 넷, 포효로 앞쪽 고리 둘을 부순다
-const SP_ARCH_T = 260, SP_ARCH_TH = 16, SP_AIM = 56, SP_LOCK = 16, SP_STUCK = 100, SP_DASH = 12;
-const spArchTop = (c) => { const u = c.t / SP_ARCH_T; return Math.min(1, u * 6) * Math.min(1, (1 - u) * 6); };
+//   v60 '해골 해룡': 반쯤 썩어 뼈가 드러난 몸. 아치마다 살이 썩어 떨어진 '틈'이 왼쪽·오른쪽에 하나씩(c.gaps — 각도 범위) — 그 틈으로는 닿아도 안 맞아서
+//   아치 속을 스윙으로 빠져나갈 수 있다. 역린 대신 한 아치의 갈비뼈 사이에 '심장석'이 박혀 있다(아치 가운데 — 틈으로 들어가야 닿는다).
+//   다른 아치의 갈비뼈 안엔 침몰선이 갇혀 있다(그림). 아치는 솟기 전 SP_ARCH_WARN 동안 점선·끓는 수면으로 예고
+const SP_ARCH_T = 260, SP_ARCH_TH = 16, SP_AIM = 58, SP_LOCK = 16, SP_STUCK = 100, SP_DASH = 12, SP_ARCH_WARN = 48, SP_GAP = 0.24 * Math.PI;
+const spArchTop = (c) => { const u = Math.max(0, c.t) / SP_ARCH_T; return Math.min(1, u * 6) * Math.min(1, (1 - u) * 6); };
+// 아치의 틈 — 왼쪽(플레이어 쪽) 아래 틈과 오른쪽 아래 틈. 가운데(꼭대기)는 등뼈가 이어져 있다
+const spGaps = (c) => [[c.ga, c.ga + SP_GAP], [Math.PI - c.ga - SP_GAP, Math.PI - c.ga]];   // 각도: 0 오른쪽 수면 · π/2 꼭대기 · π 왼쪽 수면
+const spInGap = (c, ang) => spGaps(c).some(([a0, a1]) => ang > a0 && ang < a1);
 function updateSerpent(b, dt){
   const rage = b.hp <= 4;
   if(b.st !== "dash" && b.st !== "stuck") keepFront(b, 340, dt);
@@ -10802,17 +10808,17 @@ function updateSerpent(b, dt){
     const k = spArchTop(c), R = c.R * k;
     if(R < 20 || state !== STATE.PLAY || stun > 0 || iframes > 0) continue;
     const dy = SEA - p.y, d = Math.hypot(p.x - c.x, dy);
-    if(dy > -10 && Math.abs(d - R) < SP_ARCH_TH + 12){
+    if(dy > -10 && Math.abs(d - R) < SP_ARCH_TH + 12 && !spInGap(c, Math.atan2(dy, p.x - c.x))){
       knock(false);
       pops.push({ x:p.x, y:p.y - 40, t:50, text:"해룡의 몸통!", color:"#9fe0a0" });
     }
   }
   b.archCd -= dt;
   if(b.archCd <= 0 && b.st !== "stuck"){
-    b.archCd = rage ? 230 : 300;
+    b.archCd = rage ? 210 : 270;                 // v60: 솟기 전 예고(SP_ARCH_WARN)가 생긴 만큼 조금 자주
     const n = rage ? 4 : 3, gem = Math.floor(Math.random() * n);
-    for(let i=0;i<n;i++) b.arches.push({ x: p.x + 330 + i*190 + Math.max(0, p.vx) * 8, R: 90 + Math.random()*60, t: -i*10, gem: i === gem });
-    pops.push({ x:b.x, y:SEA - 140, t:60, text:"해룡이 몸을 감아 올린다 — 역린을 노려라", color:"#9fe0a0" });
+    for(let i=0;i<n;i++) b.arches.push({ x: p.x + 400 + i*200 + Math.max(0, p.vx) * 10, R: 100 + Math.random()*50, t: -SP_ARCH_WARN - i*10, gem: i === gem, ga: 0.12*Math.PI + Math.random()*0.08*Math.PI, seed: Math.random()*6 });
+    pops.push({ x:b.x, y:SEA - 140, t:60, text:"해골 해룡이 몸을 감아 올린다 — 뼈 사이 틈으로 들어가 심장석을!", color:"#9fe0a0" });
   }
   if(rage && !b.roared){
     b.roared = true;
@@ -10824,7 +10830,7 @@ function updateSerpent(b, dt){
   b.stT -= dt;
   if(b.st === "idle"){
     b.hx += (b.x - b.hx) * 0.1 * dt; b.hy += ((SEA + 60) - b.hy) * 0.1 * dt;
-    if(b.stT <= 0){ b.st = "aim"; b.stT = SP_AIM * (rage ? 0.8 : 1); b.hx = p.x + 260; b.hy = SEA + 50; b.ax = p.x; b.ay = p.y; }
+    if(b.stT <= 0){ b.st = "aim"; b.stT = Math.max(45, SP_AIM * (rage ? 0.8 : 1)); b.hx = p.x + 260; b.hy = SEA + 50; b.ax = p.x; b.ay = p.y; }
   } else if(b.st === "aim"){
     b.hx += ((p.x + 240) - b.hx) * 0.1 * dt;
     if(b.stT > SP_LOCK){ b.ax = p.x + p.vx * 12; b.ay = Math.max(60, Math.min(SEA - 20, p.y + p.vy * 6)); }
@@ -10847,37 +10853,105 @@ function updateSerpent(b, dt){
     if(b.stT <= 0){ b.st = "idle"; b.stT = rage ? 170 : 220; }
   }
 }
+const spHeart = (c) => { const R = c.R * spArchTop(c); return { x: c.x + Math.sin(c.t * 0.04) * R * 0.08, y: SEA - R * 0.5 + Math.sin(c.t * 0.06) * 4, R }; };
 function serpentWeak(b, out){
   for(const c of b.arches){
     if(!c.gem) continue;
-    const R = c.R * spArchTop(c);
-    if(R < 40) continue;
-    const a = Math.PI * (0.5 + Math.sin(c.t * 0.025) * 0.38);          // 아치를 따라 미끄러진다
-    out.push({ x:c.x - Math.cos(a) * R, y:SEA - Math.sin(a) * R, r:24, mark:"역린" });
+    const h = spHeart(c);
+    if(h.R < 60) continue;
+    out.push({ x:h.x, y:h.y, r:30, mark:"심장석" });                    // v60: 역린 대신 — 갈비뼈 사이에 박힌 심장석
   }
   if(b.st === "stuck") out.push({ x:b.hx, y:b.hy, r:38, mark:"머리" });
 }
+// 해골 해룡 그림 — 아치(등뼈 마디·갈비뼈·썩은 살·틈), 갇힌 침몰선, 심장석, 겨누는 눈, 해골 머리와 목뼈
 function drawSerpent(b, x, hurt){
-  const body = hurt ? "#f4ecd9" : "#2f6a4a", belly = "#9fe0a0";
+  const flesh = hurt ? "#f4ecd9" : "#3c5a46", rot = hurt ? "#e8dcc0" : "#5d6b45", bone = hurt ? "#ffffff" : "#e6dcc2", boneD = "#b9ab88";
+  const pt = (c, R, a) => [c.x - cam.x + Math.cos(a) * R, SEA - Math.sin(a) * R];
   for(const c of b.arches){
-    const R = c.R * spArchTop(c), cx = c.x - cam.x;
-    if(c.t < 0){
-      ctx.strokeStyle = "rgba(159,224,160,.5)"; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
+    const cx = c.x - cam.x;
+    if(cx < -260 || cx > W/cam.z + 260) continue;
+    if(c.t < 0){                                                      // 예고 — 솟을 자리 점선과 끓는 수면
+      const k = 1 + c.t / SP_ARCH_WARN;
+      ctx.strokeStyle = "rgba(190,240,190," + (0.3 + k*0.5).toFixed(2) + ")"; ctx.lineWidth = 2 + k*2; ctx.setLineDash([10, 9]); ctx.lineDashOffset = time*2;
       ctx.beginPath(); ctx.arc(cx, SEA, c.R, Math.PI, 0); ctx.stroke(); ctx.setLineDash([]);
+      for(const [a0, a1] of spGaps(c)){ ctx.strokeStyle = "rgba(160,255,190," + (0.4 + k*0.5).toFixed(2) + ")"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, SEA, c.R, -a1, -a0); ctx.stroke(); }
+      ctx.fillStyle = "rgba(200,240,200,.6)";
+      for(const sx of [-c.R, c.R]) for(let q=0;q<3;q++){ ctx.beginPath(); ctx.arc(cx + sx + Math.sin(q*2.1 + c.t*0.2)*14, SEA - ((c.t*-3 + q*11) % 24), 3, 0, Math.PI*2); ctx.fill(); }
       continue;
     }
-    if(R < 2) continue;
-    ctx.strokeStyle = body; ctx.lineWidth = SP_ARCH_TH * 2;
-    ctx.beginPath(); ctx.arc(cx, SEA, R, Math.PI, 0); ctx.stroke();
-    ctx.strokeStyle = belly; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.arc(cx, SEA, Math.max(1, R - SP_ARCH_TH + 3), Math.PI, 0); ctx.stroke();
-    ctx.fillStyle = "rgba(20,40,30,.6)";                               // 비늘 마디
-    for(let k=1;k<8;k++){ const a = Math.PI * k / 8; ctx.beginPath(); ctx.arc(cx - Math.cos(a) * R, SEA - Math.sin(a) * R, 4, 0, Math.PI*2); ctx.fill(); }
-  }
-  const out = []; serpentWeak(b, out);
-  for(const w of out) if(w.mark === "역린"){
-    ctx.fillStyle = "rgba(255,215,106," + (0.6 + Math.sin(time*0.3)*0.3).toFixed(2) + ")";
-    ctx.beginPath(); ctx.moveTo(w.x - cam.x, w.y - 16); ctx.lineTo(w.x - cam.x + 12, w.y); ctx.lineTo(w.x - cam.x, w.y + 16); ctx.lineTo(w.x - cam.x - 12, w.y); ctx.closePath(); ctx.fill();
+    const R = c.R * spArchTop(c);
+    if(R < 6) continue;
+    const gaps = spGaps(c);
+    // 갈비뼈 안 — 갇힌 침몰선(심장석 아치가 아니면)
+    if(!c.gem && R > 60){
+      ctx.save(); ctx.beginPath(); ctx.arc(cx, SEA, Math.max(0, R - SP_ARCH_TH), Math.PI, 0); ctx.closePath(); ctx.clip();
+      ctx.translate(cx + Math.sin(c.seed)*R*0.1, SEA - 8); ctx.rotate(-0.25 + Math.sin(c.seed*3)*0.15); const sc = R / 140; ctx.scale(sc, sc);
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(-60, -20); ctx.lineTo(56, -26); ctx.quadraticCurveTo(50, 6, 30, 16); ctx.lineTo(-44, 16); ctx.quadraticCurveTo(-58, 0, -60, -20); ctx.closePath(); }, "#4a3a2c", { pool:"rgba(20,10,5,.4)", line:2 });
+      ctx.strokeStyle = "rgba(20,10,5,.5)"; ctx.lineWidth = 1.2; for(const yy of [-12, -2, 8]){ ctx.beginPath(); ctx.moveTo(-56, yy); ctx.lineTo(50, yy - 4); ctx.stroke(); }
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(-4, -22); ctx.lineTo(10, -96); }, 3.4, "#5a4632");
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(8, -88); ctx.lineTo(40, -80); ctx.lineTo(30, -56); ctx.lineTo(18, -62); ctx.lineTo(4, -48); ctx.closePath(); }, "rgba(200,190,160,.75)", { pool:false, line:1.4 });
+      ctx.fillStyle = "rgba(160,255,190,.35)"; ctx.beginPath(); ctx.arc(-30, -4, 5, 0, Math.PI*2); ctx.arc(-6, -6, 5, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    // 심장석 — 갈비뼈 손가락이 붙든 붉은 돌
+    if(c.gem && R > 40){
+      const h = spHeart(c), hx = h.x - cam.x, hy = h.y, pulse = 0.5 + Math.pow(Math.max(0, Math.sin(time*0.12)), 6) * 0.5;
+      ctx.lineCap = "round";
+      for(const sg of [-1, 1]) inkTube(() => { ctx.beginPath(); ctx.moveTo(hx + sg*R*0.62, SEA - R*0.62); ctx.quadraticCurveTo(hx + sg*30, hy - 30, hx + sg*8, hy - 14); }, 4, bone);
+      const g = ctx.createRadialGradient(hx, hy, 2, hx, hy, 40); g.addColorStop(0, "rgba(255,120,110," + (0.55*pulse + 0.2).toFixed(2) + ")"); g.addColorStop(1, "rgba(255,80,80,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hx, hy, 40, 0, Math.PI*2); ctx.fill();
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(hx, hy - 18); ctx.lineTo(hx + 14, hy - 4); ctx.lineTo(hx + 9, hy + 14); ctx.lineTo(hx - 9, hy + 14); ctx.lineTo(hx - 14, hy - 4); ctx.closePath(); }, "#c8343c",
+        { shade:() => { ctx.beginPath(); ctx.rect(hx, hy - 20, 20, 40); }, shadeCol:"rgba(60,0,10,.3)", pool:"rgba(80,0,10,.4)", line:2 });
+      ctx.strokeStyle = "rgba(255,210,190," + (0.5 + pulse*0.4).toFixed(2) + ")"; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(hx - 6, hy - 8); ctx.lineTo(hx, hy - 2); ctx.lineTo(hx - 2, hy + 6); ctx.moveTo(hx + 5, hy - 10); ctx.lineTo(hx + 7, hy - 2); ctx.stroke();
+    }
+    // 몸 — 틈이 아닌 구간마다 썩은 살 띠(잉크 한 덩어리) → 그 위로 등뼈 마디와 바깥으로 삐친 가시뼈
+    const segs = []; let a = 0;
+    const cuts = gaps.slice().sort((u, v) => u[0] - v[0]);
+    for(const [g0, g1] of cuts){ segs.push([a, g0]); a = g1; } segs.push([a, Math.PI]);
+    const ro = R + SP_ARCH_TH, ri = Math.max(1, R - SP_ARCH_TH);
+    for(const [s0, s1] of segs){
+      if(s1 - s0 < 0.02) continue;
+      inkShape(() => { ctx.beginPath(); ctx.arc(cx, SEA, ro, -s0, -s1, true);
+        for(let i=0;i<=6;i++){ const aa = s1 - (s1 - s0) * i / 6, rr = ri + (i % 2 ? 3 : -2) * (i > 0 && i < 6 ? 1 : 0); ctx.lineTo(cx + Math.cos(aa) * rr, SEA - Math.sin(aa) * rr); }
+        ctx.closePath(); }, flesh, { shade:() => { ctx.beginPath(); ctx.arc(cx, SEA, ri + 6, 0, Math.PI*2); }, shadeCol:"rgba(10,30,20,.35)", pool:"rgba(10,30,20,.4)", poolW:6, line:2.4 });
+      // 썩어 드러난 얼룩
+      ctx.fillStyle = rot;
+      for(let i=1;i<4;i++){ const aa = s0 + (s1 - s0) * (i / 4), [qx, qy] = pt(c, R + 3, aa); ctx.beginPath(); ctx.ellipse(qx, qy, 6, 3.5, -aa + Math.PI/2, 0, Math.PI*2); ctx.fill(); }
+    }
+    // 등뼈 마디(아치 전체 — 틈에서도 이어져 있지만 가늘다) · 틈 가장자리의 갈비뼈 기둥
+    const nV = Math.max(6, Math.round(R / 13));
+    for(let i=0;i<=nV;i++){
+      const aa = Math.PI * i / nV, inGap = spInGap(c, aa), [vx, vy] = pt(c, R, aa);
+      if(inGap) continue;
+      inkShape(() => { ctx.beginPath(); ctx.ellipse(vx, vy, 6.5, 4.6, -aa + Math.PI/2, 0, Math.PI*2); }, bone, { pool:false, line:1.4 });
+      const [sx2, sy2] = pt(c, ro + 9, aa);                                // 바깥으로 삐친 가시뼈
+      ctx.strokeStyle = INK; ctx.lineWidth = 4.2; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(sx2, sy2); ctx.stroke();
+      ctx.strokeStyle = boneD; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(sx2, sy2); ctx.stroke();
+    }
+    for(const [g0, g1] of gaps){
+      // 틈 — 양쪽 가장자리에 굽은 갈비뼈가 기둥처럼 서고, 사이로 초록 귀광(지나갈 수 있다)
+      const gm = (g0 + g1) / 2, [mx2, my2] = pt(c, R, gm);
+      const ga = 0.18 + Math.sin(time*0.1 + c.seed) * 0.08;
+      ctx.strokeStyle = "rgba(160,255,190," + ga.toFixed(2) + ")"; ctx.lineWidth = SP_ARCH_TH * 2; ctx.lineCap = "butt";
+      ctx.beginPath(); ctx.arc(cx, SEA, R, -g1 + 0.05, -g0 - 0.05); ctx.stroke();
+      for(const ge of [g0, g1]){
+        const [r0x, r0y] = pt(c, ro - 2, ge), [r1x, r1y] = pt(c, ri - 4, ge), [rmx, rmy] = pt(c, R, ge + (ge === g0 ? 0.08 : -0.08));
+        inkTube(() => { ctx.beginPath(); ctx.moveTo(r0x, r0y); ctx.quadraticCurveTo(rmx, rmy, r1x, r1y); }, 4, bone, "rgba(255,255,255,.5)");
+      }
+      ctx.fillStyle = "rgba(200,255,215,.75)";
+      for(let q=0;q<3;q++){ const u = (time*0.02 + q/3 + c.seed) % 1, aa = g0 + (g1 - g0) * u, [qx, qy] = pt(c, R + Math.sin(u*9)*6, aa); ctx.beginPath(); ctx.arc(qx, qy, 2.4, 0, Math.PI*2); ctx.fill(); }
+      void mx2; void my2;
+    }
+    // 아치 안쪽으로 굽은 갈비뼈(새장) — 짧게
+    for(let i=1;i<nV;i+=2){
+      const aa = Math.PI * i / nV;
+      if(spInGap(c, aa)) continue;
+      const [q0x, q0y] = pt(c, ri, aa), [q1x, q1y] = pt(c, ri - R*0.22, aa + 0.12);
+      ctx.strokeStyle = INK; ctx.lineWidth = 4.4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(q0x, q0y); ctx.lineTo(q1x, q1y); ctx.stroke();
+      ctx.strokeStyle = bone; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(q0x, q0y); ctx.lineTo(q1x, q1y); ctx.stroke();
+    }
+    bossWaterLip(cx - ro - 14, cx - ri + 10, c.seed); bossWaterLip(cx + ri - 10, cx + ro + 14, c.seed + 1);
   }
   if(b.st === "aim"){
     const lock = b.stT <= SP_LOCK;
@@ -10885,21 +10959,47 @@ function drawSerpent(b, x, hurt){
     ctx.setLineDash(lock ? [] : [12, 10]);
     ctx.beginPath(); ctx.moveTo(b.hx - cam.x, b.hy); ctx.lineTo(b.ax - cam.x, b.ay); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(255,215,106,.85)";                            // 물밑에서 빛나는 두 눈
-    ctx.beginPath(); ctx.arc(b.hx - cam.x - 10, SEA + 16, 5, 0, Math.PI*2); ctx.arc(b.hx - cam.x + 10, SEA + 16, 5, 0, Math.PI*2); ctx.fill();
+    const ex = b.hx - cam.x;                                           // 물밑에서 빛나는 빈 눈구멍 둘
+    for(const sg of [-1, 1]){
+      const g = ctx.createRadialGradient(ex + sg*10, SEA + 14, 1, ex + sg*10, SEA + 14, 14); g.addColorStop(0, "rgba(170,255,190,.95)"); g.addColorStop(1, "rgba(120,255,170,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ex + sg*10, SEA + 14, 14, 0, Math.PI*2); ctx.fill();
+    }
   }
   if(b.st === "dash" || b.st === "stuck"){
-    const hx = b.hx - cam.x, hy = b.hy;
-    ctx.strokeStyle = body; ctx.lineWidth = SP_ARCH_TH * 2; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(b.dx0 - cam.x, SEA + 30); ctx.quadraticCurveTo((b.dx0 - cam.x + hx)/2, SEA - 20, hx, hy); ctx.stroke();
-    ctx.lineCap = "butt";
-    ctx.save(); ctx.translate(hx, hy);
-    ctx.fillStyle = body;
-    ctx.beginPath(); ctx.ellipse(0, 0, 38, 24, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#ffd76a"; ctx.beginPath(); ctx.moveTo(-10, -22); ctx.lineTo(-24, -44); ctx.lineTo(-2, -24); ctx.moveTo(10, -22); ctx.lineTo(24, -44); ctx.lineTo(2, -24); ctx.fill();   // 뿔
-    ctx.fillStyle = b.st === "stuck" ? "#ff8f80" : "#ffd76a";
-    ctx.beginPath(); ctx.arc(-14, -6, 5, 0, Math.PI*2); ctx.arc(14, -6, 5, 0, Math.PI*2); ctx.fill();
+    const hx = b.hx - cam.x, hy = b.hy, bx0 = b.dx0 - cam.x;
+    // 목뼈 — 물에서 머리까지 마디가 줄지어 이어진다(가끔 썩은 살 조각)
+    const ang = Math.atan2(hy - (SEA + 30), hx - bx0), n = Math.max(10, Math.round(Math.hypot(hx - bx0, hy - SEA) / 17));
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(bx0, SEA + 30); ctx.quadraticCurveTo((bx0 + hx)/2, SEA - 20, hx, hy); }, 7, boneD);   // 마디를 꿰는 등뼈 줄기(마디가 떠 보이지 않게)
+    for(let i=0;i<=n;i++){
+      const u = i / n, qx = (1-u)*(1-u)*bx0 + 2*u*(1-u)*((bx0 + hx)/2) + u*u*hx, qy = (1-u)*(1-u)*(SEA + 30) + 2*u*(1-u)*(SEA - 20) + u*u*hy;
+      if(qy > SEA + 4) continue;
+      const w = 15 - u*4;
+      if(i % 3 === 1) inkShape(() => { ctx.beginPath(); ctx.ellipse(qx, qy, w + 4, w*0.8, ang, 0, Math.PI*2); }, flesh, { pool:false, line:1.6 });
+      inkShape(() => { ctx.beginPath(); ctx.ellipse(qx, qy, w*0.75, w*0.55, ang + Math.PI/2, 0, Math.PI*2); }, bone, { pool:false, line:1.4 });
+      ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(qx - Math.sin(ang)*w*1.4, qy + Math.cos(ang)*-w*1.4); ctx.stroke();
+      ctx.strokeStyle = boneD; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(qx - Math.sin(ang)*w*1.4, qy + Math.cos(ang)*-w*1.4); ctx.stroke();
+    }
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.max(-0.6, Math.min(0.6, ang * 0.3)));
+    const stuck = b.st === "stuck", jaw = stuck ? 0.25 + Math.sin(time*0.2)*0.1 : 0.5;
+    // 아래턱(이빨)
+    ctx.save(); ctx.translate(-8, 8); ctx.rotate(jaw * 0.6);
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-46, 4); ctx.quadraticCurveTo(-50, 14, -40, 16); ctx.lineTo(4, 12); ctx.closePath(); }, bone, { pool:"rgba(90,80,50,.35)", line:2 });
+    ctx.fillStyle = "#fffaf0"; for(let i=0;i<4;i++){ ctx.beginPath(); ctx.moveTo(-40 + i*10, 4); ctx.lineTo(-37 + i*10, -4); ctx.lineTo(-34 + i*10, 4); ctx.closePath(); ctx.fill(); }
     ctx.restore();
+    // 해골 — 뿔, 빈 눈구멍(초록 귀광), 썩은 살 조각, 금 간 이마
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(24, -6); ctx.quadraticCurveTo(26, -26, 4, -28); ctx.lineTo(-40, -16); ctx.quadraticCurveTo(-56, -10, -54, 2); ctx.lineTo(-8, 10); ctx.quadraticCurveTo(20, 10, 24, -6); ctx.closePath(); }, bone,
+      { shade:() => { ctx.beginPath(); ctx.rect(-60, 0, 90, 20); }, shadeCol:"rgba(110,90,50,.3)", pool:"rgba(90,80,50,.35)", line:2.4 });
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(18, -14); ctx.quadraticCurveTo(10, -6, -4, -8); ctx.lineTo(0, -22); ctx.closePath(); }, flesh, { pool:false, line:1.4 });
+    for(const [hx2, hy2, ln] of [[2, -26, 30], [14, -22, 24]]) inkTube(() => { ctx.beginPath(); ctx.moveTo(hx2, hy2); ctx.quadraticCurveTo(hx2 + 14, hy2 - ln*0.6, hx2 + 30, hy2 - ln*0.8); }, 4.4, "#cdbf96");
+    ctx.fillStyle = "#13201a"; ctx.beginPath(); ctx.ellipse(-12, -12, 7, 5, 0, 0, Math.PI*2); ctx.fill();
+    const eg = stuck ? "rgba(255,150,120," : "rgba(170,255,190,";
+    ctx.fillStyle = eg + "0.9)"; ctx.beginPath(); ctx.arc(-12, -12, 2.8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = eg + "0.25)"; ctx.beginPath(); ctx.arc(-12, -12, 9, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#13201a"; ctx.beginPath(); ctx.ellipse(-48, -4, 3, 2, 0, 0, Math.PI*2); ctx.fill();          // 콧구멍
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-24, -22); ctx.lineTo(-20, -16); ctx.lineTo(-26, -12); ctx.stroke();
+    ctx.fillStyle = "#fffaf0"; for(let i=0;i<4;i++){ ctx.beginPath(); ctx.moveTo(-46 + i*10, 6); ctx.lineTo(-43 + i*10, 13); ctx.lineTo(-40 + i*10, 7); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+    if(stuck) bossWaterLip(hx - 70, hx + 50, 3.3);
   }
 }
 
