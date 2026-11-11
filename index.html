@@ -1036,7 +1036,8 @@ function drawHint(){
   ctx.globalAlpha = a;
   ctx.font = "600 14px 'Gowun Batang', 'Pretendard', serif";
   const w = ctx.measureText(hintNow.text).width + 36;
-  const y = IS_TOUCH ? 168 : H - 96;      // 아래 두 줄(H-40·H-18)은 포격·날씨 안내 자리, 터치 기기는 아래쪽이 미션 목록 자리
+  const y = IS_TOUCH || boss ? 168 : H - 96;      // 보스전엔 위로 — 아래에 두면 바다 쪽 보스(크라켄 몸통)를 가린다
+  //      // 아래 두 줄(H-40·H-18)은 포격·날씨 안내 자리, 터치 기기는 아래쪽이 미션 목록 자리
   ctx.fillStyle = "rgba(13,27,38,.82)";
   ctx.fillRect(W/2 - w/2, y - 17, w, 34);
   ctx.strokeStyle = "rgba(143,214,216,.7)"; ctx.lineWidth = 1.5;
@@ -1402,6 +1403,9 @@ let storyMode = null;                      // { ch, st } — 스토리 스테이
 let storyStars = {}, storySeen = [], storyEnd = 0, storyCh = 0;   // 저장 — 별 비트, 본 대사, 엔딩 본 횟수 · 지도에서 보던 장
 let storyRun = null;                       // 이번 판 별 판정 카운터
 let storyTalk = null;                      // { lines, i, chars, after } — 대사창
+let chapCard = null;                       // { ch, t } — 장 제목 카드(대사창 앞, 아무 키나 누르면 건너뜀). 그림만 — 대사 진행과는 따로 논다
+let talkOut = null;                        // { t } — 대사창이 닫힌 직후 레터박스가 걷히는 연출
+let endRoll = null;                        // { t, after } — 엔딩 시퀀스(STATE.STORY_END)
 let storyResult = null;                    // 이번 판 결과 { win, bits, newBits, reward, crew, art }
 const storyStage = () => storyMode ? STORY_CH[storyMode.ch].stages[storyMode.st] : null;
 const storyIdx = (ch, st) => STORY_CH.slice(0, ch).reduce((a, c) => a + c.stages.length, 0) + st;
@@ -1621,11 +1625,16 @@ function startStory(ch, st){
   storyMode = { ch, st }; storyCh = ch;
   const s = storyStage();
   reset();
-  if(storySeen.indexOf(s.id) < 0 && s.pre && s.pre.length) openTalk(s.pre, STATE.READY, s.id);
+  if(storySeen.indexOf(s.id) < 0 && s.pre && s.pre.length){
+    openTalk(s.pre, STATE.READY, s.id);
+    if(st === 0) chapCard = { ch, t: 0 };           // 장의 첫 스테이지 — 대사 앞에 제목 카드
+  }
   return true;
 }
+// 대사창을 연다. 연출용 필드(t·lineT·hold·L·R…)는 drawTalk가 굴린다 — 진행(i·chars)은 talkNext만 바꾼다
 function openTalk(lines, after, seenId, then){
-  storyTalk = { lines, i: 0, chars: 0, after, seenId, then };
+  storyTalk = { lines, i: 0, chars: 0, after, seenId, then, t: 0, lineT: 0, hold: 0, L: null, R: null, fl: sv(), fr: sv() };
+  chapCard = null; talkOut = null;
   state = STATE.STORY_TALK;
 }
 function talkNext(skipAll){
@@ -1633,9 +1642,10 @@ function talkNext(skipAll){
   if(!t) return;
   const full = t.lines[t.i][1].length;
   if(!skipAll && t.chars < full){ t.chars = full; return; }
-  if(!skipAll && t.i < t.lines.length - 1){ t.i++; t.chars = 0; return; }
+  if(!skipAll && t.i < t.lines.length - 1){ t.i++; t.chars = 0; t.lineT = 0; t.hold = 0; return; }
   if(t.seenId && storySeen.indexOf(t.seenId + (t.post ? "+" : "")) < 0){ storySeen.push(t.seenId + (t.post ? "+" : "")); saveShop(); }
-  storyTalk = null;
+  storyTalk = null; chapCard = null;
+  talkOut = { t: 0 };                              // 레터박스가 걷히는 짧은 연출(그림만)
   state = t.after;
   if(t.then) t.then();
 }
@@ -1754,7 +1764,19 @@ function storyClear(){
   saveShop();
   syncHUD();
   for(let i=0;i<40;i++) spark(p.x, p.y, i % 2 ? "#ffd76a" : "#9fe0a0");
-  if(s.post && s.post.length && storySeen.indexOf(s.id + "+") < 0){ openTalk(s.post, STATE.OVER, s.id); storyTalk.post = true; }
+  if(s.post && s.post.length && storySeen.indexOf(s.id + "+") < 0){
+    // 최종장은 끝 대사 뒤에 엔딩 시퀀스를 거쳐 결과 화면으로
+    openTalk(s.post, STATE.OVER, s.id, s.end ? () => startEnding(STATE.OVER) : undefined); storyTalk.post = true;
+  }
+}
+// 엔딩 시퀀스 — 약 20초, 아무 키나 누르면 건너뛴다. 기록·해금은 storyClear에서 이미 끝났다(여긴 보여 주기만)
+const END_T = 1200;
+function startEnding(after){ endRoll = { t: 0, after }; state = STATE.STORY_END; }
+function endSkip(){
+  if(!endRoll) return;
+  const after = endRoll.after;
+  endRoll = null;
+  if(state === STATE.STORY_END) state = after;
 }
 // 다음 스테이지(같은 장 끝이면 다음 장 첫 스테이지)
 function storyNext(){
@@ -1806,7 +1828,13 @@ function storyMapRows(){
   });
   rows.push({ key: 0, x: W/2 - 260, y: H - 64, w: 160, h: 38, label: "0) ← 메뉴로", action: leaveStory });
   rows.push({ key: 9, x: W/2 - 80, y: H - 64, w: 160, h: 38, label: "9) 이야기 다시 보기", dim: !storySeen.length,
-              action: () => { const s = STORY_CH[storyCh].stages.filter(q => storyCleared(q.id) || storySeen.indexOf(q.id) >= 0).pop(); if(s) openTalk(s.pre.concat(storyCleared(s.id) ? s.post : []), STATE.STORY_MAP, null); } });
+              action: () => {
+                const st = STORY_CH[storyCh].stages, s = st.filter(q => storyCleared(q.id) || storySeen.indexOf(q.id) >= 0).pop();
+                if(!s) return;
+                // 최종장을 깼으면 대사 뒤에 엔딩도 다시 본다. 장의 첫 스테이지면 제목 카드부터
+                openTalk(s.pre.concat(storyCleared(s.id) ? s.post : []), STATE.STORY_MAP, null, s.end && storyCleared(s.id) ? () => startEnding(STATE.STORY_MAP) : undefined);
+                if(st.indexOf(s) === 0) chapCard = { ch: storyCh, t: 0 };
+              } });
   rows.push({ key: 8, x: W/2 + 100, y: H - 64, w: 160, h: 38, label: "8) 비기: " + (artSel ? artDef(artSel).short : "없음"), dim: !ARTS.some(a => artOwned(a.id)), action: cycleArt });
   return rows;
 }
@@ -1828,36 +1856,619 @@ function drawStoryMap(){
   ctx.restore();
   centerText("스토리 — 대항해도", 30, UIF(800, 24), "#f4ecd9");
   uiText("★ " + storyStarTotal() + "/" + STORY_STAR_MAX, W - 20, 30, "700 16px 'Gowun Batang', serif", "#ffd76a", "right");
+  // 등장 연출 — 장을 바꾸면 카드 묶음이 옆에서 미끄러져 들어오고, 카드는 차례로 위에서 내려앉는다
+  const M = fx.map || (fx.map = { ch: storyCh, slide: sv(), hov: [] });
+  if(M.ch !== storyCh){ M.slide.x = (storyCh > M.ch ? 1 : -1) * 70; M.slide.v = 0; M.ch = storyCh; fx.mapT = 0; }
+  fx.mapT += fx.dt;
+  spring(M.slide, 0, 0.16, 0.62, fx.dt);
+  const calm = settings.calm, slide = calm ? 0 : M.slide.x;
   const C = STORY_CH[storyCh];
-  centerText(C.name + " — " + C.sub, 124, UIF(700, 16), "#d9b877");
+  centerText(C.name + " — " + C.sub, 124, UIF(700, 16), "#d9b877", clamp01(fx.mapT / 10));
   const rows = storyMapRows();
-  // 스테이지 사이 점선 항로
   const cards = rows.filter(r => r.key >= 1 && r.key <= 5);
-  ctx.save(); ctx.strokeStyle = "rgba(217,184,119,.4)"; ctx.setLineDash([5, 6]); ctx.lineWidth = 2;
-  for(let i=1;i<cards.length;i++){ ctx.beginPath(); ctx.moveTo(cards[i-1].x + cards[i-1].w, cards[i-1].y + 115); ctx.lineTo(cards[i].x, cards[i].y + 115); ctx.stroke(); }
-  ctx.restore();
-  for(const r of rows) drawBtn(r, r.tab ? UIF(800, 13) : UIF(700, 14));
+  for(const r of rows){
+    const j = cards.indexOf(r);
+    if(j < 0){ drawBtn(r, r.tab ? UIF(800, 13) : UIF(700, 14)); continue; }
+    const k = calm ? 1 : clamp01((fx.mapT - j * 3.6) / 15);
+    const hv = M.hov[j] || (M.hov[j] = sv());
+    spring(hv, r.action && !r.dim && inRect(hoverPos, r) ? 1 : 0, 0.3, 0.5, fx.dt);
+    if(k <= 0) continue;
+    ctx.save();
+    ctx.globalAlpha = clamp01(k * 2.2);
+    ctx.translate(slide, (calm ? 0 : -(1 - ease.outBack(k, 1.4)) * 30) - (calm ? 0 : hv.x * 5));
+    drawBtn(r, UIF(700, 14));
+    ctx.restore();
+  }
+  // 항로 — 카드 아래로 점선이 흘러가고, 지금 할 스테이지 밑에 작은 배가 떠 있다
+  if(cards.length){
+    const pu = paperUI; paperUI = false;
+    const ry = 412, xs = cards.map(r => r.x + r.w/2 + slide), wave = (x) => ry + Math.sin(x * 0.022 + fx.clock * 0.03) * 5;
+    ctx.save();
+    ctx.globalAlpha = clamp01((fx.mapT - 8) / 14);
+    ctx.strokeStyle = "rgba(217,184,119,.65)"; ctx.setLineDash([7, 7]); ctx.lineDashOffset = -fx.clock * 0.35; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(let x = xs[0] - 40; x <= xs[xs.length - 1] + 40; x += 8){ if(x === xs[0] - 40) ctx.moveTo(x, wave(x)); else ctx.lineTo(x, wave(x)); }
+    ctx.stroke(); ctx.setLineDash([]);
+    const st = C.stages, cur = st.findIndex((q, j) => storyOpen(storyCh, j) && !storyCleared(q.id));
+    xs.forEach((x, j) => {
+      const done = storyCleared(st[j].id);
+      ctx.beginPath(); ctx.arc(x, wave(x), done ? 5 : 4, 0, Math.PI*2);
+      ctx.fillStyle = done ? "#ffd76a" : storyOpen(storyCh, j) ? "#f4ecd9" : "rgba(244,236,217,.3)"; ctx.fill();
+      ctx.strokeStyle = "rgba(34,24,16,.9)"; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+    const bj = cur >= 0 ? cur : storyOpen(storyCh, 0) ? st.length - 1 : -1;
+    if(bj >= 0){
+      const bx = xs[bj] + (cur < 0 ? 26 : 0), by = wave(bx) - 9 + Math.sin(fx.clock * 0.07) * 2.5;
+      ctx.save(); ctx.translate(bx, by); ctx.rotate(Math.sin(fx.clock * 0.05) * 0.07);
+      drawMiniShip(1);
+      ctx.restore();
+    }
+    ctx.restore();
+    paperUI = pu;
+  }
   if(gearMsg){ centerText(gearMsg.text, H - 88, UIF(600, 13), gearMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, gearMsg.t / 20)); gearMsg.t -= 1; if(gearMsg.t <= 0) gearMsg = null; }
   centerText("숫자 키 1~5 스테이지 · ← → 장 바꾸기 · Esc 메뉴로", H - 14, UIF(400, 12), "rgba(244,236,217,.55)");
 }
-// 대사창 — 화면 아래 1/3, 왼쪽에 얼굴, 글자가 한 자씩
+// 작은 배(지도·엔딩) — 원점이 물에 닿는 선 가운데. sil을 주면 그 색 실루엣
+function drawMiniShip(sc, sil){
+  ctx.save(); ctx.scale(sc, sc);
+  const hull = () => { ctx.beginPath(); ctx.moveTo(-17, -5); ctx.lineTo(17, -5); ctx.quadraticCurveTo(13, 5, 7, 5); ctx.lineTo(-9, 5); ctx.quadraticCurveTo(-15, 3, -17, -5); ctx.closePath(); };
+  const sail = () => { ctx.beginPath(); ctx.moveTo(-1, -31); ctx.quadraticCurveTo(15, -22, 12, -8); ctx.lineTo(-1, -8); ctx.closePath(); };
+  const jib = () => { ctx.beginPath(); ctx.moveTo(-3, -27); ctx.lineTo(-13, -8); ctx.lineTo(-3, -8); ctx.closePath(); };
+  if(sil){ ctx.fillStyle = sil; hull(); ctx.fill(); sail(); ctx.fill(); jib(); ctx.fill(); ctx.fillRect(-2, -33, 1.6, 28); }
+  else {
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-2, -5); ctx.lineTo(-2, -33); ctx.stroke();
+    inkShape(sail, "#f3ead6", { pool:false, line:1.4 }); inkShape(jib, "#e6d8b8", { pool:false, line:1.4 });
+    inkShape(hull, "#8a5a34", { pool:false, line:1.6 });
+    ctx.fillStyle = "#b03a34"; ctx.beginPath(); ctx.moveTo(-2, -33); ctx.lineTo(7, -36); ctx.lineTo(-2, -39); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---------- 대사창 초상 (v59) ----------
+   반신 초상을 캔버스로 그린다. 원점은 발치 가운데(몸통 아래 끝), 오른쪽을 보는 그림 — 오른쪽 자리에 세울 땐 좌우를 뒤집는다.
+   o.talk 입을 벌림 · o.blink 눈 감음 · o.sil 색을 주면 그 색 한 가지로만 칠한 실루엣(엔딩 행렬)
+   사람은 PORTRAITS의 설정 하나(살빛·옷·머리·모자 hat()·소품 prop()·표정)로, 사람이 아닌 넷(메모·문어·유령선·크라켄)은 따로 그린다 */
+let ptSil = null;
+function pF(path, fill, o){
+  if(ptSil){ path(); ctx.fillStyle = ptSil; ctx.fill(); return; }
+  inkShape(path, fill, Object.assign({ pool:"rgba(70,40,15,.16)", poolW:5, line:2.2 }, o || {}));
+}
+const pLine = (path, col, w) => { if(ptSil) return; path(); ctx.strokeStyle = col || INK; ctx.lineWidth = w || 2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke(); };
+const pDot = (x, y, r, col) => { if(ptSil) return; ctx.fillStyle = col || INK; ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI*2); ctx.fill(); };
+const pEll = (x, y, rx, ry, rot) => () => { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0, rx), Math.max(0, ry), rot || 0, 0, Math.PI*2); };
+const pPoly = (pts) => () => { ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); };
+const PT_HAT = {
+  bandana: (c) => {                                         // 머리를 덮은 두건 + 뒤로 날리는 매듭
+    pF(pPoly([[-30,-128],[-52,-120],[-58,-98],[-44,-108],[-32,-116]]), c.band, { line:2 });
+    pF(() => { ctx.beginPath(); ctx.arc(0, -112, 35, Math.PI*1.04, Math.PI*1.96); ctx.quadraticCurveTo(0, -128, -34.7, -116.5); ctx.closePath(); }, c.band);
+  },
+  tricorn: (c) => {                                         // 삼각모
+    pF(() => { ctx.beginPath(); ctx.moveTo(-50, -130); ctx.quadraticCurveTo(0, -150, 52, -128); ctx.quadraticCurveTo(28, -138, 22, -160); ctx.quadraticCurveTo(-4, -172, -26, -158); ctx.quadraticCurveTo(-30, -140, -50, -130); ctx.closePath(); }, c.band);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-44, -131); ctx.quadraticCurveTo(0, -146, 46, -129); }, "#d9b877", 2.4);
+  },
+  navycap: (c) => {                                         // 해군 모자 — 흰 정모에 금테와 닻
+    pF(pPoly([[-36,-134],[38,-134],[32,-166],[-30,-166]]), "#eef2f6");
+    pF(pPoly([[-38,-128],[52,-126],[40,-138],[-38,-138]]), "#22345a");
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-34, -141); ctx.lineTo(36, -141); }, "#d9a62c", 3);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(2, -160); ctx.lineTo(2, -148); ctx.moveTo(-5, -151); ctx.quadraticCurveTo(2, -144, 9, -151); ctx.moveTo(-3, -157); ctx.lineTo(7, -157); }, "#22345a", 2);
+  },
+  tophat: (c) => {                                          // 높은 실크 모자
+    pF(pPoly([[-24,-136],[24,-136],[21,-186],[-21,-186]]), "#1b1218");
+    pF(pEll(0, -136, 42, 7), "#1b1218");
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-23, -146); ctx.lineTo(23, -146); }, c.band, 6);
+  },
+  explorer: (c) => {                                        // 챙 넓은 탐험 모자
+    pF(() => { ctx.beginPath(); ctx.arc(0, -134, 28, Math.PI, 0); ctx.closePath(); }, "#8a6a3c");
+    pF(pEll(0, -133, 52, 7.5), "#8a6a3c");
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-27, -139); ctx.lineTo(27, -139); }, "#3b2417", 4);
+  },
+  goggles: (c) => {                                         // 짧은 머리 위로 올린 고글
+    pF(() => { ctx.beginPath(); ctx.arc(0, -114, 35, Math.PI*1.02, Math.PI*1.98); ctx.quadraticCurveTo(0, -132, -35, -116); ctx.closePath(); }, c.hair);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-34, -132); ctx.lineTo(34, -132); }, "#3b2417", 7);
+    pF(pEll(-13, -134, 10, 8), "#ffd76a", { line:2 }); pF(pEll(13, -134, 10, 8), "#ffd76a", { line:2 });
+  },
+  hood: (c) => {                                            // 두건(신관·돌풍술사) — 얼굴 둘레를 감싼다
+    pF(() => { ctx.beginPath(); ctx.moveTo(-40, -74); ctx.quadraticCurveTo(-52, -150, 0, -164); ctx.quadraticCurveTo(52, -150, 40, -74); ctx.quadraticCurveTo(34, -120, 0, -142); ctx.quadraticCurveTo(-34, -120, -40, -74); ctx.closePath(); }, c.band);
+  },
+  topknot: (c) => {                                         // 상투(검호)
+    pF(pEll(0, -154, 9, 11), c.hair, { line:2 });
+    pF(() => { ctx.beginPath(); ctx.arc(0, -112, 35.5, Math.PI*1.0, Math.PI*2.0); ctx.quadraticCurveTo(14, -134, 0, -138); ctx.quadraticCurveTo(-14, -134, -35.5, -112); ctx.closePath(); }, c.hair);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-7, -146); ctx.lineTo(7, -146); }, "#b03a34", 3);
+  },
+  headband: (c) => {                                        // 머리띠 + 뒤로 묶은 머리(검객)
+    pF(pPoly([[-30,-126],[-56,-108],[-50,-84],[-38,-104]]), c.hair, { line:2 });
+    pF(() => { ctx.beginPath(); ctx.arc(0, -112, 35.5, Math.PI*1.0, Math.PI*2.0); ctx.quadraticCurveTo(10, -126, -8, -128); ctx.quadraticCurveTo(-26, -128, -35.5, -112); ctx.closePath(); }, c.hair);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-35, -124); ctx.quadraticCurveTo(0, -134, 35, -124); }, c.band, 6);
+  },
+  curls: (c) => {                                           // 부스스한 곱슬머리(저격수)
+    for(let k=0;k<8;k++){ const a = Math.PI*0.98 + k * Math.PI*1.04/7; pF(pEll(Math.cos(a)*33, -114 + Math.sin(a)*33, 13, 13), c.hair, { line:2, pool:false }); }
+    pF(pEll(-34, -100, 10, 12), c.hair, { line:2, pool:false });
+  },
+  buns: (c) => {                                            // 양쪽으로 틀어 올린 머리(메이)
+    pF(pEll(-30, -146, 14, 13), c.hair, { line:2 }); pF(pEll(30, -146, 14, 13), c.hair, { line:2 });
+    pF(() => { ctx.beginPath(); ctx.arc(0, -112, 35.5, Math.PI*1.0, Math.PI*2.0); ctx.quadraticCurveTo(20, -118, 4, -132); ctx.quadraticCurveTo(-18, -120, -35.5, -112); ctx.closePath(); }, c.hair);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-33, -126); ctx.quadraticCurveTo(0, -140, 33, -126); }, c.band, 4);
+  },
+  bald: (c) => {},
+  helmet: (c) => {                                          // 쇠 투구(바이스)
+    pF(() => { ctx.beginPath(); ctx.arc(0, -114, 37, Math.PI*0.98, Math.PI*2.02); ctx.lineTo(37, -104); ctx.lineTo(-37, -104); ctx.closePath(); }, "#7d838d");
+    pLine(() => { ctx.beginPath(); ctx.moveTo(0, -151); ctx.lineTo(0, -104); }, "#4a4f58", 3);
+    pDot(-22, -110, 2.4, "#3a3f48"); pDot(22, -110, 2.4, "#3a3f48");
+  },
+  jester: (c) => {                                          // 줄무늬 곡예 모자
+    pF(() => { ctx.beginPath(); ctx.moveTo(-36, -124); ctx.quadraticCurveTo(-30, -168, -58, -176); ctx.quadraticCurveTo(-14, -176, 0, -142); ctx.quadraticCurveTo(14, -176, 58, -176); ctx.quadraticCurveTo(30, -168, 36, -124); ctx.closePath(); }, c.band);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-18, -128); ctx.quadraticCurveTo(-16, -160, -36, -172); ctx.moveTo(18, -128); ctx.quadraticCurveTo(16, -160, 36, -172); }, "#f3ead6", 5);
+    pDot(-58, -176, 5, "#ffd76a"); pDot(58, -176, 5, "#ffd76a");
+  }
+};
+const PT_PROP = {
+  hook: () => {                                             // 쇠 갈고리(잭)
+    pF(pPoly([[44,-34],[60,-34],[58,-70],[46,-70]]), "#6b4426", { line:2 });
+    pLine(() => { ctx.beginPath(); ctx.moveTo(52, -70); ctx.lineTo(52, -92); ctx.arc(62, -92, 10, Math.PI, Math.PI*0.25, false); }, INK, 8.5);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(52, -70); ctx.lineTo(52, -92); ctx.arc(62, -92, 10, Math.PI, Math.PI*0.25, false); }, "#b9bfc8", 5);
+  },
+  twin: () => {                                             // 등 뒤로 엇갈린 쌍칼(메이)
+    for(const sx of [-1, 1]){
+      pLine(() => { ctx.beginPath(); ctx.moveTo(sx*26, -60); ctx.lineTo(sx*70, -150); }, INK, 8);
+      pLine(() => { ctx.beginPath(); ctx.moveTo(sx*26, -60); ctx.lineTo(sx*70, -150); }, "#dfe5ea", 4.5);
+      pLine(() => { ctx.beginPath(); ctx.moveTo(sx*34, -98); ctx.lineTo(sx*52, -88); }, "#e0b040", 5);
+    }
+  },
+  katana: () => {                                           // 세워 든 칼(검호)
+    pLine(() => { ctx.beginPath(); ctx.moveTo(58, -4); ctx.lineTo(58, -150); }, INK, 8);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(58, -50); ctx.lineTo(58, -150); }, "#e6ecf2", 4.5);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(58, -4); ctx.lineTo(58, -46); }, "#3a2a4a", 5);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(49, -48); ctx.lineTo(67, -48); }, "#d9a62c", 5);
+  },
+  sheath: () => {                                           // 어깨 너머 칼자루(검객)
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-60, -40); ctx.lineTo(-30, -96); }, INK, 9);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-60, -40); ctx.lineTo(-30, -96); }, "#2a2030", 5.5);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-34, -90); ctx.lineTo(-22, -112); }, "#9fe0a0", 5);
+  },
+  bolt: () => {                                             // 손에 쥔 번개(뇌명)
+    pF(pPoly([[62,-150],[44,-104],[56,-104],[44,-62],[72,-116],[58,-116],[72,-150]]), "#ffe27a", { line:2 });
+  },
+  violin: () => {                                           // 품에 안은 바이올린(음악가)
+    pLine(() => { ctx.beginPath(); ctx.moveTo(30, -44); ctx.lineTo(66, -100); }, INK, 6);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(30, -44); ctx.lineTo(66, -100); }, "#3b2417", 3);
+    pF(() => { ctx.beginPath(); ctx.ellipse(22, -34, 15, 20, -0.6, 0, Math.PI*2); ctx.ellipse(38, -56, 11, 14, -0.6, 0, Math.PI*2); }, "#b5652f", { line:2 });
+    pLine(() => { ctx.beginPath(); ctx.moveTo(18, -28); ctx.lineTo(60, -92); }, "#f3ead6", 1.2);
+  },
+  hammer: () => {                                           // 어깨에 멘 망치(조선공·대장장이)
+    pLine(() => { ctx.beginPath(); ctx.moveTo(40, -20); ctx.lineTo(62, -120); }, INK, 9);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(40, -20); ctx.lineTo(62, -120); }, "#8a5a34", 5.5);
+    pF(pPoly([[42,-130],[82,-122],[80,-102],[40,-110]]), "#8d939d");
+  },
+  rifle: () => {                                            // 등에 멘 장총(저격수)
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-64, -10); ctx.lineTo(-36, -168); }, INK, 8);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-64, -10); ctx.lineTo(-52, -78); }, "#6b4426", 5);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(-52, -78); ctx.lineTo(-36, -168); }, "#5a6068", 4);
+  },
+  saw: () => {                                              // 톱날 칼(밧줄 끊는 자)
+    pF(pPoly([[48,-40],[58,-40],[72,-140],[66,-150],[60,-132],[64,-124],[56,-112],[60,-104],[52,-92],[56,-84],[48,-72]]), "#c9ced6", { line:2 });
+    pLine(() => { ctx.beginPath(); ctx.moveTo(44, -40); ctx.lineTo(62, -40); }, "#6b4426", 6);
+  },
+  staff: () => {                                            // 바람 구슬 지팡이(돌풍술사)
+    pLine(() => { ctx.beginPath(); ctx.moveTo(56, -4); ctx.lineTo(60, -140); }, INK, 8);
+    pLine(() => { ctx.beginPath(); ctx.moveTo(56, -4); ctx.lineTo(60, -140); }, "#6b4426", 4.5);
+    pF(pEll(60, -152, 13, 13), "#c7ecec", { line:2 });
+    pLine(() => { ctx.beginPath(); ctx.arc(60, -152, 6, 0.4, Math.PI*1.5); }, "#ffffff", 1.6);
+  },
+  chain: () => {                                            // 어깨에 두른 쇠사슬(바이스)
+    if(ptSil) return;
+    for(let i=0;i<9;i++){ const u = i/8, x = -52 + u*104, y = -62 + Math.sin(u*Math.PI)*36; ctx.strokeStyle = INK; ctx.lineWidth = 4.5; ctx.beginPath(); ctx.ellipse(x, y, 8, 5, i % 2 ? 1.2 : 0.2, 0, Math.PI*2); ctx.stroke(); ctx.strokeStyle = "#a9afb9"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(x, y, 8, 5, i % 2 ? 1.2 : 0.2, 0, Math.PI*2); ctx.stroke(); }
+  }
+};
+// 표정: mood smile(웃음)·flat(무뚝뚝)·frown(찌푸림)·smirk(비웃음) / eye dot·stern(치켜뜬 눈썹)·closed(감은 눈)·patch(안대)·glasses(안경)
+const PORTRAITS = {
+  "갈고리 잭":       { skin:"#e2a878", coat:"#2f6a3a", shirt:"#e9dcc0", band:"#1b1218", hat:"bandana", prop:"hook", mood:"smirk", eye:"stern", stubble:true },
+  "쌍칼 메이":       { skin:"#f2c9a8", coat:"#6a2f5a", shirt:"#f3ead6", hair:"#3a2030", band:"#e0b040", hat:"buns", prop:"twin", mood:"smirk", eye:"dot", lash:true },
+  "외눈 바론":       { skin:"#d9a27a", coat:"#2f3f6a", shirt:"#e9dcc0", band:"#2a2030", hat:"tricorn", mood:"frown", eye:"patch", mustache:"#3a2a22" },
+  "드레이크 대장":   { skin:"#e2b08a", coat:"#27406e", shirt:"#f4f6f8", hat:"navycap", mood:"flat", eye:"stern", epaulette:true, jaw:true },
+  "패기의 검호 무상": { skin:"#e6c2a0", coat:"#3a4658", shirt:"#dfe5ea", hair:"#e6e9ee", hat:"topknot", prop:"katana", mood:"flat", eye:"closed", beard:"#e6e9ee" },
+  "번개 신관 뇌명":   { skin:"#e8c8a0", coat:"#e8e2c8", shirt:"#d9a62c", band:"#f2ecd2", hat:"hood", prop:"bolt", mood:"flat", eye:"stern", mark:"#d9a62c" },
+  "음악가":          { skin:"#f2cfb0", coat:"#3a2a3a", shirt:"#f3ead6", band:"#e6a8f0", hat:"tophat", prop:"violin", mood:"smile", eye:"dot", bow:"#e6a8f0" },
+  "검객":            { skin:"#eec4a0", coat:"#2f4a3a", shirt:"#e9dcc0", hair:"#2a2030", band:"#9fe0a0", hat:"headband", prop:"sheath", mood:"flat", eye:"dot" },
+  "조선공":          { skin:"#d99a6a", coat:"#7a4a26", shirt:"#e6d8b8", hair:"#4a8ad8", hat:"goggles", prop:"hammer", mood:"smile", eye:"dot", stubble:true },
+  "고고학자":        { skin:"#ecc8a4", coat:"#6a5a3a", shirt:"#f3ead6", hat:"explorer", mood:"smile", eye:"glasses" },
+  "저격수":          { skin:"#e2b08a", coat:"#4a4a2a", shirt:"#d8cfae", hair:"#1b1218", hat:"curls", prop:"rifle", mood:"smirk", eye:"dot", nose:true },
+  "밧줄 끊는 자":     { skin:"#d9a27a", coat:"#5a2a2a", shirt:"#3a2a2a", band:"#7a2f2b", hat:"bandana", prop:"saw", mood:"flat", eye:"stern", mask:"#3a2a2a" },
+  "돌풍술사":        { skin:"#e8b48c", coat:"#2b4d55", shirt:"#c7ecec", band:"#8fd6d8", hat:"hood", prop:"staff", mood:"frown", eye:"dot" },
+  "용암 대장장이 풀무": { skin:"#c98a5a", coat:"#3a2a26", shirt:"#6b4426", hat:"bald", prop:"hammer", mood:"frown", eye:"stern", beard:"#d9662a", big:true },
+  "쇠사슬 바이스":    { skin:"#c9a080", coat:"#3a3a44", shirt:"#2a2a30", hat:"helmet", prop:"chain", mood:"frown", eye:"stern" },
+  "곡예사 선장":      { skin:"#f0d0b8", coat:"#7a2f4a", shirt:"#f3ead6", band:"#b03a34", hat:"jester", mood:"smile", eye:"dot", bow:"#ffd76a", ghost:true }
+};
+const TALK_LEFT = ["고무팔", "할아버지 메모", "음악가", "검객", "조선공", "고고학자", "저격수"];   // 주인공·동료는 왼쪽, 상대는 오른쪽
+function ptFace(c, o, ex){
+  // 눈
+  if(ptSil) return;
+  const ey = -106, eyes = [[-13 + ex, ey], [15 + ex, ey]];
+  eyes.forEach(([x, y], i) => {
+    if(c.eye === "patch" && i === 1){
+      pF(pEll(x, y, 10, 9), "#1b1218", { line:1.5, pool:false });
+      pLine(() => { ctx.beginPath(); ctx.moveTo(-34, -132); ctx.lineTo(x, y - 6); ctx.lineTo(36, -122); }, "#1b1218", 2.4);
+      return;
+    }
+    if(o.blink || c.eye === "closed") pLine(() => { ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.quadraticCurveTo(x, y + 3, x + 5, y); }, INK, 2.2);
+    else { pDot(x, y, 3.4); pDot(x + 1, y - 1.2, 1, "#f4ecd9"); }
+    if(c.lash) pLine(() => { ctx.beginPath(); ctx.moveTo(x + 4, y - 3); ctx.lineTo(x + 8, y - 6); }, INK, 1.6);
+    if(c.eye === "stern") pLine(() => { ctx.beginPath(); ctx.moveTo(x - 8 * (i ? -1 : 1), y - 11); ctx.lineTo(x + 7 * (i ? -1 : 1), y - 6); }, INK, 3);
+    if(c.eye === "glasses"){ pLine(pEll(x, y, 10, 10), INK, 2); ctx.fillStyle = "rgba(200,230,240,.3)"; pEll(x, y, 9, 9)(); ctx.fill(); }
+  });
+  if(c.eye === "glasses") pLine(() => { ctx.beginPath(); ctx.moveTo(eyes[0][0] + 10, ey); ctx.lineTo(eyes[1][0] - 10, ey); }, INK, 2);
+  if(c.nose) pF(pPoly([[10 + ex, -105],[32 + ex, -99],[10 + ex, -94]]), c.skin, { line:1.8, pool:false });
+  else pLine(() => { ctx.beginPath(); ctx.moveTo(3 + ex, -101); ctx.lineTo(6 + ex, -94); ctx.lineTo(1 + ex, -93); }, "rgba(120,70,40,.6)", 1.6);
+  // 입
+  const mx = 2 + ex, my = -83;
+  if(c.mask){ pF(() => { ctx.beginPath(); ctx.moveTo(-33, -104); ctx.quadraticCurveTo(0, -96, 33, -104); ctx.quadraticCurveTo(30, -70, 0, -66); ctx.quadraticCurveTo(-30, -70, -33, -104); ctx.closePath(); }, c.mask); return; }
+  if(c.mustache) pF(() => { ctx.beginPath(); ctx.moveTo(mx, -92); ctx.quadraticCurveTo(mx + 18, -94, mx + 22, -82); ctx.quadraticCurveTo(mx + 10, -88, mx, -86); ctx.quadraticCurveTo(mx - 10, -88, mx - 22, -82); ctx.quadraticCurveTo(mx - 18, -94, mx, -92); ctx.closePath(); }, c.mustache, { line:1.5, pool:false });
+  if(o.talk){ pF(pEll(mx, my + 1, 6, 5.5), "#5a1a1a", { line:1.8, pool:false }); return; }
+  pLine(() => {
+    ctx.beginPath();
+    if(c.mood === "smile"){ ctx.moveTo(mx - 9, my - 2); ctx.quadraticCurveTo(mx, my + 6, mx + 9, my - 2); }
+    else if(c.mood === "frown"){ ctx.moveTo(mx - 8, my + 2); ctx.quadraticCurveTo(mx, my - 4, mx + 8, my + 2); }
+    else if(c.mood === "smirk"){ ctx.moveTo(mx - 8, my + 1); ctx.quadraticCurveTo(mx + 2, my + 3, mx + 10, my - 4); }
+    else { ctx.moveTo(mx - 7, my); ctx.lineTo(mx + 7, my); }
+  }, INK, 2.2);
+}
+function ptHuman(c, o){
+  const big = c.big ? 1.12 : 1, ex = 3;                     // 얼굴은 살짝 오른쪽(보는 쪽)으로
+  if(c.prop && (c.prop === "twin" || c.prop === "rifle" || c.prop === "sheath")) PT_PROP[c.prop]();   // 등 뒤 소품
+  // 어깨·옷
+  pF(() => { ctx.beginPath(); ctx.moveTo(-68*big, 2); ctx.quadraticCurveTo(-66*big, -60, -22, -68); ctx.lineTo(22, -68); ctx.quadraticCurveTo(66*big, -60, 68*big, 2); ctx.closePath(); }, c.coat,
+     { shade: () => { ctx.beginPath(); ctx.rect(14, -80, 70, 90); }, shadeCol:"rgba(20,10,10,.18)" });
+  pF(pPoly([[-16,-68],[18,-68],[2,-34]]), c.shirt, { line:1.8, pool:false });
+  if(c.epaulette){ pF(pEll(-52, -56, 15, 7, -0.25), "#d9a62c", { line:2, pool:false }); pF(pEll(52, -56, 15, 7, 0.25), "#d9a62c", { line:2, pool:false }); pDot(-8, -30, 3, "#d9a62c"); pDot(-8, -14, 3, "#d9a62c"); }
+  if(c.bow) pF(pPoly([[1,-62],[-14,-70],[-14,-52],[1,-60],[16,-70],[16,-52]]), c.bow, { line:1.8, pool:false });
+  // 목·머리
+  pF(pPoly([[-11,-82],[13,-82],[12,-62],[-10,-62]]), c.skin, { line:1.8, pool:false });
+  if(c.hat === "hood") PT_HAT.hood(c);
+  const head = c.jaw ? () => { ctx.beginPath(); ctx.moveTo(-34, -120); ctx.quadraticCurveTo(-36, -150, 0, -150); ctx.quadraticCurveTo(36, -150, 34, -120); ctx.lineTo(30, -88); ctx.quadraticCurveTo(14, -72, 0, -73); ctx.quadraticCurveTo(-14, -72, -30, -88); ctx.closePath(); } : pEll(0, -112, 34, 38);
+  pF(head, c.skin, { shade: pEll(20, -106, 26, 36), shadeCol:"rgba(190,110,70,.16)" });
+  if(!ptSil && !c.mask){ ctx.fillStyle = "rgba(230,120,100,.28)"; pEll(23, -94, 7, 4.5)(); ctx.fill(); }
+  if(c.stubble && !ptSil){ ctx.fillStyle = "rgba(60,40,30,.22)"; ctx.beginPath(); ctx.ellipse(1, -84, 24, 12, 0, 0, Math.PI); ctx.fill(); }
+  ptFace(c, o, ex);
+  if(c.beard) pF(() => { ctx.beginPath(); ctx.moveTo(-28, -94); ctx.quadraticCurveTo(-8, -84, 2, -82); ctx.quadraticCurveTo(14, -84, 30, -94); ctx.quadraticCurveTo(30, -58, 2, c.big ? -34 : -44); ctx.quadraticCurveTo(-28, -58, -28, -94); ctx.closePath(); }, c.beard, { line:2 });
+  if(c.beard && o.talk) pF(pEll(3, -79, 5, 4), "#5a1a1a", { line:1.5, pool:false });
+  if(c.hat !== "hood") PT_HAT[c.hat](c);
+  if(c.mark) pLine(() => { ctx.beginPath(); ctx.moveTo(4, -160); ctx.lineTo(-4, -150); ctx.lineTo(4, -150); ctx.lineTo(-3, -140); }, c.mark, 2.6);
+  if(c.prop && !(c.prop === "twin" || c.prop === "rifle" || c.prop === "sheath")) PT_PROP[c.prop]();
+}
+// 고무팔 — 게임 속 모습(붉은 두건·흰 셔츠·허리띠·볼터치) 그대로 키웠다
+function ptHero(o){
+  const sk = curSkin();
+  pF(pPoly([[-34,-124],[-62,-132],[-70,-108],[-52,-112],[-36,-110]]), sk.band, { line:2 });                    // 날리는 매듭
+  pF(() => { ctx.beginPath(); ctx.moveTo(-62, 2); ctx.quadraticCurveTo(-60, -58, -22, -66); ctx.lineTo(22, -66); ctx.quadraticCurveTo(60, -58, 62, 2); ctx.closePath(); }, "#f3ead6",
+     { shade: () => { ctx.beginPath(); ctx.rect(16, -80, 60, 90); }, shadeCol:"rgba(150,120,80,.22)" });
+  pF(pPoly([[-64,-20],[-44,-62],[-26,-66],[-34,2],[-62,2]]), sk.coat, { line:2 });                                // 어깨에 걸친 코트
+  pF(pPoly([[64,-20],[44,-62],[26,-66],[34,2],[62,2]]), sk.coat, { line:2 });
+  pF(pPoly([[-36,-14],[36,-14],[36,-2],[-36,-2]]), "#b03a34", { line:1.8, pool:false });
+  pF(pPoly([[-6,-15],[6,-15],[6,-1],[-6,-1]]), "#e8c070", { line:1.5, pool:false });
+  pF(pPoly([[-10,-82],[12,-82],[11,-62],[-9,-62]]), "#f0bf94", { line:1.8, pool:false });
+  pF(pEll(0, -114, 37, 38), "#f0bf94", { shade: pEll(22, -108, 28, 36), shadeCol:"rgba(190,110,70,.16)" });
+  pF(() => { ctx.beginPath(); ctx.arc(0, -114, 37.5, Math.PI*1.03, Math.PI*1.97); ctx.quadraticCurveTo(0, -130, -37, -118); ctx.closePath(); }, sk.band,
+     { shade: () => { ctx.beginPath(); ctx.rect(10, -160, 40, 40); }, shadeCol:"rgba(60,10,10,.22)" });
+  if(ptSil) return;
+  pDot(-12, -152, 2.6, "rgba(255,240,220,.7)"); pDot(10, -156, 2.6, "rgba(255,240,220,.7)");
+  ctx.fillStyle = "rgba(230,120,100,.4)"; pEll(25, -95, 8, 5)(); ctx.fill(); pEll(-21, -95, 7, 5)(); ctx.fill();
+  for(const x of [-10, 18]){
+    if(o.blink) pLine(() => { ctx.beginPath(); ctx.moveTo(x - 5, -107); ctx.lineTo(x + 5, -107); }, INK, 2.4);
+    else if(o.excited) pLine(() => { ctx.beginPath(); ctx.arc(x, -104, 5.5, Math.PI*1.1, Math.PI*1.9); }, INK, 2.6);
+    else { pDot(x, -107, 4.2); pDot(x + 1.2, -108.4, 1.2, "#f4ecd9"); }
+  }
+  if(o.talk) pF(() => { ctx.beginPath(); ctx.arc(4, -92, o.excited ? 11 : 8, 0, Math.PI); ctx.closePath(); }, "#7a2f2b", { line:2, pool:false });
+  else pLine(() => { ctx.beginPath(); ctx.moveTo(-8, -91); ctx.quadraticCurveTo(4, -81, 16, -91); }, INK, 2.4);
+}
+// 할아버지 메모 — 붉은 두건 끈으로 묶은 낡은 쪽지
+function ptNote(o){
+  ctx.save(); ctx.translate(0, -92); ctx.rotate(-0.07);
+  pF(pPoly([[-50,-70],[44,-74],[52,-60],[50,66],[-46,70],[-52,58]]), "#ead9b2", { shade: () => { ctx.beginPath(); ctx.rect(20, -80, 40, 160); }, shadeCol:"rgba(120,80,40,.14)", pool:"rgba(150,100,45,.3)", poolW:9 });
+  pF(pPoly([[44,-74],[52,-60],[40,-62]]), "#cdb98c", { line:1.6, pool:false });
+  if(!ptSil){
+    ctx.strokeStyle = "rgba(59,42,30,.7)"; ctx.lineWidth = 2.2; ctx.lineCap = "round";
+    for(let i=0;i<6;i++){ const y = -48 + i*17, w = [70, 62, 74, 50, 68, 36][i]; ctx.beginPath(); ctx.moveTo(-36, y); for(let x = 0; x <= w; x += 6) ctx.lineTo(-36 + x, y + Math.sin(x*0.5 + i*2) * 1.8); ctx.stroke(); }
+    ctx.strokeStyle = "rgba(176,58,52,.8)"; ctx.lineWidth = 2.4;                    // 다섯 조각 표시
+    for(let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(-28 + i*14, 54, 4, 0, Math.PI*2); ctx.stroke(); }
+  }
+  pF(pPoly([[-56,-12],[56,-18],[56,-6],[-56,0]]), "#b03a34", { line:1.8, pool:false });
+  pF(pPoly([[40,-18],[62,-34],[66,-20],[50,-10],[64,2],[52,8]]), "#b03a34", { line:1.8, pool:false });
+  ctx.restore();
+}
+// 먹물 장군 문어 — 장군 모자를 쓴 문어 머리
+function ptOcto(o){
+  for(const sx of [-1, 1]) pF(() => { ctx.beginPath(); ctx.moveTo(sx*30, -30); ctx.quadraticCurveTo(sx*78, -40, sx*70, -84); ctx.quadraticCurveTo(sx*66, -100, sx*54, -92); ctx.quadraticCurveTo(sx*60, -60, sx*26, -52); ctx.closePath(); }, "#5a3f7a");
+  pF(() => { ctx.beginPath(); ctx.moveTo(-56, 2); ctx.quadraticCurveTo(-62, -150, 0, -156); ctx.quadraticCurveTo(62, -150, 56, 2); ctx.closePath(); }, "#6a4a8c", { shade: pEll(30, -80, 34, 80), shadeCol:"rgba(30,10,50,.22)" });
+  pF(pPoly([[-40,-140],[44,-140],[38,-176],[-34,-176]]), "#27406e"); pF(pPoly([[-44,-134],[58,-132],[46,-144],[-44,-144]]), "#1b2a48");
+  pLine(() => { ctx.beginPath(); ctx.moveTo(-38, -148); ctx.lineTo(42, -148); }, "#d9a62c", 3); pDot(2, -162, 5, "#d9a62c");
+  if(ptSil) return;
+  for(const x of [-16, 22]){ pF(pEll(x, -104, 13, 15), "#f6e7a8", { line:2, pool:false }); if(o.blink) pLine(() => { ctx.beginPath(); ctx.moveTo(x - 9, -104); ctx.lineTo(x + 9, -104); }, INK, 2.4); else pF(pEll(x + 3, -103, 3.4, 9), "#1b1218", { line:0 }); }
+  pLine(() => { ctx.beginPath(); ctx.moveTo(-30, -124); ctx.lineTo(-6, -116); ctx.moveTo(36, -124); ctx.lineTo(12, -116); }, INK, 3.4);
+  if(o.talk) pF(pEll(4, -70, 10, 8), "#2a1238", { line:2, pool:false }); else pLine(() => { ctx.beginPath(); ctx.moveTo(-8, -70); ctx.quadraticCurveTo(4, -64, 16, -70); }, INK, 2.6);
+  ctx.fillStyle = "#d9a8f0"; for(const [x, y] of [[-40,-40],[-30,-22],[38,-36],[28,-18]]){ pEll(x, y, 4.5, 4.5)(); ctx.fill(); }
+}
+// 망령의 유령선 — 옥빛으로 비치는 뱃머리와 찢긴 돛, 등불
+function ptGhost(o){
+  if(!ptSil) ctx.globalAlpha *= 0.82;
+  pF(pPoly([[-6,-176],[52,-150],[44,-112],[58,-96],[40,-70],[-6,-64]]), "#bfeee2", { ink:"#2f6a62" });
+  pF(pPoly([[-10,-170],[-50,-140],[-40,-118],[-54,-96],[-10,-78]]), "#9fe8d8", { ink:"#2f6a62" });
+  pLine(() => { ctx.beginPath(); ctx.moveTo(-8, -184); ctx.lineTo(-8, -40); }, "#2f6a62", 4);
+  pF(() => { ctx.beginPath(); ctx.moveTo(-70, -44); ctx.lineTo(74, -44); ctx.quadraticCurveTo(66, -6, 30, 2); ctx.lineTo(-40, 2); ctx.quadraticCurveTo(-64, -8, -70, -44); ctx.closePath(); }, "#5fb8a8", { ink:"#2f6a62", shade: () => { ctx.beginPath(); ctx.rect(-80, -22, 170, 30); }, shadeCol:"rgba(10,50,50,.3)" });
+  if(ptSil) return;
+  const g = ctx.createRadialGradient(40, -62, 2, 40, -62, 34);
+  g.addColorStop(0, "rgba(220,255,240," + (o.talk ? 0.95 : 0.7) + ")"); g.addColorStop(1, "rgba(160,255,220,0)");
+  ctx.fillStyle = g; pEll(40, -62, 34, 34)(); ctx.fill();
+  pF(pEll(40, -62, 7, 9), "#eafff6", { ink:"#2f6a62", line:1.8, pool:false });
+  pDot(-30, -22, 4, "#1b3a3a"); pDot(-8, -22, 4, "#1b3a3a"); pDot(14, -22, 4, "#1b3a3a");
+}
+// 각성한 크라켄 — 어둠 속의 큰 눈 하나(감긴 눈엔 세로 칼자국)
+function ptKraken(o){
+  for(const sx of [-1, 1]) pF(() => { ctx.beginPath(); ctx.moveTo(sx*40, 2); ctx.quadraticCurveTo(sx*92, -60, sx*70, -150); ctx.quadraticCurveTo(sx*64, -170, sx*56, -150); ctx.quadraticCurveTo(sx*66, -70, sx*24, -20); ctx.closePath(); }, "#5a2f6b");
+  pF(() => { ctx.beginPath(); ctx.moveTo(-62, 2); ctx.bezierCurveTo(-78, -90, -50, -168, 0, -170); ctx.bezierCurveTo(52, -168, 78, -90, 62, 2); ctx.closePath(); }, "#4f2a60", { shade: pEll(34, -80, 40, 90), shadeCol:"rgba(20,4,30,.3)", pool:"rgba(24,6,34,.45)", poolW:8 });
+  if(ptSil) return;
+  const beat = Math.pow(Math.max(0, Math.sin(fx.clock * 0.105)), 8);
+  pLine(() => { ctx.beginPath(); ctx.moveTo(4, -40); ctx.lineTo(-4, -62); ctx.lineTo(8, -76); ctx.moveTo(-4, -62); ctx.lineTo(-26, -58); ctx.moveTo(8, -76); ctx.lineTo(34, -70); }, "rgba(226,170,255," + (0.5 + beat*0.5).toFixed(2) + ")", 2.4);
+  for(const [x, y, r] of [[-34,-164,0.4],[0,-172,0],[32,-166,-0.4]]){ ctx.save(); ctx.translate(x, y); ctx.rotate(-r); pLine(() => { ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(0, -18); ctx.moveTo(0, -8); ctx.lineTo(-6, -16); ctx.moveTo(0, -10); ctx.lineTo(6, -20); }, INK, 6.5); pLine(() => { ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(0, -18); ctx.moveTo(0, -8); ctx.lineTo(-6, -16); ctx.moveTo(0, -10); ctx.lineTo(6, -20); }, "#c9566e", 3.4); ctx.restore(); }
+  pLine(() => { ctx.beginPath(); ctx.moveTo(-44, -108); ctx.quadraticCurveTo(-32, -100, -20, -108); }, INK, 3);
+  pLine(() => { ctx.beginPath(); ctx.moveTo(-34, -136); ctx.quadraticCurveTo(-28, -108, -34, -82); }, "#2a0f30", 5); pLine(() => { ctx.beginPath(); ctx.moveTo(-34, -132); ctx.quadraticCurveTo(-29, -108, -34, -86); }, "#e7b3c6", 1.8);
+  pF(pEll(18, -112, 24, 19), "#f6e7a8", { line:2.4, pool:"rgba(150,90,20,.3)" });
+  pDot(20, -112, 12, "#d9742a"); pF(pEll(20, -112, o.talk ? 2.4 : 5, 12), "#140a12", { line:0 }); pDot(15, -117, 2.6, "rgba(255,255,255,.85)");
+  pLine(() => { ctx.beginPath(); ctx.moveTo(-8, -124); ctx.quadraticCurveTo(18, -138, 44, -120); }, INK, 3.4);
+  pF(pEll(6, -56, o.talk ? 14 : 12, o.talk ? 9 : 3), "#1b0f26", { line:2, pool:false });
+}
+// 초상 한 점. sc 크기, o.flip 좌우 뒤집기(오른쪽 자리), o.talk·o.blink·o.excited, o.sil 실루엣 색
+function drawPortrait(who, cx, by, sc, o){
+  o = o || {};
+  const prev = ptSil; ptSil = o.sil || null;
+  ctx.save();
+  ctx.translate(cx, by); ctx.scale((o.flip ? -1 : 1) * sc, sc);
+  const c = PORTRAITS[who];
+  if(who === "고무팔") ptHero(o);
+  else if(who === "할아버지 메모") ptNote(o);
+  else if(who === "먹물 장군 문어") ptOcto(o);
+  else if(who === "망령의 유령선") ptGhost(o);
+  else if(who === "각성한 크라켄") ptKraken(o);
+  else if(c){ if(c.ghost && !ptSil) ctx.globalAlpha *= 0.86; ptHuman(c, o); }
+  else ptHuman({ skin:"#e2b08a", coat: speakerCol(who), shirt:"#f3ead6", band:"#3a2a3a", hat:"bandana", mood:"flat", eye:"dot" }, o);   // 모르는 화자 — 공용 틀에 그 인물 색
+  ctx.restore();
+  ptSil = prev;
+}
+
+/* ---------- 대사창 (v59) ----------
+   레터박스 띠가 들어오고, 왼쪽(주인공·동료)과 오른쪽(상대)에 반신 초상이 선다. 말하는 쪽은 밝고 크게, 듣는 쪽은 어둡고 작게.
+   글자는 한 자씩 — 문장부호 뒤엔 잠깐 쉰다. '!'가 든 줄은 초상이 한 번 튀고, '(…)'로 시작하면 지문을 작게 띄운다.
+   여기서 바꾸는 건 연출용 필드와 chars(글자가 드러나는 정도)뿐 — 줄 넘기기·닫기는 talkNext */
+const TALK_BAR = 52, TALK_PUNCT = { ",": 6, ".": 10, "…": 10, "!": 9, "?": 9, "—": 6 };
+function talkType(t, text, dt){
+  const full = text.length;
+  let budget = dt * 1.5;                                      // 한 프레임에 1.5자
+  while(budget > 0 && t.chars < full){
+    if(t.hold > 0){ t.hold -= dt; break; }
+    const next = Math.min(full, Math.floor(t.chars) + 1), adv = Math.min(budget, next - t.chars);
+    t.chars += adv; budget -= adv;
+    if(t.chars >= next){ const ch = text[next - 1], nx = text[next]; if(TALK_PUNCT[ch] && nx !== undefined && !TALK_PUNCT[nx] && nx !== ")") t.hold = TALK_PUNCT[ch]; }
+  }
+}
+function drawLetterbox(k){
+  if(k <= 0) return;
+  const pu = paperUI; paperUI = false;
+  ctx.fillStyle = "#17100a";
+  ctx.fillRect(0, 0, W, TALK_BAR * k); ctx.fillRect(0, H - TALK_BAR * k, W, TALK_BAR * k);
+  ctx.fillStyle = "rgba(217,184,119,.5)";
+  ctx.fillRect(0, TALK_BAR * k - 2, W, 2); ctx.fillRect(0, H - TALK_BAR * k, W, 2);
+  paperUI = pu;
+}
+// 대사창이 닫힌 뒤 — 레터박스가 걷힌다
+function drawTalkOut(){
+  if(!talkOut) return;
+  talkOut.t += fx.dt;
+  const k = 1 - ease.outCubic(talkOut.t / 16);
+  if(k <= 0 || state === STATE.STORY_TALK || state === STATE.STORY_END || state === STATE.STORY_MAP){ talkOut = null; return; }
+  drawLetterbox(k);
+}
 function drawTalk(){
   const t = storyTalk;
   if(!t) return;
   if(t.after === STATE.STORY_MAP) drawStoryMap();
-  ctx.fillStyle = "rgba(5,10,16,.55)"; ctx.fillRect(0, 0, W, H);
-  t.chars = Math.min(t.lines[t.i][1].length, t.chars + 1.5);
+  if(chapCard){ drawChapCard(); if(chapCard) return; }
+  if(t.fl === undefined){ t.t = 0; t.lineT = 0; t.hold = 0; t.L = null; t.R = null; t.fl = sv(); t.fr = sv(); }   // (검사에서 직접 만든 대사창도 그릴 수 있게)
+  const dt = fx.dt, calm = settings.calm;
+  t.t += dt; t.lineT += dt;
   const [who, text] = t.lines[t.i], col = speakerCol(who);
-  const box = { x: 40, y: H - 190, w: W - 80, h: 150, col, fill: "rgba(16,28,40,.96)" };
-  drawPanel(box, 14);
-  ctx.beginPath(); ctx.arc(box.x + 62, box.y + 75, 42, 0, Math.PI*2); ctx.fillStyle = col; ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(13,20,30,.8)"; ctx.stroke();
-  uiText(who === "할아버지 메모" ? "✎" : who[0], box.x + 62, box.y + 77, UIF(900, 34), "#14222e", "center");
-  uiText(who, box.x + 124, box.y + 30, UIF(800, 17), col);
-  drawWrapped(text.slice(0, Math.floor(t.chars)), box.x + 124, box.y + 64, box.w - 160, 26, UIF(500, 18), "#f4ecd9", 3);
-  uiText((t.i + 1) + "/" + t.lines.length + "  ·  누르면 다음 · Esc 건너뛰기", box.x + box.w - 18, box.y + box.h - 16, UIF(500, 12), "rgba(244,236,217,.5)", "right");
+  const dir = /^\(([^)]*)\)\s*/.exec(text), dirLen = dir ? dir[0].length : 0;       // 지문 "(멀리서) "
+  if(t.chars < dirLen) t.chars = dirLen;
+  if(t.lineT > 5) talkType(t, text, dt);
+  const full = text.length, done = t.chars >= full;
+  const left = TALK_LEFT.indexOf(who) >= 0;
+  if(left) t.L = who; else t.R = who;
+  spring(t.fl, left ? 1 : 0, 0.2, 0.55, dt); spring(t.fr, left ? 0 : 1, 0.2, 0.55, dt);
+  const inK = calm ? 1 : ease.outCubic(t.t / 16);
+  // 뒤 장면을 살짝 어둡게(남색이 아니라 먹빛 — 메뉴 덮개로 바뀌지 않게) + 레터박스
+  const pu = paperUI; paperUI = false;
+  const vg = ctx.createLinearGradient(0, 0, 0, H);
+  const deep = t.after === STATE.STORY_MAP ? 0.5 : 0;            // 지도 위에서 다시 볼 땐 뒤 카드가 읽히지 않게 더 짙게
+  vg.addColorStop(0, "rgba(20,14,10," + ((0.3 + deep) * inK).toFixed(2) + ")"); vg.addColorStop(1, "rgba(20,14,10," + (Math.min(0.9, 0.62 + deep) * inK).toFixed(2) + ")");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  drawLetterbox(inK);
+  // 초상 — 숨쉬기, 말하는 동안 입 뻥긋, '!' 줄은 한 번 튄다
+  const box = { x: 70, y: H - 164 + (1 - (calm ? 1 : ease.outBack(t.t / 18, 1.2))) * 40, w: W - 140, h: 132, col };
+  const shout = text.indexOf("!") >= 0;
+  const hop = shout && !calm ? -Math.sin(clamp01(t.lineT / 16) * Math.PI) * 12 : 0;
+  const blink = (fx.clock % 230) < 7;
+  for(const side of [0, 1]){
+    const name = side ? t.R : t.L;
+    if(!name) continue;
+    const f = clamp01(side ? t.fr.x : t.fl.x), speaking = name === who;
+    const sc = (1.1 + 0.16 * f) * (name === "할아버지 메모" ? 0.92 : 1);
+    const px = side ? W - 168 : 168, breathe = calm ? 0 : Math.sin(fx.clock * 0.045 + side * 2) * 1.6;
+    ctx.save();
+    ctx.globalAlpha = inK;
+    drawPortrait(name, px + (side ? 1 : -1) * (1 - inK) * 60, box.y + 16 + breathe + (speaking ? hop : 0), sc,
+                 { flip: !!side, talk: speaking && !done && Math.floor(fx.clock / 7) % 2 === 0, blink: blink && !side || (side && (fx.clock + 90) % 260 < 7), excited: speaking && shout });
+    // 듣는 쪽은 먹빛 그늘에 잠긴다
+    if(f < 0.98){
+      const sh = ctx.createRadialGradient(px, box.y - 90, 20, px, box.y - 90, 170);
+      sh.addColorStop(0, "rgba(20,14,10," + (0.6 * (1 - f)).toFixed(2) + ")"); sh.addColorStop(1, "rgba(20,14,10,0)");
+      ctx.fillStyle = sh; ctx.fillRect(px - 170, box.y - 260, 340, 290);
+    }
+    ctx.restore();
+  }
+  paperUI = pu;
+  // 대사 상자와 이름표
+  ctx.save();
+  ctx.globalAlpha = inK;
+  drawPanel(box, 12);
+  ctx.font = UIF(800, 17);
+  const nw = ctx.measureText(who).width + 34, nameBox = { x: left ? box.x + 22 : box.x + box.w - 22 - nw, y: box.y - 19, w: nw, h: 32, col };
+  drawPanel(nameBox, 8);
+  ctx.fillStyle = col; ctx.fillRect(nameBox.x + 8, nameBox.y + nameBox.h - 6, nameBox.w - 16, 2.5);
+  uiText(who, nameBox.x + nameBox.w/2, nameBox.y + 15, UIF(800, 17), col, "center");
+  // 본문 — 줄이 바뀌면 짧게 겹쳐 나타난다
+  const ta = clamp01(t.lineT / 7), tx = box.x + 30, tw = box.w - 60;
+  let ty = box.y + 44;
+  ctx.globalAlpha = inK * ta;
+  if(dir){ uiText("(" + dir[1] + ")", tx, ty - 4, "italic 500 14px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)"); ty += 22; }
+  const shake = shout && !calm && t.lineT < 14 ? (1 - t.lineT / 14) * 2.2 : 0;
+  ctx.save();
+  if(shake) ctx.translate(smoothNoise(fx.clock * 2.2, 3) * shake, smoothNoise(fx.clock * 2.2, 4) * shake);
+  // 다 쓴 문장 기준으로 줄을 나눠 두고 드러난 만큼만 그린다 — 쓰는 도중에 낱말이 다음 줄로 튀지 않게
+  const lines = wrapLines(text.slice(dirLen), tw, UIF(500, 18), 3);
+  let leftN = Math.floor(t.chars) - dirLen;
+  lines.forEach((ln, i) => { if(leftN <= 0) return; uiText(ln.slice(0, leftN), tx, ty + i*27, UIF(500, 18), "#f4ecd9"); leftN -= ln.length + 1; });
+  ctx.restore();
+  ctx.globalAlpha = inK;
+  uiText((t.i + 1) + "/" + t.lines.length + "  ·  누르면 다음 · Esc 건너뛰기", box.x + 24, box.y + box.h - 14, UIF(500, 11), "rgba(244,236,217,.5)");
+  if(done) uiText("▼", box.x + box.w - 30, box.y + box.h - 20 + (calm ? 0 : Math.sin(fx.clock * 0.13) * 3.5), UIF(800, 15), col, "center");
+  ctx.restore();
+  // 위 띠 — 어느 장 어느 스테이지인지
   const s = storyStage();
-  if(s && t.after === STATE.READY) centerText((STORY_CH[storyMode.ch].name) + " · " + s.id + " " + s.name, 40, UIF(800, 22), "#ffd76a");
+  if(s && t.after === STATE.READY){
+    const pu2 = paperUI; paperUI = false;
+    ctx.globalAlpha = inK;
+    centerText(STORY_CH[storyMode.ch].name + " · " + s.id + " " + s.name, TALK_BAR/2 + 1, UIF(800, 19), "#ffd76a", inK);
+    paperUI = pu2;
+  }
+}
+// 장 제목 카드 — 먹이 번지며 퍼지고, 부제가 붓으로 쓰이듯 왼쪽부터 드러난 뒤 걷힌다(2.4초)
+const CARD_T = 144;
+function drawChapCard(){
+  const c = chapCard, C = STORY_CH[c.ch];
+  c.t += fx.dt;
+  if(c.t >= CARD_T || !C){ chapCard = null; return; }
+  const t = c.t, out = clamp01((CARD_T - t) / 22), a = Math.min(clamp01(t / 12), out);
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  ctx.fillStyle = "rgba(20,14,10," + (0.86 * a).toFixed(2) + ")"; ctx.fillRect(0, 0, W, H);
+  // 먹 번짐 — 가운데서 퍼지는 얼룩 여럿
+  const grow = settings.calm ? 1 : ease.outCubic(t / 46);
+  for(let i=0;i<9;i++){
+    const bx = W/2 + (hash(i*3 + c.ch) - 0.5) * 520 * grow, by = H/2 + (hash(i*5 + 2) - 0.5) * 110 * grow, r = (70 + hash(i*7) * 90) * grow;
+    const g = ctx.createRadialGradient(bx, by, 0, bx, by, Math.max(1, r));
+    g.addColorStop(0, "rgba(8,5,3," + (0.85 * a).toFixed(2) + ")"); g.addColorStop(0.7, "rgba(8,5,3," + (0.5 * a).toFixed(2) + ")"); g.addColorStop(1, "rgba(8,5,3,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, Math.max(0, r), 0, Math.PI*2); ctx.fill();
+  }
+  inkSplat(W/2, H/2, t / 60, c.ch * 9 + 3, 14, "8,5,3", 380);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  // 작은 글씨 "1장"
+  ctx.globalAlpha = a * clamp01((t - 16) / 14);
+  ctx.font = UIF(700, 17); ctx.fillStyle = "#d9b877";
+  ctx.fillText("— " + C.name + " —", W/2, H/2 - 40);
+  // 부제 — 왼쪽부터 드러난다
+  ctx.font = UIF(800, 30);
+  const tw = ctx.measureText(C.sub).width, rv = settings.calm ? 1 : ease.inOutCubic((t - 30) / 56);
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.beginPath(); ctx.rect(W/2 - tw/2 - 10, H/2 - 24, (tw + 20) * rv, 60); ctx.clip();
+  ctx.fillStyle = "#f4ecd9"; ctx.fillText(C.sub, W/2, H/2 + 4);
+  ctx.restore();
+  // 붓으로 그은 밑줄
+  ctx.globalAlpha = a * 0.8;
+  ctx.fillStyle = "#b03a34";
+  if(rv > 0.02){ brushBand(W/2 - tw/2 - 6, W/2 - tw/2 - 6 + (tw + 12) * rv, H/2 + 30, 4, c.ch + 2); ctx.fill(); }
+  ctx.globalAlpha = a * 0.55 * clamp01((t - 50) / 20);
+  ctx.font = UIF(400, 12); ctx.fillStyle = "#f4ecd9";
+  ctx.fillText("아무 키나 누르면 넘어간다", W/2, H - 30);
+  ctx.restore();
+  paperUI = pu;
+}
+/* 엔딩 시퀀스 — 밤이 새벽으로 바뀌는 바다. 함께한 선원들이 실루엣으로 지나가고, 마지막에 배가 수평선으로 멀어진다 */
+function drawEnding(){
+  const e = endRoll;
+  if(!e) return;
+  e.t += fx.dt;
+  if(e.t >= END_T){ endSkip(); return; }
+  const t = e.t, pu = paperUI; paperUI = false;
+  const dawn = ease.inOutCubic((t - 120) / 820), hz = H * 0.62;
+  const mix = (a, b, k) => "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(",") + ")";
+  ctx.save();
+  const g = ctx.createLinearGradient(0, 0, 0, hz);
+  g.addColorStop(0, mix([14, 18, 40], [70, 96, 150], dawn)); g.addColorStop(0.6, mix([30, 30, 70], [226, 150, 130], dawn)); g.addColorStop(1, mix([50, 44, 90], [255, 214, 160], dawn));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, hz);
+  // 별 — 새벽이 오면 스러진다
+  for(let i=0;i<70;i++){
+    const a = (1 - dawn) * (0.35 + 0.5 * hash(i*7)) * (0.7 + 0.3 * Math.sin(fx.clock * 0.04 + i));
+    if(a <= 0.02) continue;
+    ctx.fillStyle = "rgba(255,244,220," + a.toFixed(2) + ")";
+    ctx.beginPath(); ctx.arc(hash(i*3 + 1) * W, hash(i*5 + 2) * hz * 0.9, 0.8 + hash(i) * 1.4, 0, Math.PI*2); ctx.fill();
+  }
+  // 해
+  const sunY = hz + 46 - dawn * 70, sg = ctx.createRadialGradient(W * 0.66, sunY, 4, W * 0.66, sunY, 220);
+  sg.addColorStop(0, "rgba(255,236,190," + (0.95 * dawn).toFixed(2) + ")"); sg.addColorStop(0.2, "rgba(255,200,140," + (0.5 * dawn).toFixed(2) + ")"); sg.addColorStop(1, "rgba(255,180,120,0)");
+  ctx.fillStyle = sg; ctx.fillRect(0, 0, W, hz);
+  ctx.fillStyle = "rgba(255,240,206," + dawn.toFixed(2) + ")"; ctx.beginPath(); ctx.arc(W * 0.66, sunY, 30, 0, Math.PI*2); ctx.fill();
+  // 바다
+  const sg2 = ctx.createLinearGradient(0, hz, 0, H);
+  sg2.addColorStop(0, mix([34, 40, 84], [214, 150, 130], dawn)); sg2.addColorStop(1, mix([10, 14, 34], [40, 74, 104], dawn));
+  ctx.fillStyle = sg2; ctx.fillRect(0, hz, W, H - hz);
+  ctx.strokeStyle = "rgba(255,236,200," + (0.1 + 0.25 * dawn).toFixed(2) + ")"; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+  for(let i=0;i<26;i++){
+    const y = hz + 8 + hash(i*3) * (H - hz - 14), k = (y - hz) / (H - hz), x = ((hash(i*7 + 1) * W + fx.clock * (0.15 + k * 0.5)) % (W + 120)) - 60, l = 16 + k * 50;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + l/2, y - 2.5, x + l, y); ctx.stroke();
+  }
+  // 멀어지는 배 — 마지막 5초
+  const sail = clamp01((t - 930) / 250);
+  if(t > 890){
+    const k = ease.inOutCubic(sail), sx = W * 0.3 + (W * 0.66 - W * 0.3) * k, sy = hz + 64 * (1 - k) + 2, sc = 2.6 - 2.1 * k;
+    ctx.save(); ctx.globalAlpha = clamp01((t - 890) / 40); ctx.translate(sx, sy + Math.sin(fx.clock * 0.05) * 2 * (1 - k)); ctx.rotate(Math.sin(fx.clock * 0.04) * 0.04);
+    drawMiniShip(sc, "#1a1420");
+    ctx.restore();
+  }
+  // 선원 행렬 — 실루엣이 오른쪽에서 왼쪽으로, 이름이 떠오른다
+  const names = ["고무팔"].concat(["music","sword","wright","arch","sniper","jack"].filter(id => crewOwned.indexOf(id) >= 0).map(id => crewDef(id).name));
+  const gap = Math.min(100, 560 / names.length), span = W + 320;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  names.forEach((nm, i) => {
+    const lt = t - 70 - i * gap, u = lt / 380;
+    if(u <= 0 || u >= 1) return;
+    const x = W + 160 - u * span, bob = Math.abs(Math.sin(lt * 0.09)) * 5, y = H - 4;
+    drawPortrait(nm, x, y - bob, 0.86, { flip: true, sil: mix([16, 12, 24], [40, 26, 34], dawn) });
+    const a = clamp01(Math.min((x - 90) / 120, (W - 90 - x) / 120));
+    ctx.globalAlpha = a;
+    ctx.font = UIF(800, 19); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(14,10,20,.6)"; ctx.strokeText(nm, x, y - 182);
+    ctx.fillStyle = "#f4ecd9"; ctx.fillText(nm, x, y - 182);
+    ctx.globalAlpha = 1;
+  });
+  // 글
+  const head = Math.min(clamp01((t - 20) / 40), clamp01((900 - t) / 60));
+  if(head > 0){ ctx.globalAlpha = head; ctx.font = UIF(700, 16); ctx.fillStyle = "#d9b877"; ctx.fillText("— 함께 건넌 사람들 —", W/2, 58); ctx.globalAlpha = 1; }
+  const fin = clamp01((t - 940) / 50);
+  if(fin > 0){
+    ctx.font = UIF(800, 40);
+    const txt = "끝은 없다.", tw = ctx.measureText(txt).width, rv = ease.inOutCubic((t - 940) / 90);
+    ctx.save(); ctx.beginPath(); ctx.rect(W/2 - tw/2 - 10, 100, (tw + 20) * rv, 80); ctx.clip();
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(40,24,30,.55)"; ctx.strokeText(txt, W/2, 140);
+    ctx.fillStyle = "#fff6e0"; ctx.fillText(txt, W/2, 140);
+    ctx.restore();
+    ctx.globalAlpha = clamp01((t - 1040) / 50); ctx.font = UIF(600, 15); ctx.fillStyle = "#fff6e0";
+    ctx.fillText("고무팔 · 대항해", W/2, 186); ctx.globalAlpha = 1;
+  }
+  ctx.globalAlpha = 0.55 * clamp01((t - 60) / 40); ctx.font = UIF(400, 12); ctx.fillStyle = "#f4ecd9";
+  ctx.fillText("아무 키나 누르면 넘어간다", W/2, H - 16); ctx.globalAlpha = 1;
+  // 처음과 끝은 먹빛으로
+  const fade = Math.max(1 - clamp01(t / 40), clamp01((t - (END_T - 50)) / 50));
+  if(fade > 0){ ctx.fillStyle = "rgba(20,14,10," + fade.toFixed(2) + ")"; ctx.fillRect(0, 0, W, H); }
+  ctx.restore();
+  paperUI = pu;
 }
 // 플레이 중 위쪽 — 스테이지 이름·목표·별 조건
 function drawStoryHud(){
@@ -3062,7 +3673,7 @@ function togglePause(){
 }
 
 function grab(){
-  if(inMenu()) return;   // 메뉴 선택은 클릭·숫자키로만
+  if(inMenu() || state === STATE.STORY_END) return;   // 메뉴 선택은 클릭·숫자키로만
   if(state === STATE.REVIVE) return;   // 부활 여부는 버튼·Space·Esc로만
   if(state === STATE.PICK || state === STATE.PORT) return;   // 카드·항구는 숫자 키·클릭으로만
   if(state === STATE.PAUSE){ togglePause(); return; }
@@ -3212,9 +3823,11 @@ window.addEventListener("keydown", (e)=>{
   const k = keyName(e);
   if(k === "KeyM" && state !== STATE.MENU){ e.preventDefault(); goToMenu(); return; }
   if(state === STATE.MINI){ miniKey(k, true, e); return; }
+  if(state === STATE.STORY_END){ e.preventDefault(); if(!e.repeat && endRoll && endRoll.t > 20) endSkip(); return; }
   if(state === STATE.STORY_TALK){
     e.preventDefault();
     if(e.repeat) return;
+    if(chapCard){ chapCard = null; return; }       // 제목 카드는 아무 키나 누르면 넘어간다
     if(k === "Escape") talkNext(true);
     else talkNext();
     return;
@@ -3323,7 +3936,8 @@ canvas.addEventListener("pointerdown", (e)=>{
     else if(inB(GIVEUP_BTN)) declineRevive();
     return;
   }
-  if(state === STATE.STORY_TALK){ talkNext(); return; }
+  if(state === STATE.STORY_END){ if(endRoll && endRoll.t > 20) endSkip(); return; }
+  if(state === STATE.STORY_TALK){ if(chapCard) chapCard = null; else talkNext(); return; }
   if(state === STATE.PICK || state === STATE.PORT){
     const pos = canvasPos(e);
     for(const B of overlayButtons()) if(pos.x > B.x && pos.x < B.x + B.w && pos.y > B.y && pos.y < B.y + B.h){ B.act(); break; }
@@ -5181,17 +5795,25 @@ function drawAwakenExtras(b, x){
     if(sx < -200 || sx > W/cam.z + 200) continue;
     if(t < 0){
       const k = Math.max(0, q.t) / AW_SLAM_WARN;
-      ctx.fillStyle = "rgba(20,8,30," + (0.2 + k*0.4).toFixed(2) + ")";
-      ctx.beginPath(); ctx.ellipse(sx, q.y, 18 + k*26, 7 + k*9, 0, 0, Math.PI*2); ctx.fill();
+      // 꽂힐 자리 — 위에서 아래까지 붉은 기둥이 짙어지고, 고리엔 그림자와 조여드는 원
+      const cg = ctx.createLinearGradient(sx - AW_SLAM_R, 0, sx + AW_SLAM_R, 0), ca = (0.16 + k*0.3) * (0.8 + Math.sin(time*0.5)*0.2);
+      cg.addColorStop(0, "rgba(255,90,110,0)"); cg.addColorStop(0.5, "rgba(255,90,110," + ca.toFixed(2) + ")"); cg.addColorStop(1, "rgba(255,90,110,0)");
+      ctx.fillStyle = cg; ctx.fillRect(sx - AW_SLAM_R, -10, AW_SLAM_R*2, SEA + 10);
+      ctx.fillStyle = "rgba(20,8,30," + (0.3 + k*0.45).toFixed(2) + ")";
+      ctx.beginPath(); ctx.ellipse(sx, q.y, 22 + k*30, 9 + k*10, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sx, SEA - 2, 26 + k*30, 6 + k*4, 0, 0, Math.PI*2); ctx.fill();
       ctx.setLineDash([14, 10]); ctx.lineDashOffset = -time*4;
       ctx.strokeStyle = "rgba(244,226,236," + (0.25 + k*0.45).toFixed(2) + ")"; ctx.lineWidth = 5 + k*4;
       ctx.beginPath(); ctx.moveTo(sx, -10); ctx.lineTo(sx, SEA); ctx.stroke();
       ctx.strokeStyle = "rgba(42,15,48," + (0.5 + k*0.5).toFixed(2) + ")"; ctx.lineWidth = 2 + k*3;
       ctx.beginPath(); ctx.moveTo(sx, -10); ctx.lineTo(sx, SEA); ctx.stroke(); ctx.setLineDash([]);
-      ctx.strokeStyle = "rgba(255,120,120," + (0.4 + k*0.5).toFixed(2) + ")"; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(sx, q.y, Math.max(0, 44 - k*22), 0, Math.PI*2); ctx.stroke();
-      ctx.font = "900 22px 'Gowun Batang', serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,130,120," + (0.5 + k*0.5).toFixed(2) + ")";
-      ctx.fillText("!", sx, q.y - 34 - Math.sin(time*0.4)*3);
+      ctx.strokeStyle = "rgba(255,244,236," + (0.5 + k*0.4).toFixed(2) + ")"; ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.arc(sx, q.y, Math.max(0, 58 - k*34), 0, Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = "rgba(226,60,70," + (0.7 + k*0.3).toFixed(2) + ")"; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.arc(sx, q.y, Math.max(0, 58 - k*34), 0, Math.PI*2); ctx.stroke();
+      ctx.font = "900 17px 'Gowun Batang', serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(30,10,20,.85)"; ctx.strokeText("! 내려찍기", sx, q.y - 72 - Math.sin(time*0.4)*3);
+      ctx.fillStyle = "#ffb0a0"; ctx.fillText("! 내려찍기", sx, q.y - 72 - Math.sin(time*0.4)*3);
       // 머리 위에서 치켜든 촉수 끝이 내려다본다
       awTentacle(sx + 70, -90, sx + Math.sin(time*0.2 + q.seed)*6, 4 + k*34, 10, { w0: 44, w1: 12, amp: 5, seed: q.seed, plain: true });
     } else {
@@ -11674,7 +12296,8 @@ function drawStallWarning(){
 /* 화면 위 버튼 줄 — 모바일엔 M·R·C 키가 없어서 출항·일시정지·결과 화면에 누를 수 있는 버튼을 둔다 */
 function goToMenu(){
   if(state === STATE.REVIVE) declineRevive();   // 부활 창이면 판을 정상 종료(보물·기록 저장)하고 나간다
-  if(state === STATE.STORY_TALK){ storyTalk = null; }
+  if(state === STATE.STORY_TALK){ storyTalk = null; chapCard = null; }
+  endRoll = null;
   state = storyMode ? STATE.STORY_MAP : STATE.MENU; practicePage = 0; shopPage = 0;
   syncHUD();
 }
@@ -12289,13 +12912,14 @@ function fxStateChange(from, to){
   if(from < 0) return;
   if((to === S.STORY_MAP && (from === S.MENU || from === S.OVER || from === S.READY || from === S.STORY_END)) ||
      (from === S.STORY_MAP && (to === S.STORY_TALK || to === S.READY || to === S.MENU)) ||
-     (from === S.STORY_TALK && (to === S.READY || to === S.STORY_END)) ||
+     (from === S.STORY_TALK && to === S.STORY_END) ||
      (storyMode && from === S.OVER && (to === S.READY || to === S.STORY_TALK)) ||
      (from === S.STORY_END)) fx.wipe = WIPE_T;
 }
 function draw(){
   if(state !== uiState) fxStateChange(uiState, state);
   drawFrame();
+  if(state !== STATE.MINI) drawTalkOut();
   if(state !== STATE.MINI) drawWipe();
 }
 function drawFrame(){
@@ -12590,7 +13214,8 @@ function drawFrame(){
       : "선단에 뒤처졌다";
     const lx = W/2 - 50;
     let overY = 92;
-    const line = (t, font, color, gap) => { leftText(t, lx, overY, font, color); overY += gap; };
+    fx.resT += fx.dt;
+    const line = (t, font, color, gap, al) => { if(al !== undefined) ctx.globalAlpha = al; leftText(t, lx, overY, font, color); ctx.globalAlpha = 1; overY += gap; };
     if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8", 26);
     if(storyMode) line("스토리 " + storyStage().id + " " + storyStage().name, "700 14px 'Gowun Batang', 'Pretendard', serif", "#ffd76a", 26);
     if(rushMode) line(rushDone ? ((newRushRecord ? "★ 최단 기록 " : "완주 기록 ") + fmtTime(rushT) + (rushBest && !newRushRecord ? " · 최단 " + fmtTime(rushBest) : ""))
@@ -12609,13 +13234,33 @@ function drawFrame(){
     line(Math.floor(dist) + "m · 보물 " + bigNum(treasure), "700 19px 'Gowun Batang', serif", "#d9b877", 26);
     if(storyMode && storyResult && storyResult.win){
       const s = storyStage(), r = storyResult;
-      line("★".repeat(starCount(r.bits)) + "☆".repeat(3 - starCount(r.bits)) + (r.newBits & 6 ? "  새 별!" : "") + "   " + (r.first ? "첫 클리어 보물 +" : "다시 깬 보물 +") + r.reward,
-           "800 20px 'Gowun Batang', 'Pretendard', serif", "#ffd76a", 28);
+      // 별은 하나씩 도장 찍히듯(0.25초 간격), 새로 딴 별엔 반짝임. 그 뒤 줄들은 차례로 떠오른다
+      const calm = settings.calm, T0 = 12, GAPF = 15, n = starCount(r.bits), fresh = starCount(r.newBits);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for(let k=0;k<3;k++){
+        const on = k < n, st = fx.resT - T0 - k * GAPF, sx = lx + 13 + k * 30;
+        const kk = calm ? 1 : clamp01(st / 11), sc = on ? 1.6 - 0.6 * ease.outBack(kk, 2.2) : 1;
+        ctx.save(); ctx.translate(sx, overY); ctx.scale(sc, sc);
+        ctx.font = "800 24px 'Gowun Batang', 'Pretendard', serif";
+        ctx.fillStyle = on && (calm || st > 0) ? "#ffd76a" : "rgba(244,236,217,.3)";
+        ctx.fillText(on && (calm || st > 0) ? "★" : "☆", 0, 0);
+        ctx.restore();
+        if(on && k >= n - fresh && !calm && st > 0 && st < 24){              // 새 별 — 빛살이 퍼진다
+          const u = st / 24;
+          ctx.strokeStyle = "rgba(255,236,160," + (1 - u).toFixed(2) + ")"; ctx.lineWidth = 2; ctx.lineCap = "round";
+          for(let q=0;q<8;q++){ const a = q * Math.PI/4 + 0.3; ctx.beginPath(); ctx.moveTo(sx + Math.cos(a) * (12 + u*10), overY + Math.sin(a) * (12 + u*10)); ctx.lineTo(sx + Math.cos(a) * (18 + u*22), overY + Math.sin(a) * (18 + u*22)); ctx.stroke(); }
+        }
+      }
+      const after = (i) => calm ? 1 : clamp01((fx.resT - T0 - 3 * GAPF - i * 12) / 12);
+      ctx.globalAlpha = after(0);
+      leftText((r.newBits & 6 ? "새 별!   " : "") + (r.first ? "첫 클리어 보물 +" : "다시 깬 보물 +") + r.reward, lx + 104, overY, "800 18px 'Gowun Batang', 'Pretendard', serif", "#ffd76a");
+      ctx.globalAlpha = 1; overY += 28;
       line((r.bits & 2 ? "✓ " : "· ") + s.stars[0].text + "   " + (r.bits & 4 ? "✓ " : "· ") + s.stars[1].text + (storyRun && storyRun.revived ? " (부활해서 ★★★ 없음)" : ""),
-           "600 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.8)", 22);
-      if(r.crew) line("⚓ " + r.crew.name + " 합류! — " + r.crew.desc, "700 14px 'Gowun Batang', 'Pretendard', serif", r.crew.col, 22);
-      if(r.art) line("✦ 비기 획득: " + r.art.name + " — 출항 화면에서 G로 장착", "700 14px 'Gowun Batang', 'Pretendard', serif", "#ff8f70", 22);
-      if(s.end) line("🌊 대항해의 끝 — 무한 모드 '심연' 해역과 각성한 크라켄 연습이 열렸다", "700 14px 'Gowun Batang', 'Pretendard', serif", "#d9a8f0", 22);
+           "600 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.8)", 22, after(1));
+      let ai = 2;
+      if(r.crew) line("⚓ " + r.crew.name + " 합류! — " + r.crew.desc, "700 14px 'Gowun Batang', 'Pretendard', serif", r.crew.col, 22, after(ai++));
+      if(r.art) line("✦ 비기 획득: " + r.art.name + " — 출항 화면에서 G로 장착", "700 14px 'Gowun Batang', 'Pretendard', serif", "#ff8f70", 22, after(ai++));
+      if(s.end) line("🌊 대항해의 끝 — 무한 모드 '심연' 해역과 각성한 크라켄 연습이 열렸다", "700 14px 'Gowun Batang', 'Pretendard', serif", "#d9a8f0", 22, after(ai++));
     } else if(storyMode && storyStage()){
       const s = storyStage();
       line("목표: " + storyGoalText(s) + " — 다시 도전하자 (R)", "600 14px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8", 24);
@@ -12729,6 +13374,8 @@ function drawFrame(){
     drawStoryMap();
   } else if(state === STATE.STORY_TALK){
     drawTalk();
+  } else if(state === STATE.STORY_END){
+    drawEnding();
   } else if(state === STATE.CHALLENGE){
     ctx.fillStyle = "rgba(13,27,38,0.78)";
     ctx.fillRect(0,0,W,H);
@@ -13640,7 +14287,9 @@ window.__swing = {
   story: () => ({ mode: storyMode, stars: storyStars, seen: storySeen, end: storyEnd, run: storyRun, res: storyResult, talk: storyTalk, ch: STORY_CH, all: STORY_ALL,
                   start: startStory, next: storyNext, open: openStoryMap, leave: leaveStory, talkNext, clear: storyClear, open2: storyOpen, total: storyStarTotal, max: STORY_STAR_MAX,
                   setBits: (id, b) => { if(b === undefined) delete storyStars[id]; else storyStars[id] = b; }, setEnd: (n) => { storyEnd = n; }, setCh: (n) => { storyCh = n; },
-                  drawMap: drawStoryMap, drawTalk, hud: drawStoryHud, starOk: storyStarOk, left: storyLeft }),
+                  drawMap: drawStoryMap, drawTalk, hud: drawStoryHud, starOk: storyStarOk, left: storyLeft,
+                  openTalk, card: chapCard, ending: endRoll, startEnding, endSkip, drawEnding, portraits: PORTRAITS, drawPortrait }),
+  fx: () => fx,
   art: () => ({ sel: artSel, cd: artCd, t: artT, held: artHeld, thrown: artThrow, spin: artSpin, press: artPress, lift: artLift, cycle: cycleArt, lv: artLv, owned: artOwned,
                 set: (id) => { artSel = id; }, list: ARTS, on: artOn, setCd: (v) => { artCd = v; } }),
   jack: () => ({ cd: jackCd, setCd: (v) => { jackCd = v; } }),

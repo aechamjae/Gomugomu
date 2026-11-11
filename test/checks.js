@@ -3483,6 +3483,96 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v59: 스토리 연출 — 대사창 초상 · 장 제목 카드 · 지도 · 결과 별 · 엔딩 · 연출 줄이기 --- */
+{
+  const a = A(), ST = () => a.story(), E = (x) => T().ev(x);
+  const stars0 = Object.assign({}, ST().stars), seen0 = ST().seen.slice(), owned0 = a.crew().owned.slice(), end0 = ST().end;
+  const skipTalk = () => { let n = 0; while(ST().talk && n++ < 50) ST().talkNext(true); };
+  // 대사 자료 — 줄 수 제한, 조작 안내, 초상
+  ok("v59: 스테이지 대사는 시작·끝 각각 5줄 이하", ST().all.every(s => s.pre.length <= 5 && (s.post || []).length <= 5), ST().all.filter(s => s.pre.length > 5 || (s.post || []).length > 5).map(s => s.id).join(","));
+  const allText = ST().all.map(s => s.pre.concat(s.post || []).map(l => l[1]).join(" ")).join(" ");
+  ok("v59: 조작 안내(Q·W·E·F) 문장이 남아 있다", ["(Q)", "(W)", "(E)", "(F)"].every(k => allText.includes(k)));
+  const speakers = [...new Set([].concat(...ST().all.map(s => s.pre.concat(s.post || []).map(l => l[0]))))];
+  let err = null;
+  try{ for(const w of speakers) for(const o of [{}, { talk:true, flip:true }, { blink:true, excited:true }, { sil:"#111" }]) ST().drawPortrait(w, 100, 300, 1, o); ST().drawPortrait("모르는 사람", 0, 0, 1, {}); }catch(e){ err = e.message; }
+  ok("v59: 화자 " + speakers.length + "명의 초상을 모두 그려도 오류 없음(말하기·깜빡임·실루엣)", !err && speakers.length >= 20, err);
+  // 장 제목 카드 — 장의 첫 스테이지에 처음 들어갈 때만, 대사 진행과는 따로
+  for(const k of Object.keys(ST().stars)) delete ST().stars[k]; ST().seen.length = 0;
+  ST().start(0, 0);
+  ok("v59: 장의 첫 스테이지는 제목 카드가 뜬다(대사창 상태는 그대로)", a.peek().state === 15 && ST().card && ST().card.ch === 0 && ST().talk.i === 0);
+  err = null; try{ for(let i=0;i<30;i++) H.step(); }catch(e){ err = e.message; }
+  ok("v59: 카드가 떠 있는 동안 글자는 흐르지 않는다", !err && ST().card && ST().talk.chars === 0, err);
+  E("chapCard = null");
+  try{ for(let i=0;i<200;i++) H.step(); }catch(e){ err = e.message; }
+  ok("v59: 카드가 걷히면 글자가 흐르고, 다 쓰면 멈춘다", !err && ST().talk.chars === ST().talk.lines[0][1].length, err);
+  ST().start(0, 0); for(let i=0;i<160;i++) H.step();
+  ok("v59: 제목 카드는 2.4초 뒤 스스로 걷힌다", !ST().card && ST().talk);
+  skipTalk();
+  ok("v59: 대사를 넘기면 카드도 사라지고 출항 화면", a.peek().state === 0 && !ST().card);
+  ST().setBits("P-1", 1); ST().start(0, 1);
+  ok("v59: 장의 둘째 스테이지엔 제목 카드가 없다", a.peek().state === 15 && !ST().card);
+  // 글자 — 문장부호 뒤에 쉰다(같은 시간에 덜 나간다)
+  ST().openTalk([["고무팔", "가나다라마바사아자차카타파하가나다라마바사"], ["고무팔", "가, 나. 다! 라? 마… 바, 사. 아! 자? 차."]], 14, null);
+  for(let i=0;i<14;i++) H.step(); const plain = ST().talk.chars;
+  ST().talkNext(); ST().talkNext(); for(let i=0;i<14;i++) H.step();
+  ok("v59: 문장부호가 많은 줄은 같은 시간에 글자가 덜 나온다", ST().talk.i === 1 && ST().talk.chars < plain - 2, plain + " → " + ST().talk.chars);
+  skipTalk();
+  // 지도 — 등장·장 넘기기를 그려도 오류 없음
+  ST().open(); err = null;
+  try{ for(let c=0;c<7;c++){ ST().setCh(c); for(let i=0;i<12;i++) H.step(); } }catch(e){ err = e.message; }
+  ok("v59: 지도 — 장을 넘기며 그려도 오류 없음", !err && a.peek().state === 14, err);
+  // 결과 화면 — 별 도장
+  ST().all.forEach(s => ST().setBits(s.id, 1)); ST().seen.push("F-5", "F-5+");
+  ST().start(6, 4); skipTalk(); H.step(); a.hold(true); H.step();
+  ST().clear();
+  err = null; try{ for(let i=0;i<120;i++) H.step(); }catch(e){ err = e.message; }
+  ok("v59: 결과 화면(별 도장·차례로 뜨는 줄)을 2초 그려도 오류 없음", !err && a.peek().state === 2, err);
+  ok("v59: 끝 대사를 이미 봤으면 엔딩 없이 바로 결과 화면", !ST().ending);
+  // 엔딩 — 최종장 끝 대사 뒤
+  ST().seen.splice(ST().seen.indexOf("F-5+"), 1);
+  const endBefore = ST().end;
+  ST().start(6, 4); skipTalk(); H.step(); a.hold(true); H.step();
+  ST().clear();
+  ok("v59: 최종장을 깨면 끝 대사부터(기록은 이미 됐다)", a.peek().state === 15 && ST().end === endBefore + 1);
+  skipTalk();
+  ok("v59: 끝 대사 뒤 엔딩 시퀀스(state 17)", a.peek().state === 17 && ST().ending && a.stateIds.STORY_END === 17);
+  err = null; try{ for(let i=0;i<300;i++) H.step(); }catch(e){ err = e.message; }
+  ok("v59: 엔딩을 그려도 오류 없음 · 그동안 팔 입력은 먹지 않는다", !err && (a.hold(true), a.hold(false), a.peek().state === 17), err);
+  ST().endSkip();
+  ok("v59: 건너뛰면 결과 화면으로", a.peek().state === 2 && !ST().ending && a.peek().deathReason === "클리어");
+  ST().startEnding(14);
+  err = null; try{ for(let i=0;i<1230;i++) H.step(); }catch(e){ err = e.message; }
+  ok("v59: 엔딩은 20초 뒤 스스로 끝나 돌아간다(다시 보기 → 지도)", !err && a.peek().state === 14 && !ST().ending, err);
+  // 연출 줄이기
+  E("state = STATE.SETTINGS");
+  const row = a.rows().find(r => /연출 줄이기/.test(r.label));
+  ok("v59: 설정에 '연출 줄이기'가 있고 기본은 꺼짐", row && a.settings.calm === false && /꺼짐/.test(row.label));
+  row.action();
+  ok("v59: 누르면 켜진다", a.settings.calm === true && /켜짐/.test(a.rows().find(r => /연출 줄이기/.test(r.label)).label));
+  a.startMain(); H.step(); a.hold(true); H.step();
+  const B = a.spawnBoss(false, 4); B.invul = 0;
+  E("bossIntro = null"); H.step(); T().dmg(true, "t");
+  err = null; try{ for(let i=0;i<40;i++) H.step(); }catch(e){ err = e.message; }
+  ok("v59: 연출 줄이기 — 멈칫 없음, 그리기 오류 없음", !err && a.fx().hitstop === 0, err);
+  a.settings.calm = false;
+  // 타격 멈칫은 loop에서만 — 보스가 맞은 프레임 뒤 몇 프레임 세상이 선다
+  a.startMain(); H.step(); a.hold(true); H.step();
+  const B2 = a.spawnBoss(false, 4); E("bossIntro = null; mobs.length = 0"); H.step();
+  E("const o = update; globalThis.__hs = 0; update = function(dt){ o(dt); if(!__hs && boss){ __hs = 1; boss.invul = 0; damageBoss(true, 't'); } }");
+  H.step();
+  const hs = a.fx().hitstop, t0 = E("time"); H.step(); H.step();
+  ok("v59: 보스가 맞으면 3~4프레임 멈칫(그동안 게임 시간은 서 있다)", hs > 3 && hs < 4.5 && E("time") === t0, "hitstop " + hs);
+  for(let i=0;i<4;i++) H.step();
+  ok("v59: 멈칫이 끝나면 다시 흐른다", E("time") > t0 && a.fx().hitstop === 0);
+  E("boss = null"); T().setBoss(null);
+  // 되돌리기
+  for(const k of Object.keys(ST().stars)) delete ST().stars[k]; Object.assign(ST().stars, stars0);
+  ST().seen.length = 0; seen0.forEach(x => ST().seen.push(x)); ST().setEnd(end0);
+  a.crew().owned.length = 0; owned0.forEach(x => a.crew().owned.push(x));
+  E("storyMode = null; storyResult = null; storyTalk = null; chapCard = null; endRoll = null");
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");
