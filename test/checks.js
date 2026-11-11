@@ -973,7 +973,7 @@ function swing(a, st){
     });
     if(s.deathReason === "완주") break;
   }
-  ok("보스 러시 — 해군 대장 군함까지 9연전을 순서대로 치르고 완주한다", s.deathReason === "완주" && order.join(",") === "0,1,3,4,2,6,5,7,8" && !fishSeen,
+  ok("보스 러시 — 뽑힌 대진 다섯을 순서대로 치르고 완주한다(v60: 무작위 5연전)", s.deathReason === "완주" && order.length === 5 && order.join(",") === a.rush().list.join(",") && !fishSeen,
      "사인=" + s.deathReason + " 순서=" + order.join(","));
   a.startMain();
 }
@@ -1395,11 +1395,11 @@ function swing(a, st){
   for(const i of [1, 2, 3]){
     U().tab(i);
     const rs = a.rows();
-    packs.push(rs.filter(r => r.key === 7 && /팩 열기/.test(r.label)).length);
-    if(i === 1) ok("근거리 탭에 장착 3개·강화 3개 버튼", [1,2,3].every(k => rs.some(r => r.key === k)) && [4,5,6].every(k => rs.some(r => r.key === k && /강화|최고/.test(r.label))));
+    packs.push(rs.filter(r => r.key === 9 && /팩 열기/.test(r.label)).length);
+    if(i === 1) ok("근거리 탭에 장착 4개·강화 4개 버튼(v60: 기술 넷)", [1,2,3,4].every(k => rs.some(r => r.key === k)) && [5,6,7,8].every(k => rs.some(r => r.key === k && /강화|최고/.test(r.label))));
   }
   ok("기술 탭 셋 모두 팩 버튼이 하나씩", packs.join() === "1,1,1", packs.join());
-  ok("예전 '기술 뽑기' 쪽(2)은 기술 탭으로", (a.shopPage(2), a.rows().some(r => r.key === 7)) && U().page() === 3);
+  ok("예전 '기술 뽑기' 쪽(2)은 기술 탭으로", (a.shopPage(2), a.rows().some(r => r.key === 9 && /팩 열기/.test(r.label))) && U().page() === 3);
   U().tab(0); U().key("ArrowRight");
   ok("→ 키로 다음 탭", U().page() === 3 && U().cat() === "melee");
   U().key("ArrowLeft"); U().key("ArrowLeft");
@@ -2010,7 +2010,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("창고 선원 탭은 10명이 한 화면(1~9, 0)", crewRows === 10, crewRows);
   const stunWith = (id) => { C.set(id); a.startMain(); H.step(); a.hold(true); H.step(); return T().hit(false); };
   const s0 = stunWith(null), s1 = stunWith("doctor");
-  ok("선의 — 휘청 시간 -30%", Math.abs(s1 - s0 * 0.7) < 0.01, s0.toFixed(1) + " → " + s1.toFixed(1));
+  ok("선의 — 휘청 시간 -35%(v60)", Math.abs(s1 - s0 * 0.65) < 0.01, s0.toFixed(1) + " → " + s1.toFixed(1));
   C.set("doctor"); a.startMain(); H.step();
   ok("선의 — 출발할 때 보호막 1", CT().shield() === 1);
   C.set(null); a.startMain(); H.step();
@@ -2025,7 +2025,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("조선공 — 항구 값 -20%", pr1 === Math.round(pr0 * 0.8 / 10) * 10, pr0 + " → " + pr1);
   a.hold(true); H.step(); a.hold(false);
   const rot = CT().grabRot();
-  ok("조선공 — 삭은 돛대가 두 배 오래 버틴다", rot.creak === 144, "creak=" + rot.creak);
+  ok("조선공 — 삭은 돛대가 2.5배 오래 버틴다(v60)", rot.creak === 180, "creak=" + rot.creak);
   // 음악가 — 기어 게이지
   C.set(null); a.startMain(); H.step(); a.hold(true); H.step(); T().setGear(0); const g0 = CT().gearAdd("kill");
   C.set("music"); a.startMain(); H.step(); a.hold(true); H.step(); T().setGear(0); const g1 = CT().gearAdd("kill");
@@ -3572,6 +3572,446 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("storyMode = null; storyResult = null; storyTalk = null; chapCard = null; endRoll = null");
   a.toMenu();
 }
+
+/* ===================== v60 systems: 보스 러시 · 기술 · 동료 · 칭호 · 메뉴 ===================== */
+/* --- v60 systems: 보스 러시 무작위 5연전 --- */
+{
+  const a = A(), R = () => a.rush(), E2 = (x) => T().ev(x);
+  const pool = R().pool, all = pool.mid.concat(pool.named, pool.big);
+  let good = true, why = "", seen = new Set(), firsts = new Set();
+  for(let i=0;i<400;i++){
+    const l = R().roll(), cls = l.map(t => R().cls(t)), bigs = cls.filter(c => c === "big").length;
+    l.forEach(t => seen.add(t)); firsts.add(l.join(","));
+    if(l.length !== 5 || new Set(l).size !== 5){ good = false; why = "겹침 " + l; }
+    if(cls[0] !== "mid" || cls[1] !== "mid" || cls[2] !== "named"){ good = false; why = "앞 세 자리 " + cls; }
+    if(cls[4] === "mid"){ good = false; why = "마지막이 일반 " + l; }
+    if(bigs < 1 || bigs > 2){ good = false; why = "대형 수 " + bigs; }
+    if(l.indexOf(15) >= 0 || l.indexOf(20) >= 0){ good = false; why = "전용 보스가 섞임 " + l; }
+  }
+  ok("v60 러시: 대진은 겹치지 않는 다섯 — 일반·일반·네임드·(일반|대형)·결전(대형, 대형이 둘이면 네임드도), 대형 1~2", good, why);
+  ok("v60 러시: 400번 굴리면 풀의 보스가 전부 나오고 대진이 매번 다르다", all.every(t => seen.has(t)) && firsts.size > 300, "종류 " + seen.size + "/" + all.length + " · 서로 다른 대진 " + firsts.size);
+  ok("v60 러시: 풀의 등급이 실제 보스 등급과 맞다", pool.mid.every(t => R().cls(t) === "mid") && pool.named.every(t => R().cls(t) === "named") && pool.big.every(t => R().cls(t) === "big"));
+  // 판마다 새로, 출항 화면에서 선원만 바꿀 땐 그대로
+  a.startRush(); H.step();
+  const l1 = R().list.slice();
+  ok("v60 러시: 시작하면 대진 다섯이 정해지고 출항 화면(state 0)", a.peek().state === 0 && l1.length === 5);
+  T().reset(); H.step();
+  ok("v60 러시: 출항 화면에서 다시 꾸려도(선원·기어 바꾸기) 대진은 그대로", R().list.join(",") === l1.join(","));
+  let changed = false;
+  for(let i=0;i<6 && !changed;i++){ a.startRush(); H.step(); if(R().list.join(",") !== l1.join(",")) changed = true; }
+  ok("v60 러시: 새로 시작하면 대진을 다시 뽑는다", changed);
+  for(let i=0;i<90;i++) H.step();
+  ok("v60 러시: 대진표 카드가 뒤집히는 동안 오류 없이 그려진다", a.peek().state === 0 && a.fx().rushT > 60);
+  // 기록 — 새 5연전 기록과 옛 9연전 기록은 따로
+  R().setBest(0, 61234);
+  a.toMenu();
+  a.rows().find(r => /도전/.test(r.label)).action();
+  ok("v60 러시: 5연전 기록이 없으면 도전 화면에 옛 9연전 기록을 보여 준다", /옛 9연전 17:00/.test(a.rows().find(r => /보스 러시/.test(r.label)).label), a.rows().find(r => /보스 러시/.test(r.label)).label);
+  let s = null;
+  for(let attempt = 0; attempt < 3; attempt++){
+    a.startRush(); H.step(); a.hold(true); H.step(); a.hold(false);
+    T().setFusen(2);
+    s = run(a, 9000, (st) => {
+      if(st.boss){ st.boss.hp = 1; st.boss.invul = 0; T().dmg(true, "테스트"); }
+      else { swing(a, st); T().setFusen(2); }
+    });
+    if(s.deathReason === "완주") break;
+  }
+  ok("v60 러시: 완주하면 5연전 기록만 새로 서고 옛 9연전 기록은 그대로", s.deathReason === "완주" && R().best > 0 && R().best9 === 61234, "사인=" + s.deathReason + " 5연전=" + R().best + " 9연전=" + R().best9);
+  const saved = JSON.parse(E2("recShop()"));
+  ok("v60 러시: 저장에 rush5(새 기록)·rush9(옛 기록)가 따로 들어간다", saved.rush5 === R().best && saved.rush9 === 61234);
+  // 하위 호환 — 옛 저장(rush9만 있음)을 읽어도 9연전 기록으로만 남는다
+  E2("(function(){ const r = JSON.parse(recShop()); delete r.rush5; r.rush9 = 43210; rushBest = 777; applyShopRecord(JSON.stringify(r)); })()");
+  ok("v60 러시: 옛 저장(rush9만)은 '옛 9연전 기록'으로만 읽힌다 — 새 기록은 비어 있다", R().best === 0 && R().best9 === 43210, "5연전=" + R().best + " 9연전=" + R().best9);
+  R().setBest(0, 0);
+  ok("v60 러시: 계정 코드 낱말표 끝에 rush5", E2("CODE2_WORDS.indexOf('rush5') > CODE2_WORDS.indexOf('jail')"));
+  a.toMenu();
+}
+/* --- v60 systems: 기술 개편 (도끼·바주카·개틀링 강화, 팽이·별똥 신규) --- */
+{
+  const a = start(), tc = a.tech, E = (x) => T().ev(x), P = T().P();
+  const K = tc().K, lv0 = Object.assign({}, tc().lv), eqR0 = tc().eqR, eqM0 = tc().eqM;
+  const clear = () => { const s = a.peek(); s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0; s.shots.length = 0; E("boss = null; gun = null; shock = null; comet = null; fist = null; volley = null; gunCd = 0; skillCd = 0; stun = 0; rope = null"); };
+  // 보스(곡예사, 약점 '기구'가 b.y-58)를 원하는 자리에 세운다
+  const bossAt = (dx, dy) => { E("boss = null; spawnBoss(false, 0); bossIntro = null; boss.hp = 9; boss.maxHp = 9; boss.t = 0; boss.invul = 0"); const b = a.peek().boss; b.x = P.x + dx; b.y = P.y + dy + 58; return b; };
+  ok("v60 기술: 목록에 근거리 넷(채찍·바주카·도끼·팽이) · 원거리 넷(피스톨·라이플·개틀링·별똥)",
+     tc().list.filter(t => t.cat === "melee").map(t => t.id).join() === "whip,bazooka,axe,top" && tc().list.filter(t => t.cat === "ranged").map(t => t.id).join() === "pistol,rifle,gatling,comet");
+  // 바주카 — 피해 3, 반경 150, 반동으로 위로
+  clear(); tc().set("bazooka", 1); tc().equip("bazooka");
+  P.y = 200; P.vx = 8; P.vy = 3; P.face = 1;
+  let b = bossAt(120 + 130, -4);            // 손바닥 자리(120 앞)에서 130 떨어진 약점 — 예전 반경 120이면 안 닿았다
+  a.fireGun();
+  ok("v60 기술: 바주카 — 보스 피해 3, 반경 150", b.hp === 6 && K.BAZOOKA_R === 150 && K.BAZOOKA_POW === 3, "체력 9→" + b.hp);
+  ok("v60 기술: 바주카 반동은 위로 솟는다(예전엔 이동 반대로 밀렸다)", P.vy <= -7 && P.vx >= 7, "vx=" + P.vx.toFixed(1) + " vy=" + P.vy.toFixed(1));
+  ok("v60 기술: 바주카 재충전 15초", Math.round(a.peek().gunCd) === 900, "쿨=" + a.peek().gunCd);
+  // 도끼 — 피해 2, 충격파
+  clear(); tc().set("axe", 1); tc().equip("axe");
+  P.y = 200; P.vx = 8; P.vy = 2;
+  b = bossAt(30 + 170, 40);                 // 기둥 반폭 190 안(예전 150 밖)
+  a.fireGun();
+  ok("v60 기술: 도끼 — 보스 피해 2, 반폭 190, 맞히면 튀어 오른다", b.hp === 7 && K.AXE_W === 190 && P.vy <= -5, "체력 9→" + b.hp + " vy=" + P.vy.toFixed(1));
+  ok("v60 기술: 도끼 재충전 10초", Math.round(a.peek().gunCd) === 600);
+  clear(); P.y = 200; P.vy = 2;
+  const sea = a.peek().SEA;
+  a.peek().mobs.push({ kind:0, x:P.x + 30 + 290, y:sea - 40, vy:0, air:true, gone:false }, { kind:0, x:P.x + 30 - 300, y:sea - 30, vy:0, air:true, gone:false }, { kind:0, x:P.x + 30 + 290, y:sea - 260, vy:0, air:true, gone:false });
+  a.fireGun();
+  const m = a.peek().mobs.slice();
+  ok("v60 기술: 도끼 기둥 밖(290px)의 물고기는 내리찍는 순간엔 안 맞는다 — 충격파가 생긴다", !m[0].gone && !m[1].gone && !!tc().shock);
+  for(let i=0;i<40;i++) E("updateGun(1)");
+  ok("v60 기술: 충격파가 수면을 따라 양옆으로 퍼져 수면 가까운 물고기를 친다(높이 뜬 건 안 맞는다)", m[0].gone && m[1].gone && !m[2].gone && !tc().shock);
+  clear(); P.y = 200; P.vy = 2;
+  b = bossAt(30 + 100, sea - 200 - 30);     // 기둥에도, 충격파에도 걸리는 자리
+  a.fireGun();
+  for(let i=0;i<40;i++){ b.invul = 0; E("updateGun(1)"); }
+  ok("v60 기술: 기둥에 맞은 보스는 충격파에 또 맞지 않는다", b.hp === 7, "체력 9→" + b.hp);
+  // 개틀링 — 피해 2
+  clear(); tc().set("gatling", 1); tc().equip("gatling");
+  P.y = 200; P.vx = 6; P.vy = 0;
+  b = bossAt(260, 0);
+  a.fire();
+  ok("v60 기술: 개틀링 — 보스 피해 2", b.hp === 7 && K.GATLING_POW === 2, "체력 9→" + b.hp);
+  clear(); P.y = sea - 180;
+  a.peek().mobs.push({ kind:1, x:P.x + 200, y:sea, phase:3, t:0, h:150, gone:false });
+  a.fire();
+  ok("v60 기술: 개틀링은 여전히 해왕류를 못 쓰러뜨린다(원거리 규칙 유지)", !a.peek().mobs[0].gone);
+  // 팽이 — 등 뒤까지, 보스는 한 번, 탄을 튕겨 내고 천천히 떨어진다
+  clear(); tc().set("top", 1); tc().equip("top");
+  P.y = 200; P.vx = 6; P.vy = 8; P.face = 1;
+  a.peek().gulls.push({ x:P.x - 110, y:P.y, base:P.y, vx:0, t:0, gone:false }, { x:P.x + 100, y:P.y - 60, base:P.y - 60, vx:0, t:0, gone:false }, { x:P.x + 260, y:P.y, base:P.y, vx:0, t:0, gone:false });
+  a.peek().shots.push({ x:P.x - 60, y:P.y + 40, vx:0, vy:0, r:8 });
+  b = bossAt(90, 0);
+  a.fireGun();
+  ok("v60 기술: 팽이 — 쓰면 도장이 찍히고 TOP_T 동안 돈다", a.peek().gun.kind === "top" && Math.round(a.peek().gun.t) === K.TOP_T && /팽이/.test(tc().stamp.text));
+  E("updateGun(1)");
+  const g = a.peek().gulls;
+  ok("v60 기술: 팽이는 등 뒤의 갈매기도 친다(반경 밖은 안 맞는다)", g[0].gone && g[1].gone && !g[2].gone);
+  ok("v60 기술: 팽이가 둘레의 탄을 튕겨 낸다", a.peek().shots.length === 0);
+  ok("v60 기술: 팽이 — 도는 동안 천천히 떨어진다", P.vy <= 1.2 + 1e-9, "vy=" + P.vy);
+  for(let i=0;i<30;i++){ b.invul = 0; b.x = P.x + 90; b.y = P.y + 58; E("updateGun(1)"); }
+  ok("v60 기술: 팽이 — 보스는 한 번 돌 때 한 번만 맞는다", b.hp === 8, "체력 9→" + b.hp);
+  for(let i=0;i<30;i++) E("updateGun(1)");
+  ok("v60 기술: 팽이가 끝나면 사라진다", !a.peek().gun);
+  clear(); P.y = sea - 150; P.vy = 0;
+  a.peek().mobs.push({ kind:1, x:P.x - 60, y:sea, phase:3, t:0, h:150, gone:false });
+  a.fireGun(); E("updateGun(1)");
+  ok("v60 기술: 팽이는 근거리라 등 뒤 해왕류도 쓰러뜨린다", a.peek().mobs[0].gone);
+  // 별똥 — 떨어지기 전엔 안 맞고, 떨어지면 둘레를 한꺼번에. 한가운데면 피해 2
+  clear(); tc().set("comet", 1); tc().equip("comet");
+  P.y = 200; P.vx = 0; P.vy = 0; P.face = 1;
+  for(const d of [[400, 0], [460, 50], [350, -40], [640, 0]]) a.peek().gulls.push({ x:P.x + d[0], y:P.y + d[1], base:P.y + d[1], vx:0, t:0, gone:false });
+  a.fire();
+  ok("v60 기술: 별똥 — 쏘면 표적이 정해지고 주먹(fist)은 남지 않는다", !!tc().comet && !a.peek().fist && Math.abs(tc().comet.x - (P.x + 350)) < 130 && /별똥/.test(tc().stamp.text), "x=" + (tc().comet.x - P.x));
+  for(let i=0;i<K.COMET_T - 2;i++) E("updateFist(1)");
+  ok("v60 기술: 별똥 — 떨어지기 전(예고 " + K.COMET_T + "프레임)엔 아무것도 안 맞는다", a.peek().gulls.every(q => !q.gone));
+  for(let i=0;i<4;i++) E("updateFist(1)");
+  const gg = a.peek().gulls;
+  ok("v60 기술: 별똥 — 떨어진 자리 둘레(반경 " + K.COMET_R + ")를 한꺼번에, 밖은 안 맞는다", gg[0].gone && gg[1].gone && gg[2].gone && !gg[3].gone);
+  for(let i=0;i<30;i++) E("updateFist(1)");
+  ok("v60 기술: 별똥 연출이 끝나면 사라진다", !tc().comet);
+  clear(); P.y = 200; P.vx = 0; P.vy = 0;
+  b = bossAt(300, 0); E("wpVel.length = 0");
+  a.fire();
+  for(let i=0;i<K.COMET_T + 2;i++){ b.t = 0; b.x = P.x + 300; b.y = P.y + 58; E("updateFist(1)"); }
+  ok("v60 기술: 별똥 — 약점 한가운데에 꽂히면 피해 2", b.hp === 7, "체력 9→" + b.hp);
+  clear(); P.y = 200; P.vx = 0; P.vy = 0;
+  b = bossAt(300, 0); E("wpVel.length = 0");
+  a.fire();
+  for(let i=0;i<K.COMET_T + 2;i++){ b.t = 0; b.x = P.x + 300 + 85; b.y = P.y + 58; E("updateFist(1)"); }
+  ok("v60 기술: 별똥 — 가장자리에 걸치면 피해 1", b.hp === 8, "체력 9→" + b.hp);
+  clear(); P.y = sea - 180;
+  a.peek().mobs.push({ kind:1, x:P.x + 250, y:sea, phase:3, t:0, h:150, gone:false });
+  a.fire(); for(let i=0;i<K.COMET_T + 2;i++) E("updateFist(1)");
+  ok("v60 기술: 별똥도 원거리라 해왕류는 못 쓰러뜨린다", !a.peek().mobs[0].gone);
+  // 뽑기·강화·저장
+  clear();
+  for(const k of Object.keys(tc().lv)) delete tc().lv[k];
+  Object.assign(tc().lv, { pistol:1, whip:1 });
+  a.shop().setBank(10000);
+  let seq = [0, 0.99]; const r1 = tc().open("melee", () => seq.shift());
+  seq = [0, 0.99]; const r2 = tc().open("ranged", () => seq.shift());
+  ok("v60 기술: 팩에서 새 기술 팽이·별똥이 나온다", r1.kind === "tech" && r1.id === "top" && r2.kind === "tech" && r2.id === "comet", r1.id + " · " + r2.id);
+  tc().mats.melee += 3;
+  const cdA = (tc().equip("top"), tc().meleeCd);
+  ok("v60 기술: 팽이를 비급으로 강화하면 재충전이 짧아진다", tc().up("top") === true && tc().lv.top === 2 && tc().meleeCd < cdA);
+  tc().mats.melee = 0;
+  tc().equip("comet");
+  const rec = JSON.parse(E("recShop()"));
+  ok("v60 기술: 저장에 새 기술 레벨과 장착이 들어간다", rec.tech.top === 2 && rec.tech.comet === 1 && rec.eqM === "top" && rec.eqR === "comet");
+  E("applyShopRecord(recShop())");
+  ok("v60 기술: 저장을 다시 읽어도 그대로", tc().lv.top === 2 && tc().eqM === "top" && tc().eqR === "comet");
+  ok("v60 기술: 계정 코드 낱말표 끝에 top·comet", E("CODE2_WORDS.indexOf('top') > CODE2_WORDS.indexOf('rush5') && CODE2_WORDS.indexOf('comet') > 0 && CODE2_WORDS.indexOf('rush9') === 50"));
+  a.shopUi().tab(1);
+  const rs = a.rows();
+  ok("v60 기술: 창고 근거리 탭 — 카드 넷이 화면 안에 겹치지 않고, 팩 버튼은 9", [1,2,3,4].every(k => { const r = rs.find(q => q.key === k); return r && r.x >= 16 && r.x + r.w <= 884; }) && rs.filter(r => r.key >= 1 && r.key <= 4).every((r, i, arr) => !i || r.x >= arr[i-1].x + arr[i-1].w) && rs.some(r => r.key === 9 && /팩 열기/.test(r.label)));
+  for(let i=0;i<3;i++) H.step();
+  // 되돌리기
+  for(const k of Object.keys(tc().lv)) delete tc().lv[k];
+  Object.assign(tc().lv, lv0); tc().equip(eqM0); tc().equip(eqR0); a.shop().setBank(0);
+  clear(); a.toMenu();
+}
+/* --- v60 systems: 동료 버프 (검객·요리사 제외) --- */
+{
+  const a = A(), C = () => a.crew(), K = () => a.crewK(), E = (x) => T().ev(x);
+  const sel0 = C().sel, owned0 = C().owned.slice();
+  const go = (id) => { C().set(id); a.startMain(); H.step(); a.hold(true); H.step(); T().teleport(300 * 22); E("boss = null; navy = null; stun = 0; iframes = 0"); };
+  const ready = () => { C().mate.skill = 0; };
+  const S = K().SKILL;
+  ok("v60 동료: 쿨타임 — 항해사 18초 · 저격수 14초 · 선의 30초 · 조선공 14초 · 조타수 7초 · 잭 18초, 요리사 50초는 그대로",
+     S.nav === 1080 && S.sniper === 840 && S.doctor === 1800 && S.wright === 840 && S.helm === 420 && K().JACK_CD === 1080 && S.cook === 3000);
+  ok("v60 동료: 저격수 평타 3초 · 620px", K().SNIPE_CD === 180 && K().SNIPE_R === 620);
+  const desc = (id) => K().list.find(c => c.id === id).desc;
+  ok("v60 동료: 검객·요리사 설명은 그대로", desc("sword") === "3초마다 곁의 물고기·갈매기를 벤다" && /고기가 2배로 자주/.test(desc("cook")) && /50초마다/.test(desc("cook")));
+  ok("v60 동료: 나머지 여덟 명 설명에 ★ 능동 효과가 있고 옛 숫자가 남아 있지 않다",
+     ["nav","sniper","doctor","arch","wright","music","helm","jack"].every(id => /★/.test(desc(id))) && !/25초마다 순풍|18초마다 보스|40초마다|20초마다\)|\(10초\)|25초마다\)/.test(K().list.map(c => c.desc).join(" ")));
+  // 항해사
+  go("nav"); T().P().vx = 8; ready(); H.step();
+  ok("v60 동료: 항해사 — 순풍 5초, 나서는 연출(act)", C().mate.wind > 290 && C().mate.act && C().mate.act.id === "nav" && Math.round(C().mate.skill) >= 1070);
+  // 저격수
+  go("sniper");
+  const b = a.spawnBoss(false, 0); b.invul = 0; b.x = a.peek().x + 300;
+  ready(); const hp0 = b.hp; H.step();
+  ok("v60 동료: 저격수 — 보스 저격에 예광탄(snipe) 연출", b.hp === hp0 - 1 && K().fx.some(f => f.kind === "snipe" && f.big) && C().mate.act.id === "sniper");
+  T().setBoss(null);
+  // 선의 — 응급 처치
+  go("doctor"); T().setShield(0); C().mate.skill = 9999; C().mate.aid = 0;
+  E("stun = 40; iframes = 0"); H.step();
+  ok("v60 동료: 선의 — 크게 휘청이면 그 자리에서 깨운다(응급 처치)", a.peek().stun === 0 && C().mate.aid > 1800 && K().fx.some(f => f.kind === "aid"), "stun=" + a.peek().stun + " aid=" + Math.round(C().mate.aid));
+  E("stun = 40; iframes = 0"); H.step();
+  ok("v60 동료: 선의 — 응급 처치는 45초에 한 번", a.peek().stun > 30);
+  E("stun = 0"); C().mate.aid = 0; E("stun = 12"); H.step();
+  ok("v60 동료: 선의 — 가벼운 휘청(18프레임 이하)엔 쓰지 않는다", a.peek().stun > 0 && !(C().mate.aid > 0));
+  E("stun = 0");
+  // 고고학자 — 유물 통
+  go("arch"); a.peek().barrels.length = 0; ready(); H.step();
+  const rb = a.peek().barrels.find(q => q.relic);
+  ok("v60 동료: 고고학자 — 앞바다에 유물 통을 띄운다(30초마다)", !!rb && rb.x > T().P().x + 400 && Math.round(C().mate.skill) >= 1790 && C().mate.act.id === "arch");
+  ready(); H.step();
+  ok("v60 동료: 고고학자 — 유물 통이 떠 있는 동안엔 또 띄우지 않는다", a.peek().barrels.filter(q => q.relic).length === 1);
+  const tr0 = a.peek().treasure; a.peek().barrels.push({ x: T().P().x + 100, gone:false }); const nb = a.peek().barrels[a.peek().barrels.length - 1];
+  E("breakBarrel(barrels[barrels.length - 1])"); const plain = a.peek().treasure - tr0;
+  E("breakBarrel(barrels.find(q => q.relic))"); const relic = a.peek().treasure - tr0 - plain;
+  ok("v60 동료: 고고학자 — 유물 통은 보물 3배", plain > 0 && relic === plain * 3, plain + " vs " + relic);
+  ok("v60 동료: 고고학자 — 창고 보물 +25%", Math.abs(C().loot - 1.25) < 0.001 || C().loot > 1.25);
+  // 조선공
+  go("wright"); a.hold(false); a.setRope(null); a.peek().anchors.length = 0;
+  const P = T().P(); P.y = a.peek().SEA - 220; P.vy = 4; ready(); H.step();
+  ok("v60 동료: 조선공 — 수면 230px 위부터 임시 돛대, 망치질 연출(build)", a.peek().anchors.some(an => an.temp && an.x > P.x) && K().fx.some(f => f.kind === "build") && Math.round(C().mate.skill) >= 830);
+  // 음악가 — 앙코르
+  go("music"); H.step();
+  ok("v60 동료: 음악가 — 기어 게이지 절반을 채우고 출발", a.peek().gear >= a.gearInfo().max * 0.49, Math.round(a.peek().gear) + "/" + a.gearInfo().max);
+  T().setChain(3);
+  const m0 = K().mult();
+  T().setGear(a.gearInfo().max); a.fireGear(); H.step(); T().setChain(3);
+  ok("v60 동료: 음악가 — 기어 중 콤보 배율 +1(앙코르), 나서는 연출", !!a.gearInfo().buff && K().mult() === m0 + 1 && C().mate.encore === true, m0 + " → " + K().mult());
+  C().set(null);
+  ok("v60 동료: 음악가가 없으면 기어 중에도 배율은 그대로", K().mult() === m0);
+  // 조타수
+  go("helm"); a.hold(false); a.setRope(null); T().P().vy = 5; ready();
+  ok("v60 동료: 조타수 — 더 크게 도약(vy -12), 7초, 키 연출(wheel)", C().helmJump() && T().P().vy <= -12 && Math.round(C().mate.skill) === 420 && K().fx.some(f => f.kind === "wheel"));
+  // 잭
+  go("jack"); a.hold(false); a.setRope(null); E("jackCd = 0");
+  { const P2 = T().P(); P2.y = a.peek().SEA - 130; P2.vy = 5; P2.vx = 3; a.peek().anchors.push({ x: P2.x + 120, y: P2.y - 150, kind: 0 }); E("updateJack(1)"); }
+  ok("v60 동료: 잭 — 수면 140px 위부터 건지고(18초), 사슬 갈고리 연출(hook), 앞으로 밀어 준다", !!a.peek().rope && Math.round(E("jackCd")) === 1080 && K().fx.some(f => f.kind === "hook") && T().P().vx >= 7);
+  for(let i=0;i<50;i++) H.step();
+  ok("v60 동료: 연출이 도는 동안 그리기 오류 없음", a.peek().state === 1 || a.peek().state === 2 || a.peek().state === 9);
+  C().set(sel0); C().owned.length = 0; owned0.forEach(id => C().owned.push(id));
+  a.toMenu();
+}
+/* --- v60 systems: 칭호 개편 (등급·범주·문장·도장) --- */
+{
+  const a = A(), E = (x) => T().ev(x), TT = () => a.title(), U = T().titles();
+  const saved = [...U], sel0 = TT().sel, dex0 = E("JSON.stringify(lifeLog.dex || {})"), rush0 = a.rush().best;
+  const L = TT().list;
+  const OLD = ["novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","voyage_end","star81","jail"];
+  ok("v60 칭호: 30~40개, id가 겹치지 않는다", L.length >= 30 && L.length <= 40 && new Set(L.map(t => t.id)).size === L.length, L.length + "개");
+  ok("v60 칭호: 예전 18개 id가 모두 남아 있다(저장 호환)", OLD.every(id => L.some(t => t.id === id)));
+  ok("v60 칭호: 모두 등급(1~4)·범주(여섯 중 하나)·문장·설명이 있다", L.every(t => t.tier >= 1 && t.tier <= 4 && TT().cats.some(c => c.id === t.cat) && t.emb && t.desc && typeof t.need === "function"));
+  ok("v60 칭호: 범주 여섯에 모두 칭호가 있고, 등급 넷이 다 쓰인다", TT().cats.length === 6 && TT().cats.every(c => L.some(t => t.cat === c.id)) && [1,2,3,4].every(k => L.some(t => t.tier === k)));
+  ok("v60 칭호: 유명 만화 용어가 없다", !/그랑 ?라인|해적왕|원피스|패왕색/.test(L.map(t => t.name + t.desc).join(" ")) && L.find(t => t.id === "veteran").name === "먼바다의 폭풍");
+  ok("v60 칭호: 리메이크 보스 10종 첫 격파 칭호가 모두 있다", ["boss6","boss11","boss13","boss17","jail","kraken1","ghost1","boss18","boss19","admiral1"].every(id => L.some(t => t.id === id)));
+  ok("v60 칭호: 보스 칭호 설명은 BOSSES의 이름을 읽는다", [[6,"boss6"],[11,"boss11"],[13,"boss13"],[17,"boss17"],[18,"boss18"],[19,"boss19"],[20,"jail"],[5,"kraken1"],[7,"ghost1"]].every(q => L.find(t => t.id === q[1]).desc.includes(E("BOSSES[" + q[0] + "].name"))));
+  // 옛 저장 — 예전 id만 든 저장을 읽어도 그대로 인정
+  U.clear(); E("titleSel = null; titleFresh.clear(); titleToast = null");
+  E("(function(){ const r = JSON.parse(recTitles()); r.unlocked = ['novice','veteran','jail','없는칭호']; r.sel = 'veteran'; const v = JSON.stringify(r); const f = typeof applyTitlesRecord === 'function' ? applyTitlesRecord : null; if(f) f(v); else { unlockedTitles = new Set(r.unlocked); titleSel = r.sel; } })()");
+  const U2 = T().titles();
+  ok("v60 칭호: 옛 저장의 칭호(이름이 바뀐 것 포함)를 그대로 인정하고 고른 칭호도 유지", U2.has("novice") && U2.has("veteran") && U2.has("jail") && TT().name === "먼바다의 폭풍", TT().name);
+  E("titleSel = null");
+  ok("v60 칭호: 자동 = 등급이 가장 높은 것(모르는 id가 섞여 있어도 멀쩡하다)", TT().cur && TT().cur.tier === 3 && ["veteran","jail"].indexOf(TT().cur.id) >= 0, TT().name);
+  U2.clear();
+  // 보스 첫 격파 — 도감 격침 수로
+  E("lifeLog.dex = {}"); TT().check();                      // 다른 누적 기록으로 따는 칭호를 먼저 정리해 둔다
+  U2.delete("boss11"); U2.delete("boss6"); E("titleFresh.clear(); titleToast = null");
+  E("lifeLog.dex.boss11 = 1; lifeLog.dex.boss6 = 1");
+  const got = TT().check();
+  ok("v60 칭호: 도감에 격침 기록이 있으면 보스 칭호를 딴다 — 돌려주는 건 가장 높은 등급", T().titles().has("boss11") && T().titles().has("boss6") && got && got.id === "boss11", got ? got.id : "없음");
+  ok("v60 칭호: 새로 딴 칭호는 '새 도장' 목록과 화면 알림에 오른다", TT().fresh.has("boss11") && TT().fresh.has("boss6") && TT().toast && TT().toast.id === "boss11");
+  // 노 피격·빠른 격파 — 격침 순간에만
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false);
+  T().titles().delete("flawless"); T().titles().delete("quick"); T().titles().delete("duel");
+  let b = a.spawnBoss(false, 0); E("bossIntro = null; stun = 0; iframes = 0; shield = 0; fire = 0");
+  E("knock(false)");
+  ok("v60 칭호: 보스전 중 휘청이면 표시가 남는다", b.hurt === true);
+  b.hp = 1; b.invul = 0; b.tLeft = b.tMax - 60*30; T().dmg(true, "테스트");
+  ok("v60 칭호: 휘청였고 30초 걸렸으면 '털끝 하나 안 다친'·'번개 같은 한 판'은 없다", !T().titles().has("flawless") && !T().titles().has("quick"));
+  E("pickPending = false; pickOffer = null; slowT = 0; boss = null; stun = 0; iframes = 0");
+  b = a.spawnBoss(false, 0); E("bossIntro = null");
+  b.hp = 1; b.invul = 0; b.tLeft = b.tMax - 60*10; T().dmg(true, "테스트");
+  ok("v60 칭호: 한 번도 안 휘청이고 10초 만에 잡으면 둘 다 딴다(일반 보스라 '상처 없는 결투'는 아님)", T().titles().has("flawless") && T().titles().has("quick") && !T().titles().has("duel"));
+  E("pickPending = false; pickOffer = null; slowT = 0; boss = null");
+  b = a.spawnBoss(false, 6); E("bossIntro = null");
+  b.hp = 1; b.invul = 0; T().dmg(true, "테스트");
+  ok("v60 칭호: 네임드를 노 피격으로 잡으면 '상처 없는 결투'", T().titles().has("duel"));
+  E("pickPending = false; pickOffer = null; slowT = 0; boss = null");
+  // 풍선 없이 3000m · 한 판 거리 · 러시
+  T().titles().delete("nofusen"); T().titles().delete("best2000");
+  E("dist = 3100; titleRun.fusen = 1");
+  TT().check();
+  ok("v60 칭호: 풍선으로 튕긴 판은 '맨몸의 항해'가 아니다(거리 칭호는 딴다)", !T().titles().has("nofusen") && T().titles().has("best2000"));
+  E("titleRun.fusen = 0"); TT().check();
+  ok("v60 칭호: 풍선 없이 3000m면 '맨몸의 항해'", T().titles().has("nofusen"));
+  E("dist = 0");
+  T().titles().delete("rush5"); T().titles().delete("rushfast");
+  a.rush().setBest(0); TT().check();
+  ok("v60 칭호: 러시 기록이 없으면 러시 칭호도 없다(옛 9연전 기록으로는 안 준다)", !T().titles().has("rush5"));
+  a.rush().setBest(60*60*7); TT().check();
+  ok("v60 칭호: 5연전 완주 → '다섯 고개를 넘은 자', 7분이면 '질풍 오연전'은 아직", T().titles().has("rush5") && !T().titles().has("rushfast"));
+  a.rush().setBest(60*60*5); TT().check();
+  ok("v60 칭호: 6분 안에 완주 → '질풍 오연전'", T().titles().has("rushfast"));
+  // 화면
+  a.toMenu(); TT().open();
+  let rows = a.rows();
+  ok("v60 칭호: 칭호 화면 — 범주 탭 여섯, 왼쪽 위 '← 이전', 자동 버튼", a.peek().state === 7 && rows.filter(r => r.tab).length === 6 && rows.some(r => r.back && r.x < 40 && r.y < 40 && /이전/.test(r.label)) && rows.some(r => r.key === 0 && /자동/.test(r.label)));
+  ok("v60 칭호: 새로 딴 칭호가 있는 범주부터 열린다", TT().page >= 1 && TT().cats[TT().page - 1].id === TT().list.find(t => TT().fresh.has(t.id)).cat);
+  TT().tab(0); rows = a.rows();
+  const cards = rows.filter(r => r.title);
+  ok("v60 칭호: 사냥 탭 카드 수 = 사냥 칭호 수, 화면 안에서 겹치지 않는다", cards.length === L.filter(t => t.cat === "hunt").length && cards.every(r => r.x >= 16 && r.x + r.w <= 884 && r.y + r.h <= 520) &&
+     cards.every((r, i) => cards.every((q, j) => i === j || r.x + r.w <= q.x || q.x + q.w <= r.x || r.y + r.h <= q.y || q.y + q.h <= r.y)), cards.length + "장, 맨 아래 " + Math.max(...cards.map(r => r.y + r.h)));
+  cards.find(r => r.title.id === "boss6").action();
+  ok("v60 칭호: 카드를 누르면 단다", TT().sel === "boss6" && TT().name === "무대를 빼앗은 자");
+  const lock = cards.find(r => !T().titles().has(r.title.id));
+  lock.action();
+  ok("v60 칭호: 못 딴 칭호는 달 수 없다", TT().sel === "boss6");
+  rows.find(r => r.key === 0).action();
+  ok("v60 칭호: 자동으로 되돌린다", TT().sel === null);
+  for(let i=0;i<60;i++) H.step();
+  ok("v60 칭호: 도장이 찍히는 동안 그리기 오류 없음", a.peek().state === 7 && a.fx().titleT > 30);
+  rows.find(r => r.back).action();
+  ok("v60 칭호: '← 이전'으로 일지에 돌아가면 새 도장 표시가 지워진다", TT().page === 0 && TT().fresh.size === 0 && a.rows().some(r => r.key === 3 && /칭호/.test(r.label)));
+  // 되돌리기
+  T().titles().clear(); saved.forEach(id => T().titles().add(id));
+  E("titleSel = " + JSON.stringify(sel0) + "; titleToast = null; titleFresh.clear(); lifeLog.dex = " + dex0);
+  a.rush().setBest(rush0);
+  a.toMenu();
+}
+/* --- v60 systems: 메뉴 '← 이전' 버튼 · 이동 이력 --- */
+{
+  const a = A(), N = () => a.nav(), E = (x) => T().ev(x), st = () => a.peek().state;
+  const back = () => a.rows().find(r => r.back);
+  const sameSpot = (r) => r && r.x === N().btn.x && r.y === N().btn.y && r.w === N().btn.w && r.h === N().btn.h && r.label === "← 이전";
+  a.toMenu();
+  ok("v60 이전: 메인 메뉴엔 '← 이전'이 없다", !back() && N().id === "menu");
+  // 모든 하위 화면 — 같은 자리(왼쪽 위)에 같은 버튼
+  const open = {
+    challenge: () => a.rows().find(r => /도전/.test(r.label)).action(),
+    practice: () => { a.rows().find(r => /도전/.test(r.label)).action(); a.rows().find(r => /연습 모드/.test(r.label)).action(); },
+    shop: () => a.rows().find(r => /보물 창고/.test(r.label)).action(),
+    log: () => a.rows().find(r => /항해 일지/.test(r.label)).action(),
+    "log/title": () => { a.rows().find(r => /항해 일지/.test(r.label)).action(); a.rows().find(r => r.key === 3).action(); },
+    "log/dex": () => { a.rows().find(r => /항해 일지/.test(r.label)).action(); a.rows().find(r => r.key === 4).action(); },
+    settings: () => a.rows().find(r => /설정/.test(r.label)).action(),
+    mini: () => a.rows().find(r => /미니게임/.test(r.label)).action(),
+    map: () => a.rows().find(r => /스토리 모드/.test(r.label)).action()
+  };
+  const parent = { challenge:"menu", practice:"challenge", shop:"menu", log:"menu", "log/title":"log", "log/dex":"log", settings:"menu", mini:"menu", map:"menu" };
+  let spotOk = true, parOk = true, why = "";
+  for(const id of Object.keys(open)){
+    a.toMenu(); a.rows(); open[id](); a.rows();
+    if(N().id !== id){ spotOk = false; why += " [" + id + " 대신 " + N().id + "]"; continue; }
+    if(!sameSpot(back())){ spotOk = false; why += " [" + id + " 버튼 자리]"; }
+    if(a.rows().filter(r => /메뉴로|뒤로가기|도전으로|← 항해 일지/.test(r.label || "")).length){ spotOk = false; why += " [" + id + " 옛 뒤로 버튼 남음]"; }
+    back().action();
+    if(N().id !== parent[id]){ parOk = false; why += " [" + id + " → " + N().id + "]"; }
+    for(let i=0;i<2;i++) H.step();
+  }
+  ok("v60 이전: 하위 화면 아홉 곳 모두 왼쪽 위 같은 자리에 '← 이전' — 옛 '메뉴로·뒤로가기' 줄은 없다", spotOk, why);
+  ok("v60 이전: 누르면 한 단계 위로(연습→도전, 칭호·도감→일지, 나머지→메뉴)", parOk, why);
+  // 이력 — 메뉴 → 도전 → 연습(3쪽)
+  a.toMenu(); a.rows(); open.practice(); a.rows();
+  a.rows().find(r => r.key === 8).action(); a.rows().find(r => r.key === 8).action();
+  ok("v60 이전: 이력 스택이 메뉴·도전·연습 순으로 쌓인다", N().stack.map(q => q.id).join(">") === "menu>challenge>practice", N().stack.map(q => q.id).join(">"));
+  N().key("Escape");
+  ok("v60 이전: Esc도 같은 동작 — 연습 → 도전", st() === 16 && N().stack.length === 2);
+  N().key("Backspace");
+  ok("v60 이전: Backspace도 같은 동작 — 도전 → 메뉴", st() === 4);
+  // 창고 — 탭을 옮겨도 이력은 한 칸, 이야기 창은 한 단계
+  a.toMenu(); a.rows(); open.shop(); a.rows();
+  a.shopUi().tab(4); a.rows(); a.shopUi().tab(2); a.rows();
+  ok("v60 이전: 창고에서 탭을 옮겨도 이력은 한 칸(탭은 쌓이지 않는다)", N().stack.length === 2 && N().stack[1].shopPage === 3);
+  E("crewStory = CREW.find(c => c.id === 'music')"); a.rows();
+  ok("v60 이전: 이야기 창이 뜨면 한 단계 더 — 그 창에도 '← 이전'", N().id === "shop/story" && sameSpot(back()) && N().stack.length === 3);
+  back().action();
+  ok("v60 이전: 이야기 창 → 창고(보던 탭 그대로)", st() === 6 && E("crewStory") === null && a.shopUi().page() === 3 && a.shopUi().cat() === "ranged");
+  back().action();
+  ok("v60 이전: 창고 → 메뉴", st() === 4);
+  // 윗단계를 건너뛰고 들어온 화면
+  a.toMenu(); a.rows(); a.title().open(); a.rows();
+  ok("v60 이전: 메뉴에서 곧장 칭호 화면으로 와도 이전은 일지", N().stack.map(q => q.id).join(">") === "menu>log>log/title");
+  N().back();
+  ok("v60 이전: 칭호 → 일지 → 메뉴", N().id === "log" && (N().back(), st() === 4));
+  // 판을 하고 돌아오면 이력은 메뉴부터
+  a.toMenu(); a.rows(); open.practice(); a.rows();
+  a.startPractice(0); H.step(); a.toMenu(); a.rows();
+  ok("v60 이전: 판을 하다 메뉴로 돌아오면 이력은 메뉴 한 칸", N().stack.length === 1 && N().stack[0].id === "menu");
+  // 스토리 지도에서 나가면 스토리 상태가 정리된다
+  a.toMenu(); a.rows(); open.map(); a.rows();
+  N().key("Escape");
+  ok("v60 이전: 스토리 지도 → 메뉴(스토리 모드 해제)", st() === 4 && E("storyMode") === null);
+  const src = require("fs").readFileSync(process.env.GAME || require("path").join(__dirname, "..", "index.html"), "utf8");
+  ok("v60 이전: 계정 창에도 '← 이전' 버튼", /id="acctBack">← 이전</.test(src) && /on\("acctBack",\s*closeAccount\)/.test(src));
+  a.toMenu();
+}
+/* --- v60 systems: 메뉴·버튼 비주얼 (놋쇠 버튼 · 깃발 탭 · 밤바다 메뉴 · 팩 열기 연출) --- */
+{
+  const a = A(), E = (x) => T().ev(x), st = () => a.peek().state;
+  a.toMenu(); const rows = a.rows();
+  ok("v60 메뉴: 메인 메뉴 여덟 줄 모두 왼쪽 문장(아이콘)", rows.length === 8 && rows.every(r => typeof r.icon === "string") && E("['map','anchor','skull','chest','compass','cog','person','jelly'].join()") === rows.map(r => r.icon).join(), rows.map(r => r.icon).join());
+  ok("v60 메뉴: 줄끼리 겹치지 않고 화면 안(제목 아래 · 바닥 안내 위)", rows.every((r, i) => r.y >= 140 && r.y + r.h <= 500 && (i === 0 || rows[i-1].y + rows[i-1].h < r.y)));
+  ok("v60 메뉴: 그리기 분기 — 카드는 양피지, 탭은 깃발, 나머지는 놋쇠 버튼", E("typeof drawBrassBtn === 'function' && typeof drawFlagTab === 'function' && typeof drawMenuSea === 'function' && typeof drawMenuLogo === 'function' && typeof drawHeading === 'function'") &&
+     /if\(r\.tab\)\{ drawFlagTab\(r, font\); return; \}/.test(E("drawBtn.toString()")) && /drawBrassBtn/.test(E("drawBtn.toString()")));
+  // 메뉴끼리 옮기면 짧은 잉크 전환 + 버튼 등장 타이머가 처음부터
+  E("fx.menuT = 99; fx.wipe = 0; uiState = STATE.MENU"); a.rows().find(r => /도전/.test(r.label)).action(); E("fxStateChange(STATE.MENU, STATE.CHALLENGE)");
+  ok("v60 메뉴: 메뉴 → 도전 — 잉크 전환(18프레임)과 등장 타이머 리셋", E("fx.wipe") === 18 && E("fx.wipeT") === 18 && E("fx.menuT") === 0);
+  E("fxStateChange(STATE.MENU, STATE.STORY_MAP)");
+  ok("v60 메뉴: 스토리 흐름 전환은 예전 길이(WIPE_T) 그대로", E("fx.wipe === WIPE_T && fx.wipeT === WIPE_T"));
+  // 눌림 — 그리기 전용, 판정·상태는 그대로
+  E("uiPress({ x: 50, y: 30 })");
+  ok("v60 메뉴: 누른 자리의 버튼만 눌림 표시(0~1)", E("pressK(BACK_BTN)") === 1 && E("pressK({ x: 400, y: 400, w: 50, h: 30 })") === 0);
+  E("fx.clock += 20");
+  ok("v60 메뉴: 눌림은 잠깐 뒤 돌아온다", E("pressK(BACK_BTN)") === 0);
+  // 팩 열기 연출 — 결과는 openPack이 정하고 그림만 따라간다. 창고를 떠나면 걷힌다
+  a.toMenu(); a.rows().find(r => /보물 창고/.test(r.label)).action(); a.shopUi().tab(1);
+  const bank0 = E("bank"); E("bank = 99999");
+  const res = E("openPack('melee', () => 0.9)");
+  ok("v60 메뉴: 팩을 열면 상자 연출이 걸린다(결과 그대로)", res && res.kind === "mat" && E("UIK.pack && UIK.pack.res") === res && E("UIK.pack.cat") === "melee");
+  for(let i = 0; i < 3; i++) H.step();
+  E("fxStateChange(STATE.SHOP, STATE.MENU)");
+  ok("v60 메뉴: 창고를 떠나면 팩 연출은 걷힌다", E("UIK.pack") === null);
+  E("bank = " + bank0 + "; mats.melee -= " + res.n);
+  // 화면 버튼(출항·일시정지·결과) → 놋쇠 버튼 줄로 바꿔 그린다. 흐린 글씨색은 '못 고르는 칸'
+  ok("v60 메뉴: 화면 버튼 변환 — 흐린 색은 dim, 행동은 그대로", E("asBrass({ x:0, y:0, w:10, h:10, label:'x', act:goToMenu, col:'rgba(244,236,217,.35)' }).dim") === true &&
+     E("asBrass({ x:0, y:0, w:10, h:10, label:'x', act:goToMenu, col:'#9fe0a0' }).action === goToMenu"));
+  // 연출 줄이기 — 흐르는 빛·등장 애니메이션 없이 그려도 오류 없음(가짜 캔버스로 한 번씩)
+  const calm0 = E("settings.calm");
+  for(const c of [true, false]){
+    E("settings.calm = " + c);
+    E("drawMenuSea(false); drawMenuLogo(52); drawMenuBg(); drawHeading('시험', 40, 22); drawBrassBtn({ x:10, y:10, w:320, h:36, label:'1) 📜 시험', icon:'map', sel:true, action(){} }); drawFlagTab({ x:10, y:60, w:120, h:36, tab:true, sel:true, label:'탭', action(){} }); UIK.pack = { res:{ kind:'tech', id:'top' }, cat:'melee', t:40 }; drawPackReveal(); UIK.pack = null");
+  }
+  E("settings.calm = " + calm0);
+  ok("v60 메뉴: 연출 줄이기 켜고/끄고 새 UI 그리기 오류 없음", true);
+  ok("v60 메뉴: 도전 화면 설명이 5연전으로", /무작위 보스 5연전/.test(require("fs").readFileSync(process.env.GAME || require("path").join(__dirname, "..", "index.html"), "utf8")));
+  a.toMenu();
+}
+/* ===================== v60 systems 끝 ===================== */
 
 /* --- 프로젝트 원칙 --- */
 {

@@ -67,6 +67,8 @@
   .acct .box{width:min(380px,92%);background:#f1e3c0;color:#3b2a1e;border:2px solid #3b2a1e;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.4), inset 0 0 18px rgba(150,100,50,.25);
              padding:18px 20px;display:flex;flex-direction:column;gap:10px;max-height:96%;overflow:auto;}
   .acct h2{margin:0;font-size:20px;text-align:center;}
+  .acct .box{position:relative;}
+  .acct button.back{position:absolute;left:10px;top:10px;flex:none;min-width:0;padding:5px 10px;font-size:13px;}
   .acct .who{text-align:center;font-size:13px;color:#8a5a20;}
   .acct label{font-size:12px;color:rgba(59,42,30,.75);display:flex;flex-direction:column;gap:4px;}
   .acct input[type=text],.acct input[type=password]{
@@ -231,6 +233,7 @@
     <canvas id="game" tabindex="0" aria-label="해적선 스윙 게임"></canvas>
     <div class="acct" id="acct" hidden>
       <form class="box" id="acctForm" autocomplete="on" onsubmit="return false">
+        <button type="button" class="back" id="acctBack">← 이전</button>
         <h2>계정</h2>
         <div class="who" id="acctWho">게스트로 플레이 중</div>
         <label>아이디 <input type="text" id="acctId" maxlength="16" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
@@ -338,7 +341,7 @@ const STUN_MOB     = 15; // 식인 물고기에 스쳤을 때만 이 시간
 const STUN_FLOOR = 0.4;
 function stunRed(){
   const def = buff() ? buff().def : 0;
-  const m = (1 - def) * (1 - 0.2 * pk("tough")) * (1 - crewK("doctor", 0.3, 0.04));
+  const m = (1 - def) * (1 - 0.2 * pk("tough")) * (1 - crewK("doctor", 0.35, 0.04));
   return Math.min(1 - STUN_FLOOR, 1 - m);
 }
 
@@ -372,12 +375,18 @@ const GUN_CD    = 60*15;    // 채찍 재충전 15초
 const GUN_LIFE  = 30;       // 이펙트 지속 프레임
 const WHIP_R    = 250;      // 채찍 다리가 닿는 거리(몸 중심에서)
 const WHIP_BACK = -50;      // 등 뒤로는 이만큼까지만 휩쓴다(앞쪽 반원 + 살짝)
-const BAZOOKA_R = 120, BAZOOKA_AT = 120, BAZOOKA_KNOCK = 9.5;   // 바주카 — 코앞 한 점을 두 손바닥으로 강타, 반동
-const AXE_W     = 150;      // 도끼 — 발뒤꿈치로 내리찍는 기둥의 반폭
+// v60 기술 개편 — 바주카: 반경 120→150 · 보스 피해 2→3 · 재충전 18→15초 · 반동이 이동 반대(속도를 잃음) → 비스듬히 위로 솟음
+const BAZOOKA_R = 150, BAZOOKA_AT = 120, BAZOOKA_KNOCK = 9.5, BAZOOKA_POW = 3, BAZOOKA_LIFT = 7.2;
+// 도끼: 반폭 150→190 · 보스 피해 1→2 · 재충전 12→10초 · 내리찍은 자리에서 수면을 따라 양옆으로 충격파(AXE_WAVE_R까지) · 맞히면 살짝 튀어 오른다
+const AXE_W = 190, AXE_POW = 2, AXE_WAVE_SPD = 11, AXE_WAVE_R = 340, AXE_WAVE_H = 110, AXE_HOP = 5;
+// 팽이(v60 신규 근거리) — 몸을 축으로 TOP_T프레임 돌며 둘레(반경 TOP_R, 등 뒤 포함)를 TOP_TICK마다 쓸고, 도는 동안 탄을 튕겨 내고 천천히 떨어진다
+const TOP_R = 150, TOP_T = 48, TOP_TICK = 6, TOP_FALL = 1.2;
 
 /* 원거리 기술(Q) */
 const RIFLE_SPD = 38, RIFLE_LIFE = 30;    // 라이플 — 비틀어 쏘는 주먹. 더 빠르고 멀리, 관통
-const GATLING_RANGE = 440, GATLING_ARC = 0.42;   // 개틀링 — 조준 방향 부채꼴(반각 rad) 안을 순식간에 연타
+const GATLING_RANGE = 440, GATLING_ARC = 0.42, GATLING_POW = 2;   // 개틀링 — 조준 방향 부채꼴(반각 rad) 안을 순식간에 연타. v60: 보스 피해 1→2
+// 별똥(v60 신규 원거리) — 주먹을 하늘로 쏘아 올렸다가 COMET_T프레임 뒤 표적 위로 내리꽂는다. 반경 COMET_R 안을 한꺼번에, 약점 한가운데(COMET_CORE)에 꽂히면 피해 2
+const COMET_RANGE = 640, COMET_R = 110, COMET_T = 28, COMET_CORE = 42, COMET_AFTER = 18;
 
 /* 해왕류 처치 보상 — 위험한 대형 잡몹이라 금화 한두 개보다 훨씬 커야 공정하다 */
 const KING_REWARD = 600;
@@ -560,35 +569,35 @@ const fusenMax = () => FUSEN_MAX + pk("pouch");
 // boss는 BOSSES 번호(여기선 아직 상수가 없어서 숫자로): 6 문어 · 7 유령선 · 8 해군 대장 · 11 무상 · 13 풀무
 const CREW = [
   { id:"cook",   name:"요리사", cost:120000, col:"#f7a8a0", desc:"고기가 2배로 자주 · 출발할 때 풍선 +1 · ★ 50초마다 풍선을 새로 불어 준다" },
-  { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 절반 · 해군 감속 · ★ 해군 추격 8초 · 수갑 절반 · 25초마다 순풍" },
+  { id:"nav",    name:"항해사", cost:150000, col:"#8fd6d8", desc:"폭풍 절반 · 해군 감속 · 해군 추격 8초 · 수갑 절반 · ★ 18초마다 5초 순풍 — 바람 줄기를 타고 밀려 간다" },
   { id:"sword",  name:"검객",   cost:0, boss:11, stage:"2-4", col:"#9fe0a0", desc:"3초마다 곁의 물고기·갈매기를 벤다",
     tease:"빙하 해역의 검호 무상과 겨룬 자에게만 칼을 맡긴다",
     story:["무상의 기세가 꺾이자, 얼음 위에서 결투를 지켜보던 젊은 검객이 칼집을 들고 다가왔다.",
            "\"스승님이 무릎 꿇는 건 처음 봅니다. 그 고무팔이 어디까지 닿는지 곁에서 보고 싶습니다.\"",
            "그날부터 검객은 곁으로 날아드는 물고기와 갈매기를 대신 베어 주었다."] },
-  { id:"sniper", name:"저격수", cost:0, boss:8, stage:"5-4", col:"#ffd76a", desc:"4초마다 앞쪽 적·보물 통을 쏜다 · ★ 18초마다 보스 약점을 저격(피해 1)",
+  { id:"sniper", name:"저격수", cost:0, boss:8, stage:"5-4", col:"#ffd76a", desc:"3초마다 앞쪽 멀리(620)까지 적·보물 통을 쏜다 · ★ 14초마다 보스 약점을 저격(피해 1) — 예광탄이 그어진다",
     tease:"해군 대장 군함의 망루에서 누군가 총을 겨누고 있다",
     story:["군함이 기울자 망루에서 백기가 올라왔다. 해군 제복을 벗어 던진 저격수였다.",
            "\"명령대로만 쏘는 건 지겨웠어. 네 배에선 내가 고른 걸 쏘겠다.\"",
            "저격수는 앞쪽의 적과 보물 통을 먼저 노려 준다."] },
-  { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -30% · 출발할 때 보호막 1 · ★ 보호막이 없으면 40초마다 다시 감아 준다" },
-  { id:"arch",   name:"고고학자", cost:0, boss:7, stage:"4-4", col:"#c9a27a", desc:"보물 지도 조각이 2배로 나오고 · 보물 통 보물 +50% · ★ 판이 끝나면 창고 보물 +20%",
+  { id:"doctor", name:"선의",   cost:180000, col:"#f4f6f8", desc:"휘청 시간 -35% · 출발 보호막 1 · 보호막이 없으면 30초마다 다시 · ★ 응급 처치 — 크게 휘청이면 그 자리에서 깨운다(45초)" },
+  { id:"arch",   name:"고고학자", cost:0, boss:7, stage:"4-4", col:"#c9a27a", desc:"지도 조각 2배 · 보물 통 +50% · 판이 끝나면 창고 보물 +25% · ★ 30초마다 앞바다에 유물 통(3배)을 찾아 띄우고 통 자리를 짚어 준다",
     tease:"망령의 유령선 선창에서 누군가 해도를 붙들고 있다",
     story:["유령선이 가라앉기 직전, 선창에서 낡은 해도 더미를 끌어안은 학자가 기어 나왔다.",
            "\"백 년 동안 이 배의 지도만 읽었지. 이제 진짜 바다에서 맞춰 보고 싶군.\"",
            "고고학자가 고른 보물 통은 더 무겁고, 지도 조각도 더 자주 눈에 띈다."] },
-  { id:"wright", name:"조선공", cost:0, boss:13, stage:"3-4", col:"#d98f4e", desc:"삭은 돛대가 두 배 오래 버틴다 · 항구 값 -20% · ★ 낮게 떨어지면 앞에 임시 돛대를 세운다(20초마다)",
+  { id:"wright", name:"조선공", cost:0, boss:13, stage:"3-4", col:"#d98f4e", desc:"삭은 돛대가 2.5배 버틴다 · 항구 값 -20% · ★ 낮게 떨어지면 망치질 한 번에 앞에 임시 돛대(14초마다)",
     tease:"용암 대장장이 풀무의 대장간에 사슬에 묶인 일꾼이 있다",
     story:["풀무의 망치가 식자, 대장간 구석에서 사슬에 묶인 채 배를 고치던 조선공이 고개를 들었다.",
            "\"삭은 돛대도 내 손을 거치면 한참 버티지. 풀어 주면 네 배를 맡아 주마.\"",
            "항구 상인들도 조선공의 얼굴을 보면 값을 깎아 준다."] },
-  { id:"music",  name:"음악가", cost:0, boss:6, stage:"1-4", col:"#e6a8f0", desc:"콤보가 40% 오래 이어지고 · 기어 게이지 +25% · ★ 기어 지속 +30% · 게이지 40% 채우고 출발",
+  { id:"music",  name:"음악가", cost:0, boss:6, stage:"1-4", col:"#e6a8f0", desc:"콤보 +40% 오래 · 기어 게이지 +25% · 지속 +30% · 게이지 절반 채우고 출발 · ★ 앙코르 — 기어 중엔 음표가 흐르고 콤보 배율 +1",
     tease:"먹물 장군 문어의 먹물 속에서 바이올린 소리가 들린다",
     story:["문어가 먹물을 거두자, 촉수에 감겨 춤 반주를 하던 악사가 바이올린을 든 채 떨어졌다.",
            "\"장군님 춤 반주는 이제 그만! 당신 스윙에 맞춰 켜게 해 줘요.\"",
            "음악가의 박자에 맞추면 콤보가 길게 이어지고 기어 게이지도 빨리 찬다."] },
-  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +20% · 갈림길 2배 · 라이벌 감속 · ★ 공중에서 ↑ 로 한 번 더 도약(10초)" },
-  { id:"jack",   name:"갈고리 잭", cost:0, stage:"F-2", col:"#f0a24e", desc:"바다로 떨어지면 앞 고리에 갈고리를 걸어 건져 준다(25초마다) · 라이벌 판돈 +20%",
+  { id:"helm",   name:"조타수", cost:170000, col:"#8fb8e0", desc:"공중 조작 +25% · 갈림길 2배 · 라이벌 감속 · ★ 공중에서 ↑ 로 한 번 더 크게 도약(7초) — 키가 돌며 궤적이 남는다" },
+  { id:"jack",   name:"갈고리 잭", cost:0, stage:"F-2", col:"#f0a24e", desc:"★ 바다로 떨어지면 사슬 갈고리로 앞 고리에 걸어 건져 올린다(18초마다) · 라이벌 판돈 +20%",
     tease:"라이벌의 갈고리가 언젠가 널 구해 줄지도",
     story:["외눈 바론과의 경주가 끝나자, 갈고리 잭이 뱃전에 갈고리를 걸고 올라탔다.",
            "\"이번만은 같은 배다, 고무 꼬맹이. 떨어지면 갈고리로 건져 주지.\"",
@@ -602,10 +611,13 @@ const storyReady = (c) => isStoryCrew(c) && crewOwned.indexOf(c.id) < 0 && story
 const crewNewsCount = () => CREW.filter(storyReady).length;
 // 새 선원 5명의 효과 — 레벨이 오를수록 조금씩 세진다(Lv.1 기준값에서 단계마다 더한다)
 const crewK = (id, base, per) => crewOn(id) ? base + per * (crewLv(id) - 1) : 0;
-const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 240, CREW_SNIPE_R = 520;
+const CREW_SWORD_CD = 180, CREW_SWORD_R = 170, CREW_SNIPE_CD = 180, CREW_SNIPE_R = 620;   // v60: 저격 4초→3초 · 520→620px
 // v50 동료 고유 능력(★) — 검객만 쓸모 있다는 피드백으로 나머지에게도 하나씩. 쿨타임은 선원 레벨마다 -8%(crewCdMul)
-const CREW_SKILL = { cook: 60*50, nav: 60*25, sniper: 60*18, doctor: 60*40, wright: 60*20, helm: 60*10 };
-const CREW_ARCH_LOOT = 0.2, CREW_MUSIC_GEAR_T = 0.3, CREW_MUSIC_START = 0.4, CREW_NAV_WIND_T = 240, CREW_HELM_JUMP = 11;
+// v60 동료 버프(검객·요리사는 그대로): 항해사 25→18초 · 저격수 18→14초 · 선의 40→30초 · 조선공 20→14초 · 조타수 10→7초 + 고고학자 유물 통 30초(신규)
+const CREW_SKILL = { cook: 60*50, nav: 60*18, sniper: 60*14, doctor: 60*30, wright: 60*14, helm: 60*7, arch: 60*30 };
+const CREW_ARCH_LOOT = 0.25, CREW_MUSIC_GEAR_T = 0.3, CREW_MUSIC_START = 0.5, CREW_NAV_WIND_T = 300, CREW_NAV_PUSH = 0.13, CREW_NAV_VMAX = 18, CREW_HELM_JUMP = 12;
+// v60 신규 능동 효과 — 선의 응급 처치(휘청이 CREW_AID_MIN 넘게 걸리면 바로 깨운다), 고고학자 유물 통(보물 3배), 음악가 앙코르(기어 중 콤보 배율 +1)
+const CREW_AID_CD = 60*45, CREW_AID_MIN = 18, CREW_RELIC_AHEAD = 520, CREW_RELIC_K = 3, CREW_ENCORE = 1, CREW_WRIGHT_H = 230, CREW_ACT_T = 40;
 const crewSkillCd = (id) => CREW_SKILL[id] * crewCdMul(id);
 // 고고학자 — 판이 끝나 창고로 옮길 때 보물 +20%(레벨마다 +4%)
 const crewLoot = () => 1 + crewK("arch", CREW_ARCH_LOOT, 0.04);
@@ -759,11 +771,13 @@ const TECH_CATS = {
 const TECH_ORDER = ["melee", "ranged", "gear"];
 const TECHS = [
   { id:"whip",    cat:"melee",  name:"고무고무 채찍",   short:"채찍",  cd:GUN_CD, base:true, desc:"다리를 휘둘러 앞쪽 반원을 휩쓴다" },
-  { id:"bazooka", cat:"melee",  name:"고무고무 바주카", short:"바주카", cd:60*18, desc:"코앞을 두 손바닥으로 강타 · 보스 피해 2 · 반동" },
-  { id:"axe",     cat:"melee",  name:"고무고무 도끼",   short:"도끼",  cd:60*12, desc:"발뒤꿈치로 발밑 기둥을 바다까지 내리찍는다" },
+  { id:"bazooka", cat:"melee",  name:"고무고무 바주카", short:"바주카", cd:60*15, desc:"코앞을 두 손바닥으로 강타 · 보스 피해 3 · 반동으로 위로 솟는다" },
+  { id:"axe",     cat:"melee",  name:"고무고무 도끼",   short:"도끼",  cd:60*10, desc:"발밑 기둥을 바다까지 내리찍는다 · 보스 피해 2 · 수면을 따라 양옆으로 충격파" },
+  { id:"top",     cat:"melee",  name:"고무고무 팽이",   short:"팽이",  cd:60*14, desc:"몸을 축으로 빙글빙글 — 등 뒤까지 둘레를 쓸고 탄을 튕겨 낸다 · 도는 동안 천천히 떨어진다" },
   { id:"pistol",  cat:"ranged", name:"고무고무 피스톨", short:"피스톨", cd:SKILL_CD, base:true, desc:"자동 조준 주먹 한 방" },
   { id:"rifle",   cat:"ranged", name:"고무고무 라이플", short:"라이플", cd:60*12, desc:"비틀어 쏜 주먹 — 더 빠르고 멀리, 꿰뚫는다" },
-  { id:"gatling", cat:"ranged", name:"고무고무 개틀링", short:"개틀링", cd:60*18, desc:"조준 방향 부채꼴을 순식간에 연타" },
+  { id:"gatling", cat:"ranged", name:"고무고무 개틀링", short:"개틀링", cd:60*18, desc:"조준 방향 부채꼴을 순식간에 연타 · 보스 피해 2" },
+  { id:"comet",   cat:"ranged", name:"고무고무 별똥",   short:"별똥",  cd:60*14, desc:"주먹을 하늘로 쏘아 올려 표적 위로 내리꽂는다 — 둘레를 한꺼번에, 한가운데면 피해 2" },
   { id:"gcharge", cat:"gear",   name:"투지",   desc:"기어 게이지가 레벨당 10% 빨리 찬다" },
   { id:"gtime",   cat:"gear",   name:"지구력", desc:"기어 지속 시간이 레벨당 8% 길어진다" },
   { id:"gstart",  cat:"gear",   name:"예열",   desc:"출항할 때 기어 게이지가 레벨당 12% 차 있다" }
@@ -800,6 +814,7 @@ function openPack(cat, rnd){
     res = { kind:"mat", n, text: c.mat + " +" + n + "  (보유 " + mats[cat] + ")" };
   }
   shopMsg = { text: res.text, t: res.rare ? 220 : 140, good: true, rare: res.rare };
+  UIK.pack = { res, cat, t: 0 };                // 상자가 열리는 연출(그리기 전용, v60)
   saveShop();
   return res;
 }
@@ -885,7 +900,7 @@ function spring(o, target, k, damp, dt){
 const smoothNoise = (t, seed) => (Math.sin(t*0.77 + seed*12.9) + Math.sin(t*1.31 + seed*4.1) * 0.6 + Math.sin(t*2.09 + seed*7.7) * 0.3) / 1.9;
 const sv = () => ({ x: 0, v: 0 });
 const fx = { clock: 0, dt: 1, lean: sv(), sq: sv(), coatX: sv(), coatY: sv(), knot: sv(), zoom: sv(), blink: 200, blinkT: 0,
-             prevRope: null, armT: 99, snap: null, hitstop: 0, rings: [], prevStun: 0, wipe: 0, resT: 0, mapT: 0 };
+             prevRope: null, armT: 99, snap: null, hitstop: 0, rings: [], prevStun: 0, wipe: 0, wipeT: 27, resT: 0, mapT: 0, menuT: 0 };
 const WIPE_T = 27, HITSTOP_HIT = 3.5, HITSTOP_SINK = 6;
 function fxReset(){
   for(const k of ["lean","sq","coatX","coatY","knot","zoom"]){ fx[k].x = 0; fx[k].v = 0; }
@@ -895,6 +910,7 @@ function fxReset(){
 function fxStep(real, g){
   fx.dt = real; fx.clock += real;
   if(fx.wipe > 0) fx.wipe -= real;
+  fx.menuT += real;
   spring(fx.zoom, 0, 0.16, 0.3, real);
   if(!p || g <= 0 || state === STATE.PAUSE) return;
   spring(fx.lean, Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012)), 0.22, 0.5, g);
@@ -941,7 +957,7 @@ function brushBand(x0, x1, y, h, seed){
 // 화면 전환 — 잉크가 번지며 덮었다 걷힌다(상태는 이미 바뀌어 있고 그림만 덮는다)
 function drawWipe(){
   if(fx.wipe <= 0) return;
-  const k = 1 - fx.wipe / WIPE_T, a = k < 0.3 ? ease.outCubic(k / 0.3) : 1 - ease.inOutCubic((k - 0.3) / 0.7);
+  const k = 1 - fx.wipe / (fx.wipeT || WIPE_T), a = k < 0.3 ? ease.outCubic(k / 0.3) : 1 - ease.inOutCubic((k - 0.3) / 0.7);
   const pu = paperUI; paperUI = false;
   ctx.save();
   ctx.fillStyle = "rgba(34,24,16," + (a * 0.9).toFixed(2) + ")"; ctx.fillRect(0, 0, W, H);
@@ -1155,15 +1171,31 @@ function startBlitz(){
   return true;
 }
 
-// 보스 러시 — 중간보스 6종 + 크라켄 + 유령선 + 해군 대장 군함 9연전. 잡몹·날씨 없이 보스만, 완주 시간 기록
-// v39에서 해군 대장이 들어와 9연전이 됐다 — 8연전 시절 최단 기록(swing:shop의 rush)은 비교가 안 되니 rush9에 따로 둔다
-const RUSH_ORDER = [0, 1, 3, 4, 2, 6, 5, 7, 8];
-let rushMode = false, rushBest = 0;
+// 보스 러시 (v60) — 판마다 무작위 5연전. 잡몹·날씨 없이 보스만, 완주 시간 기록.
+// 대진: 일반 · 일반 · 네임드 · (일반 또는 대형) · 마지막은 대형(네 번째가 대형이면 반반으로 네임드) — 대형은 많아야 둘, 겹치지 않는다.
+// 각성한 크라켄(15)·해저 감옥 간수장(20)은 전용 무대가 따로 있어 뺐다.
+// 기록: 예전 고정 9연전 최단 기록(swing:shop의 rush9)은 rushBest9에 그대로 두고 '옛 9연전 기록'으로만 보여 준다. 새 5연전 기록은 rush5(rushBest)
+const RUSH_N = 5;
+const RUSH_POOL = { mid:[0, 1, 2, 3, 4, 9, 10, 12, 14, 16], named:[6, 11, 13, 17], big:[5, 7, 8, 18, 19] };
+const RUSH_LEGACY = [0, 1, 3, 4, 2, 6, 5, 7, 8];     // v59까지의 고정 순서(기록 설명용)
+const RUSH_GAP = 26;                                 // 보스 사이 쉬는 거리(m) — 예전 40
+let rushMode = false, rushBest = 0, rushBest9 = 0, rushList = null;
+function rollRush(rnd){
+  rnd = rnd || Math.random;
+  const used = [], take = (pool) => { const left = pool.filter(t => used.indexOf(t) < 0), t = left[Math.floor(rnd() * left.length)]; used.push(t); return t; };
+  const out = [take(RUSH_POOL.mid), take(RUSH_POOL.mid), take(RUSH_POOL.named)];
+  const bigFourth = rnd() < 0.5;
+  out.push(take(bigFourth ? RUSH_POOL.big : RUSH_POOL.mid));
+  out.push(take(bigFourth && rnd() < 0.5 ? RUSH_POOL.named : RUSH_POOL.big));
+  return out;
+}
+const rushClass = (t) => isBigType(t) ? "big" : isNamed(t) ? "named" : "mid";
 function startRush(){
   practiceMode = null; storyMode = null;
   dailyMode = false;
   blitzMode = false;
   rushMode = true;
+  rushList = null;               // 새 대진을 뽑는다(reset이 굴린다)
   reset();
 }
 const fmtTime = (fr) => { const t = fr / 60, m = Math.floor(t / 60), sec = t - m*60; return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(1); };
@@ -1838,8 +1870,8 @@ function storyMapRows(){
         if(s.crew || s.art) uiText("보상: " + [s.crew ? crewDef(s.crew).name : null, s.art ? artDef(s.art).short : null].filter(Boolean).join(" · "), x + 12, y + h - 12, UIF(700, 11), "#e6a8f0");
       } });
   });
-  rows.push({ key: 0, x: W/2 - 260, y: H - 64, w: 160, h: 38, label: "0) ← 메뉴로", action: leaveStory });
-  rows.push({ key: 9, x: W/2 - 80, y: H - 64, w: 160, h: 38, label: "9) 이야기 다시 보기", dim: !storySeen.length,
+  rows.push(backRow(0));
+  rows.push({ key: 9, x: W/2 - 170, y: H - 64, w: 160, h: 38, label: "9) 이야기 다시 보기", dim: !storySeen.length,
               action: () => {
                 const st = STORY_CH[storyCh].stages, s = st.filter(q => storyCleared(q.id) || storySeen.indexOf(q.id) >= 0).pop();
                 if(!s) return;
@@ -1847,7 +1879,7 @@ function storyMapRows(){
                 openTalk(s.pre.concat(storyCleared(s.id) ? s.post : []), STATE.STORY_MAP, null, s.end && storyCleared(s.id) ? () => startEnding(STATE.STORY_MAP) : undefined);
                 if(st.indexOf(s) === 0) chapCard = { ch: storyCh, t: 0 };
               } });
-  rows.push({ key: 8, x: W/2 + 100, y: H - 64, w: 160, h: 38, label: "8) 비기: " + (artSel ? artDef(artSel).short : "없음"), dim: !ARTS.some(a => artOwned(a.id)), action: cycleArt });
+  rows.push({ key: 8, x: W/2 + 10, y: H - 64, w: 160, h: 38, label: "8) 비기: " + (artSel ? artDef(artSel).short : "없음"), dim: !ARTS.some(a => artOwned(a.id)), action: cycleArt });
   return rows;
 }
 const storyGoalText = (s) => {
@@ -1859,14 +1891,13 @@ const storyGoalText = (s) => {
   return g.list.map(t => BOSSES[t].name).join(" → ") + " 연전";
 };
 function drawStoryMap(){
-  ctx.fillStyle = "rgba(10,20,30,0.9)";
-  ctx.fillRect(0, 0, W, H);
+  drawMenuBg(0.84);
   // 바탕 — 낡은 해도 줄
   ctx.save(); ctx.strokeStyle = "rgba(217,184,119,.08)"; ctx.lineWidth = 1;
   for(let x = 0; x < W; x += 60){ ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
   for(let y = 0; y < H; y += 60){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
   ctx.restore();
-  centerText("스토리 — 대항해도", 30, UIF(800, 24), "#f4ecd9");
+  drawHeading("스토리 — 대항해도", 32, 22);
   uiText("★ " + storyStarTotal() + "/" + STORY_STAR_MAX, W - 20, 30, "700 16px 'Gowun Batang', serif", "#ffd76a", "right");
   // 등장 연출 — 장을 바꾸면 카드 묶음이 옆에서 미끄러져 들어오고, 카드는 차례로 위에서 내려앉는다
   const M = fx.map || (fx.map = { ch: storyCh, slide: sv(), hov: [] });
@@ -2502,11 +2533,62 @@ function drawStoryHud(){
   ctx.restore();
 }
 
+/* ---------- 메뉴 이동 이력 (v60) ----------
+   하위 메뉴마다 왼쪽 위 같은 자리(BACK_BTN)에 '← 이전' 버튼 — 누르면 한 단계 위로, 맨 위면 메인 메뉴. Esc·Backspace·터치 모두 navBack().
+   화면 이름(navId): menu · challenge · practice · shop · shop/story · log · log/title · log/dex · settings · mini · map.
+   상태는 여기저기서 바로 바뀌므로(state = …) 이력은 navSync()가 '지금 화면'을 보고 맞춘다 — 스택 맨 위와 같으면 그 화면의 쪽(탭·페이지)만 새로 적고,
+   스택 안에 있던 화면이면 거기까지 걷어 내고, 처음 보는 화면이면 쌓는다. 그래서 돌아가면 떠날 때의 탭·페이지가 그대로다. */
+const BACK_BTN = { x: 16, y: 16, w: 96, h: 34 };
+let navStack = [];
+const navId = () => state === STATE.MENU ? "menu" : state === STATE.CHALLENGE ? "challenge" : state === STATE.PRACTICE_SELECT ? "practice"
+  : state === STATE.SHOP ? (crewStory ? "shop/story" : "shop") : state === STATE.LOG ? (dexPage ? "log/dex" : titlePage ? "log/title" : "log")
+  : state === STATE.SETTINGS ? "settings" : state === STATE.MINI_SELECT ? "mini" : state === STATE.STORY_MAP ? "map" : null;
+const navSnap = (id) => ({ id, state, shopPage, techCat, practicePage, titlePage, storyCh });
+const NAV_PARENT = { practice: "challenge", "shop/story": "shop", "log/title": "log", "log/dex": "log" };
+const NAV_STATE = { menu: STATE.MENU, challenge: STATE.CHALLENGE, shop: STATE.SHOP, log: STATE.LOG };
+function navSync(){
+  const id = navId();
+  if(!id) return;
+  const top = navStack[navStack.length - 1];
+  if(top && top.id === id){ navStack[navStack.length - 1] = navSnap(id); return; }
+  const at = navStack.findIndex(q => q.id === id);
+  if(at >= 0){ navStack.length = at + 1; navStack[at] = navSnap(id); return; }
+  if(id === "menu" || !navStack.length) navStack = [{ id: "menu", state: STATE.MENU }];
+  if(id === "menu") return;
+  // 윗단계를 건너뛰고 들어왔으면(예: 메뉴에서 곧장 연습 목록) 윗단계를 끼워 둔다 — '이전'은 늘 한 단계 위
+  const par = NAV_PARENT[id];
+  if(par && !navStack.some(q => q.id === par)) navStack.push(Object.assign(navSnap(par), { state: NAV_STATE[par], titlePage: 0, practicePage: 0 }));
+  navStack.push(navSnap(id));
+}
+function navBack(){
+  navSync();
+  if(!navId() || navStack.length < 2){ state = STATE.MENU; return; }
+  const cur = navStack.pop(), prev = navStack[navStack.length - 1];
+  // 떠나는 화면 정리
+  if(cur.id === "map"){ leaveStory(); }
+  if(cur.id === "shop"){ shopPage = 0; crewStory = null; shopMsg = null; }
+  if(cur.id === "shop/story") crewStory = null;
+  if(cur.id === "log/title") closeTitles();
+  if(cur.id === "log/dex") dexPage = false;
+  if(cur.id === "practice") practicePage = 0;
+  // 돌아갈 화면 — 떠날 때의 탭·페이지 그대로
+  state = prev.state;
+  if(prev.id === "shop" && prev.shopPage !== undefined){ shopPage = prev.shopPage; techCat = prev.techCat; }
+  if(prev.id === "practice" && prev.practicePage !== undefined) practicePage = prev.practicePage;
+  if(prev.id === "log"){ titlePage = 0; dexPage = false; }
+  if(prev.id === "menu"){ shopPage = 0; practicePage = 0; }
+}
+const backRow = (key) => Object.assign({ key, back: true, label: "← 이전", icon: "back", action: navBack }, BACK_BTN);
 // MENU/PRACTICE_SELECT 화면의 선택지 — 그리기와 클릭·숫자키 판정이 이 배열 하나를 같이 본다
 function menuRows(){
+  navSync();
+  return menuRowsRaw();
+}
+function menuRowsRaw(){
   if(state === STATE.MENU){
-    const top = H/2 - 108, rh = 33;
+    const top = 166, rh = 41;
     const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
+    const ICON = ["map", "anchor", "skull", "chest", "compass", "cog", "person", "jelly"];
     return btnRows([
       { y: top,        label: "1) 📜 스토리 모드 — ★" + storyStarTotal() + "/" + STORY_STAR_MAX, action: openStoryMap, story: true },
       { y: top + rh,   label: "2) 무한 모드" + (diffSel !== "normal" ? " — " + DIFFS[diffSel].name : "") + (best ? " — 최고 " + Math.floor(best) + "m" : ""), action: startMainGame },
@@ -2517,16 +2599,16 @@ function menuRows(){
       { y: top + rh*5, label: "6) 설정", action: () => { state = STATE.SETTINGS; } },
       { y: top + rh*6, label: "7) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount, acct: true },
       { key: 0, y: top + rh*7, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
-    ], 480, 31);
+    ].map((r, i) => Object.assign(r, { icon: ICON[i] })), 500, 35);
   }
   if(state === STATE.CHALLENGE){
     const top = H/2 - 92, rh = 44;
     return btnRows([
       { y: top,        label: "1) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
       { y: top + rh,   label: "2) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝 (내일 다시)" : "") + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
-      { y: top + rh*2, label: "3) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
+      { y: top + rh*2, label: "3) 보스 러시 — 무작위 5연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : rushBest9 ? " · 옛 9연전 " + fmtTime(rushBest9) : ""), action: startRush },
       { y: top + rh*3, label: "4) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
-      { key: 9, y: top + rh*4 + 14, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } }
+      backRow(9)
     ], 480, 36);
   }
   if(state === STATE.STORY_MAP) return storyMapRows();
@@ -2537,7 +2619,7 @@ function menuRows(){
       return { y: top + i*rh, label: (i+1) + ") " + q.name + (b ? " — 최고 " + b + q.unit : "") + (md ? "  " + "🏅".repeat(md) : ""),
                sub: q.desc, col: q.col, action: () => startMini(q.id) };
     });
-    rows.push({ key: 9, y: top + 3*rh + 20, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } });
+    rows.push(backRow(9));
     rows.forEach(r => { if(r.sub){ r.x = W/2 - 260; r.w = 520; r.h = 56; r.cy = r.y; r.y = r.y - 19; } });
     return btnRows(rows, 260, 34);
   }
@@ -2553,32 +2635,19 @@ function menuRows(){
           try{ if(window.localStorage) localStorage.removeItem("swing:hints"); }catch(e){}
           shopMsg = { text: "힌트를 다시 보여 준다", t: 90, good: true };
         } },
-      { y: H/2 + 160, label: "6) ← 뒤로가기", action: () => { state = STATE.MENU; } }
+      backRow(6)
     ], 460, 36);
   }
   if(state === STATE.LOG && dexPage){
-    return [{ key: 9, y: H - 30, label: "9) ← 항해 일지", action: () => { dexPage = false; } }];
+    return [backRow(9)];
   }
-  if(state === STATE.LOG && titlePage > 0){
-    // 칭호 고르기 — 맨 앞은 '자동', 그 뒤로 칭호 목록. 숫자 키 1~7, 8) 페이지, 9) 일지로
-    const PER = 7, all = [null].concat(TITLES), pages = Math.ceil(all.length / PER), pg = titlePage - 1;
-    const top = 120, rowH = 36;
-    const rows = all.slice(pg*PER, pg*PER + PER).map((t, i) => {
-      const has = !t || unlockedTitles.has(t.id), on = t ? titleSel === t.id : !titleSel;
-      const label = (i+1) + ") " + (t ? (has ? "★ " : "☆ ") + t.name + " — " + t.desc : "자동 — 딴 칭호 중 가장 높은 것");
-      return { y: top + i*rowH, label: label + (on ? "  [장착 중]" : ""), action: () => pickTitle(t ? t.id : null), dim: !has, on };
-    });
-    rows.push({ key: 8, y: top + PER*rowH + 8, label: "8) " + (pg < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (pg+1) + "/" + pages + ")",
-                action: () => { titlePage = (pg + 1) % pages + 1; } });
-    rows.push({ key: 9, y: top + PER*rowH + 42, label: "9) ← 항해 일지", action: () => { titlePage = 0; } });
-    return rows;
-  }
+  if(state === STATE.LOG && titlePage > 0) return titleRows();
   if(state === STATE.LOG){
-    const rows = [{ y: H - 44, label: "1) ← 뒤로가기", action: () => { state = STATE.MENU; } }];
+    const rows = [backRow(1)];
     if(parrotUnlocked()) rows.push({ y: H - 74, label: "2) 앵무새 동료 " + (parrotOn ? "켜짐 — 끄기" : "꺼짐 — 켜기"),
                                      action: () => { parrotOn = !parrotOn; saveShop(); } });
     else rows.push({ y: H - 74, label: "앵무새 동료 — 보스 누적 " + PARROT_UNLOCK + "마리 격파 시 합류 (" + lifeBossKills + "/" + PARROT_UNLOCK + ")", action: () => {} });
-    rows.push({ key: 3, y: 236, label: "3) 칭호 고르기 →", action: () => { titlePage = 1; shopMsg = null; } });
+    rows.push({ key: 3, y: 236, label: "3) 칭호 보기·고르기 (" + unlockedTitles.size + "/" + TITLES.length + ") →" + (titleFresh.size ? "  ★ 새 칭호 " + titleFresh.size : ""), action: openTitles });
     rows.push({ key: 4, y: 260, label: "4) 바다 도감 (" + dexFound() + "/" + DEX.length + ") →", action: () => { dexPage = true; } });
     return rows;
   }
@@ -2593,12 +2662,71 @@ function menuRows(){
     }));
     rows.push({ key: 8, y: top + PER*rowH + 10, label: "8) " + (practicePage < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (practicePage+1) + "/" + pages + ")",
                 action: () => { practicePage = (practicePage + 1) % pages; } });
-    rows.push({ key: 9, y: top + PER*rowH + 44, label: "9) ← 도전으로", action: () => { state = STATE.CHALLENGE; practicePage = 0; } });
+    rows.push(backRow(9));
     return btnRows(rows, 480, 30);
   }
   return [];
 }
 
+// 칭호 화면 (v60) — 범주 탭 여섯 + 문장 카드(4열). 카드를 누르면 단다. 1~9는 숫자 키, 그 뒤는 클릭
+const TITLE_COLS = 4, TITLE_TOP = 138, TITLE_CH = 68, TITLE_GAP = 6;
+function openTitles(){
+  shopMsg = null; fx.titleT = 0;
+  // 새로 딴 칭호가 있으면 그 범주부터
+  const f = TITLES.find(t => titleFresh.has(t.id));
+  titlePage = f ? TITLE_CATS.findIndex(c => c.id === f.cat) + 1 : Math.max(1, titlePage);
+}
+function closeTitles(){ titlePage = 0; titleFresh.clear(); }
+function titleTab(i){ titlePage = (i + TITLE_CATS.length) % TITLE_CATS.length + 1; fx.titleT = 0; shopMsg = null; }
+function titleRows(){
+  const rows = [], cat = TITLE_CATS[titlePage - 1] || TITLE_CATS[0], list = TITLES.filter(t => t.cat === cat.id);
+  rows.push(backRow(9));
+  rows.push({ key: 0, x: W - 16 - 190, y: 16, w: 190, h: 34, label: "0) 자동 — 가장 높은 칭호", on: !titleSel, action: () => pickTitle(null) });
+  const tw = (W - 32 - 5*8) / 6;
+  TITLE_CATS.forEach((c, i) => {
+    const all = TITLES.filter(t => t.cat === c.id), got = all.filter(t => unlockedTitles.has(t.id)).length, fresh = all.some(t => titleFresh.has(t.id));
+    rows.push({ key: -1, tab: true, x: 16 + i*(tw + 8), y: 90, w: tw, h: 36, label: c.name + " " + got + "/" + all.length + (fresh ? " ★" : ""), sel: i === titlePage - 1, glow: fresh && i !== titlePage - 1,
+                col: i === titlePage - 1 ? "#ffd76a" : "rgba(217,184,119,.75)", action: () => titleTab(i) });
+  });
+  const cw = (W - 32 - (TITLE_COLS - 1)*8) / TITLE_COLS;
+  list.forEach((t, i) => {
+    const x = 16 + (i % TITLE_COLS)*(cw + 8), y = TITLE_TOP + Math.floor(i / TITLE_COLS)*(TITLE_CH + TITLE_GAP);
+    const has = unlockedTitles.has(t.id), on = titleSel === t.id, tr = TITLE_TIERS[t.tier];
+    rows.push({ key: i < 8 ? i + 1 : -1, x, y, w: cw, h: TITLE_CH, on, dim: !has, title: t, label: t.name, action: () => pickTitle(t.id),
+      draw: () => {
+        const fresh = titleFresh.has(t.id);
+        if(fresh) drawTitleStamp(t, x + 32, y + TITLE_CH/2 - 4, 20, ((fx.titleT || 0) - 10 - (i % 8) * 6) / 30);
+        else drawTitleMedal(t, x + 32, y + TITLE_CH/2 - 4, 20, { dim: !has });
+        uiText(t.name, x + 62, y + 17, UIF(800, 14), has ? "#f4ecd9" : "rgba(244,236,217,.5)");
+        // 등급은 메달 색이 말해 준다 — 오른쪽 아래엔 '장착'·'새로!'만(그때는 설명 폭을 줄여 겹치지 않게)
+        const tag = on ? "✓ 장착" : fresh ? "새로!" : "";
+        drawWrapped(t.desc, x + 62, y + 36, cw - 70 - (tag ? 44 : 0), 14, UIF(500, 11), has ? "rgba(244,236,217,.78)" : "rgba(244,236,217,.48)", 2);
+        if(tag) uiText(tag, x + cw - 10, y + TITLE_CH - 13, UIF(800, 11), on ? "#9fe0a0" : "#ffd76a", "right");
+        uiText((has ? "" : "🔒 ") + tr.name, x + 32, y + TITLE_CH - 7, UIF(700, 9), has ? tr.col : "rgba(244,236,217,.45)", "center");
+        if(i < 8) uiText((i + 1) + "", x + cw - 9, y + 11, UIF(600, 10), "rgba(244,236,217,.35)", "right");
+      } });
+  });
+  return rows;
+}
+function drawTitles(){
+  drawMenuBg();
+  fx.titleT = (fx.titleT || 0) + fx.dt;
+  drawHeading("칭호", 33, 22);
+  const cur = currentTitle();
+  if(cur){
+    ctx.font = UIF(700, 14);
+    const txt = "지금 단 칭호 — " + cur.name + (titleSel ? "" : " (자동)"), tw = ctx.measureText(txt).width;
+    drawTitleMedal(cur, W/2 - tw/2 - 18, 66, 12);
+    uiText(txt, W/2 + 8, 66, UIF(700, 14), TITLE_TIERS[cur.tier].col, "center");
+  } else centerText("아직 딴 칭호가 없다 — 조건을 채우면 문장에 도장이 찍힌다", 66, UIF(600, 14), "rgba(244,236,217,.7)");
+  for(const r of menuRows()) drawBtn(r, r.tab ? UIF(800, 13) : UIF(700, 13));
+  if(shopMsg){
+    shopMsg.t -= 1;
+    centerText(shopMsg.text, H - 38, UIF(700, 14), shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
+    if(shopMsg.t <= 0) shopMsg = null;
+  }
+  centerText("모은 칭호 " + unlockedTitles.size + "/" + TITLES.length + " · 고른 칭호는 출항 화면·현상수배 포스터·결과에 붙는다 · ← → 범주 · 카드를 누르면 단다", H - 16, UIF(400, 12), "rgba(244,236,217,.6)");
+}
 function canvasPos(e){
   const r = canvas.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
@@ -2618,6 +2746,9 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyChases, navyBeaten, navyCaught = 0, cuffT = 0, jailEscaped = false, viceHook, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, rival, nextRivalAt, rivalWins, rivalRaces, rivalRand = Math.random, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
 
 function reset(){
+  // 보스 러시 — 판마다 대진을 새로 뽑는다. 출항 화면에서 선원·기어만 바꿔 다시 꾸릴 땐(state가 READY) 같은 대진 그대로
+  if(rushMode && (!rushList || state !== STATE.READY)){ rushList = rollRush(); fx.rushT = 0; }
+  titleRun = { fusen: 0 }; titleToast = null;
   // 60초 사냥은 하루 한 판 — 끝나고 R로 다시 시작하면 본게임으로 넘어간다
   if(blitzMode && !blitzFresh) blitzMode = false;
   blitzFresh = false;
@@ -2669,7 +2800,7 @@ function reset(){
   routes = []; routeLeft = 0; routeSeq = 0; routesDone = { up:0, low:0 };
   nextRouteAt = ROUTE_FIRST + genRand()*200;
   nextPortAt = PORT_FIRST; portIdx = 0; portAt = null; portPending = null; portBought = {}; portMsg = null;
-  crewMate = { x:150 - 50, y:120, cd:90, skill: 60*8, wind: 0 }; crewFx = []; crewKills = 0; crewLvUp = null; crewNews = null;
+  crewMate = { x:150 - 50, y:120, cd:90, skill: 60*8, wind: 0, aid: 0, act: null, encore: false }; crewFx = []; crewKills = 0; crewLvUp = null; crewNews = null;
   nextBarrageAt = BARRAGE_FIRST + barrageRand()*400;
   skimT = 0; skimGain = 0; skims = 0; nearMisses = 0; goldRings = 0;
   gear = 0; gearT = 0; gears = 0; gearOn = 0; giant = null; gearForm = null; boundLeft = 0;
@@ -2721,7 +2852,7 @@ function reset(){
   skillCd = 0;                 // 출발할 땐 충전되어 있다
   fist = null;
   gunCd = 0;                   // 근거리 기술(W)도 출발할 땐 충전
-  skillMax = rangedCd(); gunMax = meleeCd(); volley = null;
+  skillMax = rangedCd(); gunMax = meleeCd(); volley = null; comet = null; shock = null; techStamp = null;
   gun = null;
   fire = 0;
   stallX = p.x;
@@ -2935,7 +3066,8 @@ function breakBarrel(b, how){
   b.gone = true;
   barrelsBroken++;
   const y = barrelY(b);
-  const bv = Math.round((wk("barrel") ? 60 : 30) * (1 + crewK("arch", 0.5, 0.1)));
+  const bv = Math.round((wk("barrel") ? 60 : 30) * (1 + crewK("arch", 0.5, 0.1))) * (b.relic ? CREW_RELIC_K : 1);
+  if(b.relic){ pops.push({ x:b.x, y:y - 46, t:80, text:"유물 통! +" + bv, color:"#c9a27a" }); for(let i=0;i<14;i++) spark(b.x, y - 6, i % 2 ? "#ffd76a" : "#c9a27a"); }
   treasure += bv;
   const n = 6;
   for(let i=0;i<n;i++){
@@ -3280,9 +3412,8 @@ function updateDex(dt){
 }
 let dexPage = false;
 function drawDex(){
-  ctx.fillStyle = "rgba(13,27,38,0.92)";
-  ctx.fillRect(0,0,W,H);
-  centerText("바다 도감", 40, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
+  drawMenuBg(0.86);
+  drawHeading("바다 도감", 36, 22);
   const found = dexFound();
   centerText("발견 " + found + "/" + DEX.length + "  ·  처음 만나면 보물 +" + DEX_FIRST + " · 만난 횟수(보스는 격침)만큼 별 · 다 채우면 칭호와 박물학자 두건",
              68, "600 13px 'Gowun Batang', 'Pretendard', serif", found === DEX.length ? "#ffd76a" : "#9fe0a0");
@@ -3301,7 +3432,7 @@ function drawDex(){
       leftText("??? · " + cat.name, cx + 18, cy, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.32)");
     }
   });
-  for(const row of menuRows()) centerText(row.label, row.y, "600 15px 'Gowun Batang', 'Pretendard', serif", "#d9b877");
+  for(const row of menuRows()) drawBtn(row, UIF(700, 14));
 }
 
 /* ---------- 항로 갈림길 ---------- */
@@ -3735,7 +3866,7 @@ function grab(){
     if(a.rot && !a.dex){ a.dex = true; dexSee("rot"); }
     if(a.port && !a.dex){ a.dex = true; dexSee("port"); }
     if(a.rot && !a.creak){
-      a.creak = a.creakMax = ROT_T * (1 + crewK("wright", 1, 0.2));   // 조선공이 덧대 주면 두 배 버틴다
+      a.creak = a.creakMax = ROT_T * (1 + crewK("wright", 1.5, 0.2));   // 조선공이 덧대 주면 2.5배 버틴다(v60: 2배 → 2.5배)
       pops.push({ x:a.x, y:a.y-26, t:50, text:"삐걱…", color:"#c9a27a" });
     }
     if(airTime > 34){
@@ -3851,15 +3982,14 @@ window.addEventListener("keydown", (e)=>{
       storyCh = (storyCh + (k === "ArrowRight" ? 1 : STORY_CH.length - 1)) % STORY_CH.length;
       return;
     }
-    if(k === "Escape"){
+    if(k === "Escape" || k === "Backspace"){
       e.preventDefault();
-      if(state === STATE.LOG && dexPage) dexPage = false;          // 도감 → 일지
-      else if(state === STATE.LOG && titlePage) titlePage = 0;     // 칭호 고르기 → 일지
-      else if(state === STATE.SHOP && crewStory) crewStory = null;   // 이야기 창 → 선원 탭
-      else if(state === STATE.SHOP){ state = STATE.MENU; shopPage = 0; }   // 창고는 탭이라 한 번에 메뉴로
-      else if(state === STATE.STORY_MAP) leaveStory();
-      else if(state === STATE.PRACTICE_SELECT) state = STATE.CHALLENGE;
-      else if(state !== STATE.MENU) state = STATE.MENU;
+      if(state !== STATE.MENU) navBack();       // 한 단계 위로 — 화면의 '← 이전' 버튼과 같은 동작(v60)
+      return;
+    }
+    if(state === STATE.LOG && titlePage && (k === "ArrowLeft" || k === "ArrowRight")){
+      e.preventDefault();
+      titleTab(titlePage - 1 + (k === "ArrowRight" ? 1 : -1));
       return;
     }
     if(state === STATE.SHOP && !crewStory && (k === "ArrowLeft" || k === "ArrowRight")){
@@ -3873,7 +4003,7 @@ window.addEventListener("keydown", (e)=>{
       // 줄에 key가 있으면 그 번호, 없으면 순서대로 1부터 — 페이지를 나눈 연습 목록은 8·9가 고정 번호다(0도 쓴다, -1은 클릭 전용)
       const n = parseInt(m[1], 10), rows = menuRows();
       const row = rows.find((r, i) => (r.key !== undefined ? r.key : i + 1) === n);
-      if(row && row.action) row.action();
+      if(row && row.action){ if(row.w !== undefined) uiPress({ x: row.x + row.w/2, y: row.y + row.h/2 }); row.action(); }
     }
     return;
   }
@@ -3963,6 +4093,8 @@ canvas.addEventListener("pointerdown", (e)=>{
     miniDown();
     return;
   }
+  uiPress(canvasPos(e));                         // 놋쇠 버튼이 눌려 내려앉는 그림(v60)
+  if(UIK.pack && state === STATE.SHOP){ UIK.pack = null; return; }   // 팩 열기 연출은 누르면 바로 걷힌다
   {
     const pos = canvasPos(e);
     for(const B of screenButtons()){
@@ -4350,30 +4482,68 @@ function cardRect(i, n){
 }
 
 function chainMult(){
-  return Math.min(CHAIN_CAP, Math.max(1, chain));
+  // 음악가 앙코르(v60) — 기어 발동 중엔 콤보 배율 +1(상한도 하나 위)
+  const enc = crewOn("music") && buff() ? CREW_ENCORE : 0;
+  return Math.min(CHAIN_CAP, Math.max(1, chain)) + (chain > 0 ? enc : 0);
 }
 
 /* 보스 처치 칭호 — 누적 처치 수 기준, 약한 순서로 나열 (마지막으로 만족하는 게 현재 칭호) */
+// v60 칭호 개편 — 등급(tier 1 동 · 2 은 · 3 금 · 4 전설) · 범주(cat) · 문장(emb, drawEmblem 종류).
+// 예전 18개의 id는 그대로다(저장된 unlocked·두건 해금 조건이 id를 본다). 이름만 손본 것: veteran(유명 만화 용어를 뺐다)·kraken1·kraken10.
+// 보스 첫 격파 칭호는 도감 격침 수(lifeLog.dex["boss" + 번호], 연습은 안 센다)를 본다 — 예전에 잡아 둔 보스는 다음 판정 때 바로 인정된다.
+// 설명의 보스 이름은 BOSSES에서 읽는다(이름이 바뀌어도 따라간다). **순서는 '자동' 칭호의 같은 등급 안 우선순위다(뒤가 높다) — 새 칭호는 범주 끝에.**
+const TITLE_TIERS = [null, { name:"동", col:"#e0a070" }, { name:"은", col:"#dfe6ee" }, { name:"금", col:"#ffd76a" }, { name:"전설", col:"#e2b0ff" }];
+const TITLE_CATS = [{ id:"hunt", name:"사냥" }, { id:"sail", name:"항해" }, { id:"skill", name:"기술" }, { id:"story", name:"스토리" }, { id:"collect", name:"수집" }, { id:"dare", name:"도전" }];
+const bossSunk = (s, t) => ((s.dex || {})["boss" + t] || 0) >= 1;
 const TITLES = [
-  { id:"novice",    name:"풋내기 사냥꾼",     desc:"보스 1마리 격파",        need:(s) => s.boss >= 1 },
-  { id:"gull20",    name:"하늘의 사냥꾼",     desc:"폭탄 갈매기 누적 20마리", need:(s) => (s.gulls || 0) >= 20 },
-  { id:"hunter",    name:"현상금 사냥꾼",     desc:"보스 누적 10마리",        need:(s) => s.boss >= 10 },
-  { id:"perfect50", name:"타이밍의 달인",     desc:"PERFECT 누적 50회",       need:(s) => (s.perfects || 0) >= 50 },
-  { id:"kraken1",   name:"크라켄 슬레이어",   desc:"크라켄 1마리 격파",       need:(s) => s.kraken >= 1 },
-  { id:"ghost1",    name:"유령선 퇴마사",     desc:"망령의 유령선 1척 격침",   need:(s) => (s.ghost || 0) >= 1 },
-  { id:"admiral1",  name:"정의를 꺾은 자",    desc:"해군 대장 군함 격침",      need:(s) => (s.admiral || 0) >= 1 },
-  { id:"veteran",   name:"그랑 라인의 폭풍",  desc:"보스 누적 30마리",        need:(s) => s.boss >= 30 },
-  { id:"dist10k",   name:"대항해자",          desc:"누적 항해 10000m",        need:(s) => (s.dist || 0) >= 10000 },
-  { id:"kraken3",   name:"심해의 재앙",       desc:"크라켄 누적 3마리",       need:(s) => s.kraken >= 3 },
-  { id:"ghost3",    name:"저승의 뱃사공",     desc:"유령선 누적 3척",         need:(s) => (s.ghost || 0) >= 3 },
-  { id:"mapper",    name:"전설의 보물 사냥꾼", desc:"보물 지도 완성",         need:(s) => (s.maps || 0) >= 1 },
-  { id:"kraken10",  name:"해왕을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 },
-  { id:"ghost10",   name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 },
-  { id:"naturalist", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length },
-  { id:"voyage_end", name:"대항해의 끝",      desc:"스토리 최종장을 깬다",     need:(s) => (s.storyEnd || 0) >= 1 },
-  { id:"star81",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX },
-  { id:"jail",      name:"탈옥수",            desc:"해저 감옥에서 간수장 그롬을 꺾고 탈옥", need:(s) => ((s.dex || {}).boss20 || 0) >= 1 }
+  // 사냥
+  { id:"novice",    cat:"hunt", tier:1, emb:"dagger",   name:"풋내기 사냥꾼",     desc:"보스 1마리 격파",        need:(s) => s.boss >= 1 },
+  { id:"gull20",    cat:"hunt", tier:1, emb:"gull",     name:"하늘의 사냥꾼",     desc:"폭탄 갈매기 누적 20마리", need:(s) => (s.gulls || 0) >= 20 },
+  { id:"hunter",    cat:"hunt", tier:2, emb:"target",   name:"현상금 사냥꾼",     desc:"보스 누적 10마리",        need:(s) => s.boss >= 10 },
+  { id:"kraken1",   cat:"hunt", tier:2, emb:"tentacle", name:"잠든 재앙을 깨운 자", desc:BOSSES[5].name + "을 처음 물리친다", need:(s) => s.kraken >= 1 },
+  { id:"ghost1",    cat:"hunt", tier:2, emb:"ghost",    name:"유령선 퇴마사",     desc:"뒤집혀 올라오는 " + BOSSES[7].name + "을 가라앉힌다", need:(s) => (s.ghost || 0) >= 1 },
+  { id:"boss6",     cat:"hunt", tier:2, emb:"octo",     name:"무대를 빼앗은 자",   desc:"바다의 무희 장군 — " + BOSSES[6].name + "를 꺾는다", need:(s) => bossSunk(s, 6) },
+  { id:"boss13",    cat:"hunt", tier:2, emb:"hammer",   name:"모루를 식힌 자",     desc:"거인 대장장이 — " + BOSSES[13].name + "를 꺾는다", need:(s) => bossSunk(s, 13) },
+  { id:"admiral1",  cat:"hunt", tier:3, emb:"swords",   name:"정의를 꺾은 자",    desc:"군함 위 결투에서 드레이크 대장을 이긴다", need:(s) => (s.admiral || 0) >= 1 },
+  { id:"boss11",    cat:"hunt", tier:3, emb:"scarf",    name:"두건을 이은 자",     desc:"붉은 두건 조각을 지닌 늙은 검객 — " + BOSSES[11].name + "을 꺾는다", need:(s) => bossSunk(s, 11) },
+  { id:"boss17",    cat:"hunt", tier:3, emb:"lantern",  name:"꺼진 등불을 거둔 자", desc:"빛을 잃은 여왕 — " + BOSSES[17].name + "를 꺾는다", need:(s) => bossSunk(s, 17) },
+  { id:"boss18",    cat:"hunt", tier:3, emb:"island",   name:"섬에 오른 자",       desc:"등에 섬을 진 고래 — " + BOSSES[18].name + "을 꺾는다", need:(s) => bossSunk(s, 18) },
+  { id:"boss19",    cat:"hunt", tier:3, emb:"bone",     name:"해골 해룡을 재운 자", desc:"뼈만 남은 해룡 — " + BOSSES[19].name + "을 꺾는다", need:(s) => bossSunk(s, 19) },
+  { id:"veteran",   cat:"hunt", tier:3, emb:"skull",    name:"먼바다의 폭풍",     desc:"보스 누적 30마리",        need:(s) => s.boss >= 30 },
+  { id:"kraken3",   cat:"hunt", tier:3, emb:"tentacle", name:"심해의 재앙",       desc:"크라켄 누적 3마리",       need:(s) => s.kraken >= 3 },
+  { id:"ghost3",    cat:"hunt", tier:3, emb:"ghost",    name:"저승의 뱃사공",     desc:"유령선 누적 3척",         need:(s) => (s.ghost || 0) >= 3 },
+  { id:"boss15",    cat:"hunt", tier:4, emb:"eye",      name:"봉인을 다시 건 자",  desc:BOSSES[15].name + "을 물리친다", need:(s) => bossSunk(s, 15) },
+  { id:"kraken10",  cat:"hunt", tier:4, emb:"tentacle", name:"심연을 넘어선 자",  desc:"크라켄 누적 10마리",      need:(s) => s.kraken >= 10 },
+  { id:"ghost10",   cat:"hunt", tier:4, emb:"ghost",    name:"망령을 지배하는 자", desc:"유령선 누적 10척",        need:(s) => (s.ghost || 0) >= 10 },
+  { id:"hunt100",   cat:"hunt", tier:4, emb:"crown",    name:"바다의 전설",       desc:"보스 누적 100마리",       need:(s) => s.boss >= 100 },
+  { id:"allboss",   cat:"hunt", tier:4, emb:"scroll",   name:"현상수배첩을 덮은 자", desc:"보스 " + BOSSES.length + "종을 모두 한 번씩 격침", need:(s) => BOSSES.every((b, t) => bossSunk(s, t)) },
+  // 항해
+  { id:"best2000",  cat:"sail", tier:2, emb:"wave",     name:"먼바다의 그네꾼",   desc:"한 판에 2000m",           need:(s) => (s.best || 0) >= 2000 },
+  { id:"dist10k",   cat:"sail", tier:2, emb:"ship",     name:"대항해자",          desc:"누적 항해 10000m",        need:(s) => (s.dist || 0) >= 10000 },
+  { id:"best5000",  cat:"sail", tier:3, emb:"compass",  name:"끝없는 바다",       desc:"한 판에 5000m",           need:(s) => (s.best || 0) >= 5000 },
+  { id:"best8000",  cat:"sail", tier:4, emb:"star",     name:"심연을 건넌 자",    desc:"한 판에 8000m — 네 해역을 모두 지난다", need:(s) => (s.best || 0) >= 8000 },
+  // 기술
+  { id:"perfect50", cat:"skill", tier:2, emb:"clock",   name:"타이밍의 달인",     desc:"PERFECT 누적 50회",       need:(s) => (s.perfects || 0) >= 50 },
+  { id:"combo15",   cat:"skill", tier:2, emb:"rope",    name:"끊기지 않는 그네",  desc:"연속 콤보 ×15",           need:(s) => (s.combo || 0) >= 15 },
+  { id:"flawless",  cat:"skill", tier:2, emb:"shield",  name:"털끝 하나 안 다친", desc:"한 번도 휘청이지 않고 보스를 격파", need:(s) => !!(s.kill && s.kill.flawless) },
+  { id:"quick",     cat:"skill", tier:3, emb:"bolt",    name:"번개 같은 한 판",   desc:"보스를 등장 20초 안에 격파", need:(s) => !!(s.kill && s.kill.sec <= 20) },
+  { id:"duel",      cat:"skill", tier:3, emb:"fist",    name:"상처 없는 결투",    desc:"네임드·대형 보스를 한 번도 휘청이지 않고 격파", need:(s) => !!(s.kill && s.kill.flawless && s.kill.heavy) },
+  // 스토리
+  { id:"voyage_end", cat:"story", tier:3, emb:"flag",   name:"대항해의 끝",      desc:"스토리 최종장을 깬다",     need:(s) => (s.storyEnd || 0) >= 1 },
+  { id:"crewall",   cat:"story", tier:3, emb:"wheel",   name:"한배를 탄 사람들",  desc:"동료 " + CREW.length + "명을 모두 맞이한다", need:(s) => (s.crewN || 0) >= CREW.length },
+  { id:"star81",    cat:"story", tier:4, emb:"star",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX },
+  // 수집
+  { id:"mapper",    cat:"collect", tier:2, emb:"map",   name:"전설의 보물 사냥꾼", desc:"보물 지도 완성",         need:(s) => (s.maps || 0) >= 1 },
+  { id:"medals",    cat:"collect", tier:2, emb:"jelly", name:"놀이터의 왕",       desc:"미니게임 셋 모두 금메달",  need:(s) => !!s.goldAll },
+  { id:"rich",      cat:"collect", tier:3, emb:"chest", name:"창고가 터질 듯",    desc:"창고 보물 1,000,000",     need:(s) => (s.bank || 0) >= 1000000 },
+  { id:"naturalist", cat:"collect", tier:4, emb:"book", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length },
+  // 도전
+  { id:"jail",      cat:"dare", tier:3, emb:"key",      name:"탈옥수",            desc:BOSSES[20].name + "을 꺾고 해저 감옥을 탈옥", need:(s) => bossSunk(s, 20) },
+  { id:"rush5",     cat:"dare", tier:3, emb:"swords",   name:"다섯 고개를 넘은 자", desc:"보스 러시 5연전 완주",    need:(s) => (s.rush || 0) > 0 },
+  { id:"nofusen",   cat:"dare", tier:3, emb:"balloon",  name:"맨몸의 항해",       desc:"풍선으로 한 번도 튕기지 않고 한 판 3000m", need:(s) => (s.bare || 0) >= 3000 },
+  { id:"rushfast",  cat:"dare", tier:4, emb:"bolt",     name:"질풍 오연전",       desc:"보스 러시를 6분 안에 완주", need:(s) => (s.rush || 0) > 0 && s.rush <= 60*60*6 }
 ];
+const titleDef = (id) => TITLES.find(t => t.id === id) || null;
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
 let lifeLog = { runs:0, dist:0, perfects:0, missions:0, gulls:0, barrels:0, skims:0, gears:0, golds:0, xp:0, recent:[], dex:{} };
@@ -4422,13 +4592,15 @@ async function saveLog(){
 }
 
 // 칭호 고르기 — titleSel이 비어 있으면(자동) 딴 것 중 가장 높은 칭호를 단다
-let titleSel = null, titlePage = 0;
-function currentTitleName(){
-  if(titleSel && unlockedTitles.has(titleSel)) return TITLES.find(t => t.id === titleSel).name;
-  let name = null;
-  for(const t of TITLES) if(unlockedTitles.has(t.id)) name = t.name;
-  return name;
+// v60: '가장 높은' = 등급이 높은 것, 같은 등급이면 목록에서 뒤에 있는 것. titlePage는 1~6 = 범주(TITLE_CATS) 차례
+let titleSel = null, titlePage = 0, titleFresh = new Set(), titleToast = null, titleRun = { fusen: 0 }, lastKill = null;
+function currentTitle(){
+  if(titleSel && unlockedTitles.has(titleSel) && titleDef(titleSel)) return titleDef(titleSel);
+  let top = null;
+  for(const t of TITLES) if(unlockedTitles.has(t.id) && (!top || t.tier >= top.tier)) top = t;
+  return top;
 }
+function currentTitleName(){ const t = currentTitle(); return t ? t.name : null; }
 function pickTitle(id){
   if(id && !unlockedTitles.has(id)){
     const t = TITLES.find(q => q.id === id);
@@ -4441,16 +4613,70 @@ function pickTitle(id){
   return true;
 }
 
+// 판정에 쓰는 값 — 누적 기록(lifeLog) + 지금 판의 값. kill은 방금 격침한 보스(damageBoss가 lastKill에 적어 둔다)
+function titleStats(){
+  const live = !practiceMode && typeof dist === "number";
+  const run = live && mainGame() ? dist : 0;
+  return Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone, dexN: dexFound(), storyEnd, stars: storyStarTotal(),
+    best: Math.max(best || 0, bestDiff.easy || 0, bestDiff.hard || 0, run), combo: Math.max(bestChain || 0, live && !storyMode ? maxChain || 0 : 0),
+    bare: run > 0 && titleRun.fusen === 0 ? run : 0, rush: rushBest, bank, crewN: crewOwned.length, goldAll: MINIS.every(q => (miniMedals[q.id] || 0) >= 3), kill: lastKill });
+}
+// 새로 딴 칭호 가운데 가장 높은 것을 돌려준다(없으면 null). 딴 것은 titleFresh(칭호 화면의 '새로 찍힌 도장')와 화면 알림(titleToast)에 올린다
 function checkTitles(){
-  const stats = Object.assign({}, lifeLog, { boss: lifeBossKills, kraken: lifeKrakenKills, ghost: lifeGhostKills, admiral: lifeAdmiralKills, maps: mapsDone, dexN: dexFound(), storyEnd, stars: storyStarTotal() });
+  const stats = titleStats();
   let unlocked = null;
   for(const t of TITLES){
     if(!unlockedTitles.has(t.id) && t.need(stats)){
       unlockedTitles.add(t.id);
-      unlocked = t;
+      titleFresh.add(t.id);
+      if(!unlocked || t.tier >= unlocked.tier) unlocked = t;
     }
   }
+  if(unlocked) titleToast = { id: unlocked.id, t: 0 };
   return unlocked;
+}
+// 칭호 문장 — 등급 색 메달에 문장 그림. o.dim이면 못 딴 칭호(흐리게)
+function drawTitleMedal(t, x, y, r, o){
+  drawMedal(x, y, r, t.tier, Object.assign({ kind: t.emb }, o || {}));
+  if(t.tier === 4 && !(o && o.dim)){               // 전설 — 작은 왕관 술
+    const pu = paperUI; paperUI = false;
+    drawEmblem("crown", x, y - r - r*0.16, r*0.34, "#ffd76a");
+    paperUI = pu;
+  }
+}
+// 도장 찍히는 연출 — k(0→1). 크게 떨어져 내려앉고(outBack) 먹이 튄다. 연출 줄이기면 그냥 그린다
+function drawTitleStamp(t, x, y, r, k){
+  const calm = settings.calm, kk = calm ? 1 : clamp01(k);
+  if(kk <= 0) return;
+  const sc = 1 + 1.3 * (1 - ease.outBack(clamp01(kk / 0.45), 1.6));
+  ctx.save(); ctx.globalAlpha *= clamp01(kk / 0.12);
+  ctx.translate(x, y); ctx.rotate(-0.22 * (1 - clamp01(kk / 0.45))); ctx.scale(sc, sc);
+  drawTitleMedal(t, 0, 0, r);
+  ctx.restore();
+  if(!calm && kk > 0.4){
+    const pu = paperUI; paperUI = false;
+    const u = clamp01((kk - 0.4) / 0.6);
+    inkSplat(x, y, u, t.id.length * 2.3 + t.tier, 9, "40,26,16", r * 3);
+    ctx.save(); ctx.globalAlpha = (1 - u) * 0.8; ctx.strokeStyle = TITLE_TIERS[t.tier].col; ctx.lineWidth = 3 * (1 - u) + 0.5;
+    ctx.beginPath(); ctx.arc(x, y, r * (1.1 + 1.2 * ease.outCubic(u)), 0, Math.PI*2); ctx.stroke(); ctx.restore();
+    paperUI = pu;
+  }
+}
+// 판 중에 칭호를 따면 위쪽에 꼬리표가 내려와 도장이 찍힌다(약 3초). 그리기 전용 타이머
+const TOAST_T = 190;
+function drawTitleToast(){
+  if(!titleToast) return;
+  const t = titleDef(titleToast.id);
+  titleToast.t += fx.dt;
+  if(!t || titleToast.t > TOAST_T){ titleToast = null; return; }
+  const k = titleToast.t, calm = settings.calm, inK = calm ? 1 : ease.outBack(clamp01(k / 16), 1.2), outK = clamp01((TOAST_T - k) / 18);
+  const w = 300, h = 56, x = W/2 - w/2, y = (boss ? 118 : 96) - 70 * (1 - inK);
+  ctx.save(); ctx.globalAlpha = outK;
+  drawPanel({ x, y, w, h, sel: true }, 10);
+  drawTitleStamp(t, x + 34, y + h/2, 20, (k - 12) / 34);
+  uiText("칭호 획득 · " + TITLE_TIERS[t.tier].name, x + 66, y + 18, UIF(700, 11), TITLE_TIERS[t.tier].col);
+  uiText(t.name, x + 66, y + 37, UIF(800, 17), "#f4ecd9");
+  ctx.restore();
 }
 
 function clearCuts(){
@@ -4462,7 +4688,7 @@ function spawnBoss(big, forceType){
   if(forceType !== undefined) type = forceType;
   else if(storyMode) type = storyBossType();
   else if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
-  else if(rushMode) type = RUSH_ORDER[rushIdx];
+  else if(rushMode) type = rushList[rushIdx];
   else if(big){
     type = BIG_BOSSES[Math.floor(Math.random()*BIG_BOSSES.length)]; bigSpawns++;   // 2000m마다 넷 중 같은 확률
     if(type === 5 && Math.random() < AWAKEN_CHANCE) type = AWAKEN;                 // 운이 나쁘면 크라켄이 각성한 채로 나온다
@@ -4510,8 +4736,69 @@ function drawRushHud(){
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = "700 14px 'Gowun Batang', serif";
   ctx.fillStyle = "#f4ecd9";
-  ctx.fillText("보스 러시 " + Math.min(rushIdx + 1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length + "  ·  " + fmtTime(rushT), W/2, y);
+  ctx.fillText("보스 러시 " + Math.min(rushIdx + 1, RUSH_N) + "/" + RUSH_N + "  ·  " + fmtTime(rushT), W/2, y);
   ctx.restore();
+  // 쉬는 구간 — 다음 보스 예고 카드(작게, 위쪽 가운데)
+  if(boss || bossIntro) fx.rushNext = 0; else fx.rushNext = (fx.rushNext || 0) + fx.dt;
+  if(!boss && !bossIntro && rushList && rushIdx < RUSH_N && !rushDone){
+    const t = rushList[rushIdx], cl = rushClass(t), cc = RUSH_CLASS[cl];
+    const bx = W/2 - 150, by = y + 22, bw = 300, bh = 50, k = settings.calm ? 1 : ease.outBack(clamp01((fx.rushNext || 0) / 16), 1.3);
+    ctx.save(); ctx.translate(W/2, by + bh/2); ctx.scale(k, k); ctx.translate(-W/2, -(by + bh/2));
+    drawPanel({ x: bx, y: by, w: bw, h: bh, sel: true }, 8);
+    drawMedal(bx + 28, by + bh/2, 18, cl === "big" ? 4 : cl === "named" ? 3 : 1, { kind: BOSS_EMB[t] });
+    uiText((rushIdx ? "다음 상대 " : "첫 상대 ") + (rushIdx + 1) + "/" + RUSH_N + " · " + cc.name, bx + 54, by + 16, UIF(700, 11), cc.col);
+    uiText(BOSSES[t].name, bx + 54, by + 34, UIF(800, 16), "#f4ecd9");
+    ctx.restore();
+  }
+}
+// 보스 러시 대진표 — 출항 화면에 카드 다섯 장이 차례로 뒤집히며 공개된다(fx.rushT, 그리기 전용)
+const RUSH_CLASS = { mid:{ name:"일반", col:"#e08a6a", tier:1 }, named:{ name:"네임드", col:"#ffd76a", tier:3 }, big:{ name:"대형", col:"#d9a8f0", tier:4 } };
+const BOSS_EMB = ["dagger","harpoon","cannon","rope","wind","tentacle","octo","ghost","anchor","fin","chain","sword","bolt","hammer","flame","eye","lantern","jelly","whale","serpent","key"];
+const RUSH_FLIP0 = 18, RUSH_FLIP_GAP = 16, RUSH_FLIP_T = 20;
+function drawRushBracket(){
+  const cw = 152, ch = 214, gap = 12, x0 = W/2 - (RUSH_N*cw + (RUSH_N - 1)*gap)/2, y0 = 104, calm = settings.calm;
+  fx.rushT = (fx.rushT || 0) + fx.dt;
+  drawHeading("보스 러시 — 이번 대진", 40, 22);
+  centerText("판마다 무작위 다섯 상대 · 잡몹 없이 보스만 · 시간 초과면 끝", 74, UIF(500, 13), "rgba(244,236,217,.72)");
+  const pu = paperUI;
+  rushList.forEach((t, i) => {
+    const st = fx.rushT - RUSH_FLIP0 - i*RUSH_FLIP_GAP, k = calm ? 1 : clamp01(st / RUSH_FLIP_T);
+    const face = k >= 0.5, sx = calm ? 1 : Math.max(0.03, Math.abs(Math.cos(k * Math.PI))), lift = calm ? 0 : Math.sin(k * Math.PI) * 14;
+    const cl = rushClass(t), cc = RUSH_CLASS[cl], x = x0 + i*(cw + gap), cx = x + cw/2, last = i === RUSH_N - 1;
+    ctx.save(); ctx.translate(cx, y0 - lift); ctx.scale(sx, 1); ctx.translate(-cx, -y0);
+    if(!face){
+      // 뒷면 — 짙은 남빛 가죽에 놋쇠 닻
+      paperUI = false;
+      rrPath(x, y0, cw, ch, 10); ctx.fillStyle = "#2a2030"; ctx.fill();
+      rrPath(x + 6, y0 + 6, cw - 12, ch - 12, 7); ctx.strokeStyle = "#b8893c"; ctx.lineWidth = 2; ctx.stroke();
+      rrPath(x, y0, cw, ch, 10); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.stroke();
+      drawMedal(cx, y0 + ch/2, 30, 0, { kind: "anchor" });
+      ctx.font = UIF(800, 15); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#d9b877"; ctx.fillText("?", cx, y0 + ch - 30);
+      paperUI = pu;
+    } else {
+      drawPanel({ x, y: y0, w: cw, h: ch, sel: last, glow: false }, 10);
+      // 등급 띠
+      paperUI = false;
+      ctx.fillStyle = cl === "big" ? "#6a3a8a" : cl === "named" ? "#9a6a14" : "#8a3a2a";
+      rrPath(x + 10, y0 + 10, cw - 20, 24, 5); ctx.fill();
+      ctx.font = UIF(800, 12); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff4d8";
+      ctx.fillText((i + 1) + "번째 · " + cc.name + (last ? " · 결전" : ""), cx, y0 + 23);
+      paperUI = pu;
+      drawMedal(cx, y0 + 88, 38, cc.tier, { kind: BOSS_EMB[t] });
+      const lines = wrapLines(BOSSES[t].name, cw - 20, UIF(800, 16), 2);
+      lines.forEach((ln, j) => uiText(ln, cx, y0 + 146 + j*20 - (lines.length - 1)*10 + 10, UIF(800, 16), "#f4ecd9", "center"));
+      uiText("체력 " + (BOSS_HP[t] || 3) + " · " + bossTimeOf({ type: t, big: cl === "big", named: cl === "named" }) / 60 + "초", cx, y0 + ch - 20, UIF(600, 12), "rgba(244,236,217,.7)", "center");
+    }
+    ctx.restore();
+    // 뒤집히는 순간 먹이 튄다
+    if(!calm && st > RUSH_FLIP_T*0.5 && st < RUSH_FLIP_T*0.5 + 18){ paperUI = false; inkSplat(cx, y0 + ch/2, (st - RUSH_FLIP_T*0.5) / 18, t*3.3 + i, 7, "30,20,14", 90); paperUI = pu; }
+  });
+  const done = calm || fx.rushT > RUSH_FLIP0 + (RUSH_N - 1)*RUSH_FLIP_GAP + RUSH_FLIP_T;
+  ctx.globalAlpha = done ? 1 : 0.35;
+  centerText(rushBest ? "5연전 최단 기록 " + fmtTime(rushBest) : "아직 5연전 완주 기록이 없다", 342, UIF(700, 15), "#ffd76a");
+  if(rushBest9) centerText("옛 9연전 기록 " + fmtTime(rushBest9) + " (v59까지의 고정 순서 — 따로 보존)", 364, UIF(500, 12), "rgba(244,236,217,.6)");
+  centerText("화면을 누르거나 Space로 출항 · R 대진 다시 뽑기 · M 메뉴로", 390, UIF(500, 13), "rgba(244,236,217,.75)");
+  ctx.globalAlpha = 1;
 }
 
 function drawBlitzTimer(){
@@ -4741,6 +5028,7 @@ function knock(hard, mild){
     for(let i=0;i<14;i++) spark(p.x, p.y, "#8fd6d8");
     return;
   }
+  if(boss) boss.hurt = true;               // 칭호 '털끝 하나 안 다친' — 보스전 중 휘청였다
   // hard는 크라켄 촉수(true)·유령선 사슬("chain")에서만, mild는 오직 식인 물고기 피격에서만 들어온다
   const base = hard === "chain" ? STUN_CHAIN : hard ? STUN_KRAKEN : mild ? STUN_MOB : STUN_FRAMES;
   const onFire = fire > 0;
@@ -4845,23 +5133,23 @@ function damageBoss(ranged, mark, power){
       if(b.type === 7) lifeGhostKills++;
       if(b.type === ADMIRAL) lifeAdmiralKills++;
       dexSee("boss" + b.type);
+      // 이번 격침의 내용(노 피격·걸린 시간)은 이 판정 한 번에만 쓰인다
+      lastKill = { type: b.type, flawless: !b.hurt, heavy: !!(b.big || b.named), sec: ((b.tMax || 0) - (b.tLeft || 0)) / 60 };
       const unlocked = checkTitles();
-      if(unlocked){
-        newTitle = unlocked.name;
-        pops.push({ x:b.x, y:b.y-70, t:160, text:"칭호 획득: " + unlocked.name, color:"#ffd76a" });
-      }
+      lastKill = null;
+      if(unlocked) newTitle = unlocked.name;       // 알림은 위쪽 꼬리표(titleToast)가 맡는다
       saveTitles();
     }
     // 연습은 예전처럼 바로 무작위 보상, 그 밖에는 슬로모션이 끝나면 카드 3장 중에서 고른다(러시 마지막 보스는 곧 완주라 생략)
     if(practiceMode) applyBossReward(b);
     else if(storyMode){ storyBossKilled(b); if(!storyRun.win) applyBossReward(b); }
-    else if(!(rushMode && rushIdx + 1 >= RUSH_ORDER.length)){ pickOffer = rollCards(false, b.named ? 2 : 1); pickPending = true; }
+    else if(!(rushMode && rushIdx + 1 >= RUSH_N)){ pickOffer = rollCards(false, b.named ? 2 : 1); pickPending = true; }
     if(storyMode){
       // 스토리 — 다음 보스는 storyBossKilled()가 정한다(러시만)
     } else if(rushMode){
       rushIdx++;
-      nextBossAt = dist + 40; nextBigAt = Infinity;
-      if(rushIdx >= RUSH_ORDER.length) rushDone = true;   // 마지막 해군 대장 군함까지 — update()에서 완주 처리
+      nextBossAt = dist + RUSH_GAP; nextBigAt = Infinity;
+      if(rushIdx >= RUSH_N) rushDone = true;   // 다섯 번째까지 — update()에서 완주 처리
     } else if(practiceMode && practiceMode.type === "boss"){
       // 연습 대상만 짧은 간격으로 계속 반복 등장
       if(b.big){ nextBigAt = dist + 60; nextBossAt = Infinity; }
@@ -6263,7 +6551,7 @@ function leadPoint(c, spd){
   return { x:tx, y:ty };
 }
 // 사거리 안에서 가장 급한 목표를 고른다. spd가 있으면 그 속도로 날아갈 때 만나는 자리(예측점)를 돌려준다
-function pickAimTarget(spd, range, bossRange, noKing){
+function pickAimTarget(spd, range, bossRange, noKing, fixedT){
   let best = null, bd = 1e9, bp = 9;
   for(const c of aimCandidates()){
     if(noKing && c.king) continue;
@@ -6276,6 +6564,7 @@ function pickAimTarget(spd, range, bossRange, noKing){
     if(c.pri === 2 && (c.x < p.x + 20 || d > 760)) continue;
     if(c.pri < bp || (c.pri === bp && d < bd)){ bp = c.pri; bd = d; best = c; }
   }
+  if(best && fixedT) return { x: best.x + best.vx*fixedT, y: best.y + best.vy*fixedT + 0.5*best.ay*fixedT*fixedT };   // 정해진 시간 뒤의 자리(별똥)
   return best ? leadPoint(best, spd) : null;
 }
 
@@ -6288,13 +6577,14 @@ function pistolAim(spd, range){
 
 function pistolCd(){ return SKILL_CD * (1 - 0.12 * upLv("pistol")); }
 
-let skillMax = SKILL_CD, gunMax = GUN_CD, volley = null;
+let skillMax = SKILL_CD, gunMax = GUN_CD, volley = null, comet = null, shock = null, techStamp = null;
 function firePistol(){
   if(cuffed()) return;
   if(state !== STATE.PLAY || skillCd > 0 || fist || stun > 0) return;
   cutViceHook();
   skillCd = skillMax = rangedCd();
   if(eqRanged === "gatling"){ fireGatling(); return; }
+  if(eqRanged === "comet"){ fireComet(); return; }
   const rifle = eqRanged === "rifle";
   const spd = rifle ? RIFLE_SPD : FIST_SPD, life = rifle ? RIFLE_LIFE : FIST_LIFE;
   const a = pistolAim(spd, spd*life);
@@ -6322,11 +6612,35 @@ function fireGatling(){
     da = Math.atan2(Math.sin(da), Math.cos(da));
     return Math.abs(da) < GATLING_ARC + Math.asin(Math.min(1, r / d));
   };
-  strikeArea(inCone, "개틀링", 1, { ranged:true });
+  strikeArea(inCone, "개틀링", GATLING_POW, { ranged:true });
+}
+// 별똥 — 표적(없으면 앞쪽 허공)을 정해 두고 주먹을 쏘아 올린다. 떨어지는 자리는 쏠 때 정해진다(움직이는 표적은 COMET_T 뒤 자리를 미리 노린다)
+function fireComet(){
+  const t = pickAimTarget(0, COMET_RANGE, PISTOL_BOSS_RANGE, true, COMET_T);
+  const face = p.face || 1;
+  comet = { x: t ? t.x : p.x + face*300 + p.vx*COMET_T*0.6, y: t ? t.y : Math.min(SEA - 60, p.y), t: 0, done: false, ox: p.x, oy: p.y, seed: time };
+  techStamp = { text: "고무고무 별똥", t: 0, col: "240,162,78" };
+  for(let i=0;i<10;i++) spark(p.x, p.y - 20, "#f0a24e");
+}
+function cometLand(){
+  const c = comet; c.done = true;
+  addShake(7, 16);
+  for(let i=0;i<22;i++) spark(c.x + (Math.random() - 0.5)*COMET_R, c.y + (Math.random() - 0.5)*COMET_R*0.7, i % 2 ? "#f0a24e" : "#ffe6a0");
+  // 약점 한가운데에 꽂히면 피해 2
+  const core = !!boss && weakPoints(boss).some(w => Math.hypot(w.x - c.x, w.y - c.y) < COMET_CORE + w.r);
+  const hp0 = boss ? boss.hp : 0;
+  c.hits = strikeArea((x, y, r) => Math.hypot(x - c.x, y - c.y) < COMET_R + r, "별똥", core ? 2 : 1, { ranged:true });
+  if(core && boss && boss.hp < hp0) pops.push({ x:c.x, y:c.y - 40, t:60, text:"정통!", color:"#ffd76a" });
 }
 
 function updateFist(dt){
   if(volley){ volley.t += dt; if(volley.t > 22) volley = null; }
+  if(comet){
+    comet.t += dt;
+    if(!comet.done && comet.t >= COMET_T) cometLand();
+    if(comet && comet.t > COMET_T + COMET_AFTER) comet = null;
+  }
+  if(techStamp){ techStamp.t += dt; if(techStamp.t > 46) techStamp = null; }
   if(!fist) return;
   fist.px = fist.x; fist.py = fist.y;
   if(fist.back){
@@ -6475,7 +6789,7 @@ function strikeArea(inArea, how, power, opt){
   for(const g of gulls) if(!g.gone && inArea(g.x, g.y, GULL_R)){ killGull(g, 20); hits++; }
   for(const b of barrels) if(!b.gone && inArea(b.x, barrelY(b), BARREL_R)){ breakBarrel(b, how); hits++; }
   for(let i=shots.length-1;i>=0;i--) if(inArea(shots[i].x, shots[i].y, shots[i].r || 8)) shots.splice(i,1);
-  if(boss){
+  if(boss && !opt.noBoss){
     // 유령 상태(또는 가라앉은) 유령선은 무적 — 범위기로도 안 맞는다
     const ghostSafe = boss.type === 7 && (boss.phase === 1 || (boss.sink || 0) > 12);
     let hit;
@@ -6508,17 +6822,28 @@ function fireGun(){
     const gx = p.x + BAZOOKA_AT*face, gy = p.y - 4;
     gun.x = gx; gun.y = gy;
     const spd = Math.hypot(p.vx, p.vy);
-    if(spd > 0.4){ p.vx -= (p.vx/spd) * BAZOOKA_KNOCK; p.vy -= (p.vy/spd) * BAZOOKA_KNOCK; }
-    else p.vy -= BAZOOKA_KNOCK;
+    // v60 반동 — 예전엔 이동 반대쪽으로 밀려 속도만 잃었다. 이제 손바닥을 맞부딪친 반동으로 비스듬히 위로 솟는다(떨어질 때 높이를 벌어 준다)
+    p.vy = Math.max(-12, Math.min(p.vy, 0) - BAZOOKA_LIFT);
+    if(!rope && spd > 0.4) p.vx = Math.max(p.vx * 0.92, Math.min(p.vx, 5));
     for(let i=0;i<22;i++) spark(gx, gy, "#e8b48c");
-    strikeArea((x, y, r) => Math.hypot(x - gx, y - gy) < BAZOOKA_R + r, "바주카", 2);
+    strikeArea((x, y, r) => Math.hypot(x - gx, y - gy) < BAZOOKA_R + r, "바주카", BAZOOKA_POW);
   } else if(eqMelee === "axe"){
     // 도끼 — 다리를 높이 들었다 발밑 기둥을 바다까지 내리찍는다. 발밑의 해왕류·물고기를 노릴 때
     addShake(8, 18);
     const cx = p.x + 30*face;
     gun.x = cx;
     for(let i=0;i<20;i++) spark(cx + (Math.random()-0.5)*AXE_W, SEA, "#8fd6d8");
-    strikeArea((x, y, r) => Math.abs(x - cx) < AXE_W + r && y > p.y - 140 - r, "도끼", 1);
+    const hp0 = boss ? boss.hp : -1;
+    const n = strikeArea((x, y, r) => Math.abs(x - cx) < AXE_W + r && y > p.y - 140 - r, "도끼", AXE_POW);
+    if(n > 0 && !rope) p.vy = Math.min(p.vy, -AXE_HOP);          // 맞힌 반동으로 살짝 튀어 오른다
+    // 충격파 — 내리찍은 자리에서 수면을 따라 양옆으로 퍼진다(updateGun). 기둥에 이미 맞은 보스는 또 맞지 않는다
+    shock = { x: cx, t: 0, hitBoss: !!boss && boss.hp < hp0 || !boss && hp0 >= 0, seed: time };
+  } else if(eqMelee === "top"){
+    // 팽이 — 두 팔을 벌리고 몸을 축으로 돈다. 판정은 updateGun이 TOP_TICK마다
+    gun.t = TOP_T; gun.life = TOP_T; gun.tick = 0; gun.hitBoss = false; gun.seed = time;
+    techStamp = { text: t.name, t: 0, col: "192,138,240" };
+    pops.pop();                                                  // 이름은 도장으로 찍는다
+    addShake(4, 10);
   } else {
     // 채찍 — 다리를 크게 휘둘러 몸 주변 앞쪽 반원을 휩쓴다. 조준이 필요 없다
     addShake(6, 14);
@@ -6531,7 +6856,30 @@ function fireGun(){
 }
 
 function updateGun(dt){
+  if(gun && gun.kind === "top"){
+    // 팽이 — 몸을 따라다니며 둘레를 쓴다. 보스는 한 번만 맞는다. 줄 없이 떨어지는 중이면 천천히
+    gun.x = p.x; gun.y = p.y; gun.tick -= dt;
+    if(!rope && p.vy > TOP_FALL) p.vy = TOP_FALL;
+    if(stun > 0) gun.t = 0;
+    else if(gun.tick <= 0){
+      gun.tick = TOP_TICK;
+      const hp0 = boss ? boss.hp : -1;
+      strikeArea((x, y, r) => Math.hypot(x - p.x, y - p.y) < TOP_R + r, "팽이", 1, { noBoss: gun.hitBoss });
+      if(hp0 >= 0 && (!boss || boss.hp < hp0)) gun.hitBoss = true;
+    }
+  }
   if(gun){ gun.t -= dt; if(gun.t <= 0) gun = null; }
+  if(shock){
+    // 도끼 충격파 — 좌우 두 물마루가 AXE_WAVE_SPD로 퍼지며 수면 가까이(AXE_WAVE_H)의 것을 친다
+    shock.t += dt;
+    const d = shock.t * AXE_WAVE_SPD, sx = shock.x;
+    if(d > AXE_WAVE_R) shock = null;
+    else {
+      const hp0 = boss ? boss.hp : -1;
+      strikeArea((x, y, r) => y > SEA - AXE_WAVE_H - r && Math.abs(Math.abs(x - sx) - d) < 36 + r, "도끼 충격파", 1, { noBoss: shock.hitBoss });
+      if(hp0 >= 0 && (!boss || boss.hp < hp0)) shock.hitBoss = true;
+    }
+  }
 }
 
 
@@ -6593,10 +6941,10 @@ function crewKillFish(m){
   for(let k=0;k<10;k++) spark(m.x, m.y, "#d9b877");
 }
 // 갈고리 잭 — 바다로 떨어지는 중이고 팔이 비어 있으면 가장 가까운 앞 고리에 갈고리를 걸어 준다
-const JACK_CD = 60*25;
+const JACK_CD = 60*18, JACK_H = 140;      // v60: 25초 → 18초 · 수면 120 → 140px 위부터 건진다
 function updateJack(dt){
   if(jackCd > 0){ jackCd -= dt; return; }
-  if(rope || p.vy <= 0 || p.y < SEA - 120 || stun > 0) return;
+  if(rope || p.vy <= 0 || p.y < SEA - JACK_H || stun > 0) return;
   let best = null, bd = reach() * 1.3;
   for(const a of anchors){
     if(a.cut || a.broken || a.x < p.x - 40) continue;
@@ -6605,10 +6953,11 @@ function updateJack(dt){
   }
   if(!best) return;
   rope = { a: best, len: Math.max(REEL_MIN, Math.min(bd * 0.85, SEA - 52 - best.y)) };
-  p.vy = Math.min(p.vy, -4); p.vx = Math.max(p.vx, 5);
+  p.vy = Math.min(p.vy, -4); p.vx = Math.max(p.vx, 7);
   airTime = 0; holding = false;
   jackCd = JACK_CD * (1 - 0.075 * (crewLv("jack") - 1));
-  crewFx.push({ x1:crewMate.x, y1:crewMate.y, x2:best.x, y2:best.y, t:20, col:"#f0a24e" });
+  crewFx.push({ x1:crewMate.x, y1:crewMate.y, x2:best.x, y2:best.y, t:26, t0:26, col:"#f0a24e", kind:"hook" });
+  crewAct("jack");
   pops.push({ x:p.x, y:p.y - 44, t:70, text:"잭의 구명 갈고리!", color:"#f0a24e" });
 }
 // 조타수 — 공중에서 ↑ 를 누르면 한 번 더 도약
@@ -6618,41 +6967,69 @@ function helmJump(){
   p.vy = Math.min(p.vy, -CREW_HELM_JUMP); p.vx = Math.max(p.vx, 0) + 2.5;
   c.skill = crewSkillCd("helm");
   airTime = 0;
+  crewFx.push({ x1:p.x, y1:p.y, x2:p.x, y2:p.y, t:30, t0:30, col:"#8fb8e0", kind:"wheel" });
+  crewAct("helm");
   pops.push({ x:p.x, y:p.y - 40, t:50, text:"조타수: 키를 꺾어라!", color:"#8fb8e0" });
   for(let i=0;i<12;i++) spark(p.x, p.y + 10, "#8fb8e0");
   return true;
 }
+// 동료가 나서는 순간 — 곁의 동료가 잠깐 커지고 먹 고리가 번진다(drawCrew). 판정과 무관
+function crewAct(id){ if(crewMate) crewMate.act = { id, t: 0 }; }
 // ★ 고유 능력 — 공격(c.cd)과 따로 도는 쿨타임(c.skill)
 function updateCrewSkill(c, dt){
-  if(c.wind > 0){ c.wind -= dt; if(state === STATE.PLAY) p.vx += 0.11 * dt; }   // 항해사가 불러온 순풍
+  if(c.act){ c.act.t += dt; if(c.act.t > CREW_ACT_T) c.act = null; }
+  if(c.wind > 0){ c.wind -= dt; if(state === STATE.PLAY && p.vx < MAXV * 0.92) p.vx += CREW_NAV_PUSH * dt; }   // 항해사가 불러온 순풍(최고 속도 직전까지만 민다 — 불꽃이 공짜로 붙지 않게)
+  if(c.aid > 0) c.aid -= dt;
+  const live = state === STATE.PLAY && !(practiceMode && crewSel !== "sniper");
+  // 선의 응급 처치 — 크게 휘청이면 그 자리에서 깨운다(보호막과 따로 도는 쿨타임)
+  if(live && crewOn("doctor") && !(c.aid > 0) && stun > CREW_AID_MIN){
+    stun = 0; iframes = Math.max(iframes, 40); c.aid = CREW_AID_CD * crewCdMul("doctor");
+    crewFx.push({ x1:c.x, y1:c.y, x2:p.x, y2:p.y, t:28, t0:28, col:"#9fe0a0", kind:"aid" });
+    crewAct("doctor");
+    pops.push({ x:p.x, y:p.y - 60, t:80, text:"선의: 정신 차려! 응급 처치", color:"#9fe0a0" });
+  }
+  // 음악가 앙코르 — 기어가 켜지는 순간 나선다(배율은 chainMult가 본다)
+  if(crewOn("music")){
+    const on = !!buff();
+    if(on && !c.encore && live){ crewAct("music"); pops.push({ x:p.x, y:p.y - 60, t:80, text:"음악가: 앙코르! 콤보 배율 +" + CREW_ENCORE, color:"#e6a8f0" }); }
+    c.encore = on;
+  }
   if(c.skill > 0){ c.skill -= dt; return; }
-  if(state !== STATE.PLAY || practiceMode && crewSel !== "sniper") return;
+  if(!live) return;
   const say = (text, col) => pops.push({ x:p.x, y:p.y - 60, t:80, text, color:col });
   if(crewOn("cook")){
     if(fusen < FUSEN_MAX){ fusen++; fusenAnim = 46; say("요리사: 새 풍선 불었어요!", "#f7a8a0"); c.skill = crewSkillCd("cook"); }
   } else if(crewOn("nav")){
-    if(!boss && p.vx < 16){ c.wind = CREW_NAV_WIND_T; say("항해사: 순풍이 온다!", "#8fd6d8"); c.skill = crewSkillCd("nav"); }
+    if(!boss && p.vx < CREW_NAV_VMAX){ c.wind = CREW_NAV_WIND_T; say("항해사: 순풍이 온다!", "#8fd6d8"); c.skill = crewSkillCd("nav"); crewAct("nav"); }
   } else if(crewOn("doctor")){
-    if(shield <= 0){ shield = 1; say("선의: 붕대 다시 감았어", "#f4f6f8"); for(let i=0;i<10;i++) spark(p.x, p.y, "#8fd6d8"); c.skill = crewSkillCd("doctor"); }
+    if(shield <= 0){ shield = 1; say("선의: 붕대 다시 감았어", "#f4f6f8"); for(let i=0;i<10;i++) spark(p.x, p.y, "#8fd6d8"); c.skill = crewSkillCd("doctor"); crewAct("doctor"); }
+  } else if(crewOn("arch")){
+    // 고고학자 — 앞바다에서 유물 통을 찾아 띄운다(보스·해군·보물섬 중엔 쉰다). 난수를 쓰지 않아 오늘의 항해 코스는 그대로
+    if(!boss && !navy && !bonusOn && !blitzMode && !barrels.some(b => !b.gone && b.relic)){
+      const b = { x: p.x + CREW_RELIC_AHEAD + Math.max(0, p.vx) * 8, gone:false, relic:true, born: time };
+      barrels.push(b);
+      crewFx.push({ x1:c.x, y1:c.y, x2:b.x, y2:SEA - 14, t:30, t0:30, col:"#c9a27a", kind:"find" });
+      say("고고학자: 저 앞에 유물 통이오!", "#c9a27a"); c.skill = crewSkillCd("arch"); crewAct("arch");
+    }
   } else if(crewOn("sniper")){
     const b = boss;
     if(b && b.invul <= 0 && !b.dive && b.hp > 0){
       const wp = weakPoints(b).filter(w => w.x > cam.x && w.x < cam.x + W);
       if(wp.length){
         const w = wp[0];
-        crewFx.push({ x1:c.x, y1:c.y, x2:w.x, y2:w.y, t:16, col:"#ffd76a" });
-        c.skill = crewSkillCd("sniper");
+        crewFx.push({ x1:c.x, y1:c.y, x2:w.x, y2:w.y, t:26, t0:26, col:"#ffd76a", kind:"snipe", big:true });
+        c.skill = crewSkillCd("sniper"); crewAct("sniper");
         say("저격수: " + w.mark + " 명중!", "#ffd76a");
         damageBoss(true, "저격");
       }
     }
   } else if(crewOn("wright")){
-    if(!rope && p.vy > 2 && p.y > SEA - 200 && !anchors.some(a => !a.cut && !a.broken && a.x > p.x - 20 && Math.hypot(a.x - p.x, a.y - p.y) < reach())){
+    if(!rope && p.vy > 2 && p.y > SEA - CREW_WRIGHT_H && !anchors.some(a => !a.cut && !a.broken && a.x > p.x - 20 && Math.hypot(a.x - p.x, a.y - p.y) < reach())){
       const a = { x: p.x + 150 + Math.max(0, p.vx) * 4, y: Math.max(90, p.y - 150), kind:0, temp:true };
       anchors.push(a);
-      crewFx.push({ x1:c.x, y1:c.y, x2:a.x, y2:a.y, t:20, col:"#d98f4e" });
+      crewFx.push({ x1:c.x, y1:c.y, x2:a.x, y2:a.y, t:30, t0:30, col:"#d98f4e", kind:"build" });
       say("조선공: 임시 돛대 세웠다!", "#d98f4e");
-      c.skill = crewSkillCd("wright");
+      c.skill = crewSkillCd("wright"); crewAct("wright");
     }
   }
 }
@@ -6686,7 +7063,7 @@ function updateCrew(dt){
     if(tgt){
       c.cd = CREW_SNIPE_CD * (1 - 0.3 * pk("drill")) * crewCdMul("sniper");
       const ty2 = kind === 2 ? barrelY(tgt) : tgt.y;
-      crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:ty2, t:12, col:"#ffd76a" });
+      crewFx.push({ x1:c.x, y1:c.y, x2:tgt.x, y2:ty2, t:18, t0:18, col:"#ffd76a", kind:"snipe" });
       if(kind === 1){ killGull(tgt, 20); crewKills++; }
       else if(kind === 0) crewKillFish(tgt);
       else { breakBarrel(tgt, "저격수"); crewKills++; }
@@ -7156,7 +7533,7 @@ function update(dt){
     airTime = 0;
   } else {
     const ak = buff() ? 1 + (buff().spd - 1) * 2.5 : 1;
-    const airK = ak * (1 + 0.25 * pk("air")) * (1 + crewK("helm", 0.2, 0.03));
+    const airK = ak * (1 + 0.25 * pk("air")) * (1 + crewK("helm", 0.25, 0.03));
     if(keys.left)  p.vx -= AIR*airK*dt;
     if(keys.right) p.vx += AIR*airK*dt;
     if(keys.down)  p.vy += DIVE*dt;
@@ -7287,7 +7664,7 @@ function update(dt){
   }
   if(rushMode){
     rushT += dt;
-    if(!boss && dist >= nextBossAt && rushIdx < RUSH_ORDER.length) spawnBoss(isBigType(RUSH_ORDER[rushIdx]));
+    if(!boss && dist >= nextBossAt && rushIdx < RUSH_N) spawnBoss(isBigType(rushList[rushIdx]));
   } else if(!boss && !navy && !(rival && !rival.over)){   // 해군 추격·라이벌 경주 중엔 보스가 끼어들지 않는다 — 끝난 뒤에 나온다
     if(dist >= nextBigAt) spawnBoss(true);
     else if(dist >= nextBossAt && dist + 220 < nextBigAt) spawnBoss(false);
@@ -7371,6 +7748,7 @@ function update(dt){
     if(fusen > 0){
       // 고무고무 풍선 — 바다에 닿는 순간 몸을 부풀려 튕겨 오른다
       fusen--;
+      titleRun.fusen++;
       storyCount("fusenUsed");
       rope = null;
       p.y = SEA - 16;
@@ -7495,7 +7873,7 @@ function resetProfile(){
   best = 0; bestChain = 0;
   lifeBossKills = 0; lifeKrakenKills = 0; lifeGhostKills = 0; lifeAdmiralKills = 0; unlockedTitles = new Set(); titleSel = null;
   bank = 0; upgrades = {}; bestBounty = 0; ownedSkins = ["red"]; skin = "red"; parrotOn = true;
-  mapPieces = 0; mapsDone = 0; blitzBest = 0; blitzDate = ""; rushBest = 0; bestGrade = "";
+  mapPieces = 0; mapsDone = 0; blitzBest = 0; blitzDate = ""; rushBest = 0; rushBest9 = 0; bestGrade = "";
   gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null; crewXp = {}; diffSel = "normal"; bestDiff = { easy:0, hard:0 };
   miniBest = { jelly:0, cannon:0, hop:0 }; miniMedals = { jelly:0, cannon:0, hop:0 }; miniPlays = 0; mini = null;
   techLv = { pistol:1, whip:1 }; mats = { melee:0, ranged:0, gear:0 }; eqRanged = "pistol"; eqMelee = "whip";
@@ -7568,7 +7946,9 @@ const CODE_HEAD = "GOMU1-", CODE2_HEAD = "G2-";
 // 낱말표 — 코드 형식의 일부라 절대 고치지 않는다(순서를 바꾸면 예전 코드를 못 읽는다). 새 낱말은 끝에만 덧붙일 것
 const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022",
   "story","st","seen","end","art","grab","sense","redhawk","puff","spin","jack","boss15","biome3","voyage_end","star81","captain","starlit",
-  "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail"];
+  "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail",
+  "rush5","top","comet",
+  "hunt100","allboss","best2000","best5000","best8000","combo15","flawless","quick","duel","crewall","medals","rich","nofusen","rushfast"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -7853,6 +8233,7 @@ function acctLoadCode(){
   if(idIn) idIn.addEventListener("input", () => { acctChecked = null; });
   on("acctLogout", () => logout().then((r) => acctRefresh(r.msg, r.ok)));
   on("acctClose",  closeAccount);
+  on("acctBack",   closeAccount);
   on("acctMake",   acctMakeCode);
   on("acctMail",   acctMailCode);
   on("acctLoad",   acctLoadCode);
@@ -7933,7 +8314,8 @@ function applyShopRecord(v){
     mapPieces = r.mapPieces || 0; mapsDone = r.mapsDone || 0;
     blitzBest = r.blitz || 0;
     blitzDate = r.blitzD || "";
-    rushBest = r.rush9 || 0;
+    rushBest9 = r.rush9 || 0;        // 옛 고정 9연전 기록 — 보존만
+    rushBest = r.rush5 || 0;         // v60 무작위 5연전 기록
     bestGrade = r.grade || "";
     gearUnlocked = Math.min(5, Math.max(2, r.gearU || 2));
     gearSel = Math.min(gearUnlocked, Math.max(2, r.gearS || 2));
@@ -7972,7 +8354,7 @@ async function loadShop(){
   }catch(e){}
 }
 function recShop(){
-  return JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, blitzD: blitzDate, rush9: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
+  return JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, blitzD: blitzDate, rush9: rushBest9, rush5: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
                            tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel, crewXp,
                            mini: { b: miniBest, m: miniMedals, n: miniPlays }, diff: diffSel, bestDiff,
                            story: { st: storyRec(), seen: storySeen, end: storyEnd }, art: artSel });
@@ -8599,10 +8981,11 @@ function drawBarrel(b){
   ctx.fillRect(-12, -19, 6, 38);
   ctx.strokeStyle = "#3a2618"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(-15, -9); ctx.lineTo(15, -9); ctx.moveTo(-15, 9); ctx.lineTo(15, 9); ctx.stroke();
+  if(b.relic){ ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 16, 21, 0, 0, Math.PI*2); ctx.stroke(); }   // 유물 통 — 금테
   ctx.fillStyle = "#ffd76a";
   ctx.font = "700 11px 'Gowun Batang', 'Pretendard', serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("$", 2, 0);
+  ctx.fillText(b.relic ? "★" : "$", 2, 0);
   ctx.restore();
 }
 
@@ -12571,9 +12954,12 @@ function drawCrew(){
   const c = crewMate, cd = crewDef(crewSel);
   if(!cd) return;
   const x = c.x - cam.x, y = c.y;
+  drawCrewAura(c, cd, x, y);
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(p.face || 1, 1);
+  // 나서는 순간 — 통통 튀며 잠깐 커진다
+  const actK = c.act && !settings.calm ? Math.sin(clamp01(c.act.t / CREW_ACT_T) * Math.PI) : 0;
+  ctx.scale((p.face || 1) * (1 + 0.55 * actK), 1 + 0.55 * actK);
   ctx.fillStyle = "rgba(244,236,217,.85)";                 // 작은 구름에 올라탄다
   ctx.beginPath(); ctx.ellipse(0, 14, 15, 5, 0, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = "#3a2a3a"; ctx.fillRect(-5, 0, 10, 12);   // 몸
@@ -12635,6 +13021,7 @@ function drawCrew(){
   ctx.stroke();
   ctx.restore();
   for(const f of crewFx){
+    if(f.kind){ drawCrewFx(f); continue; }
     ctx.save();
     ctx.globalAlpha = Math.min(1, f.t / 8);
     ctx.strokeStyle = f.col; ctx.lineWidth = f.slash ? 4 : 2;
@@ -12646,6 +13033,110 @@ function drawCrew(){
   }
 }
 
+// v60 동료 연출 — 나설 때의 먹 고리, 항해사의 바람 줄기, 음악가의 음표, 고고학자의 통 표시
+function drawCrewAura(c, cd, x, y){
+  const calm = settings.calm;
+  ctx.save(); ctx.lineCap = "round";
+  if(c.act){
+    const k = clamp01(c.act.t / CREW_ACT_T);
+    ctx.globalAlpha = (1 - k) * 0.8; ctx.strokeStyle = cd.col; ctx.lineWidth = 4 * (1 - k) + 1;
+    ctx.beginPath(); ctx.arc(x, y, 14 + 34 * ease.outCubic(k), 0, Math.PI*2); ctx.stroke();
+    if(!calm) inkSplat(x, y, k, c.act.t * 0 + cd.name.length * 1.7, 6, "40,26,16", 52);
+  }
+  if(c.wind > 0 && cd.id === "nav"){
+    // 순풍 — 화면을 가로지르는 바람 줄기와 화살촉(왼쪽에서 오른쪽으로 흐른다)
+    const al = Math.min(1, c.wind / 30, (CREW_NAV_WIND_T - c.wind) / 12 + 0.2), vw = W / cam.z;
+    for(let i=0;i<7;i++){
+      const sp = 9 + hash(i*3.1) * 6, len = 70 + hash(i*5.7) * 90;
+      const wx = ((time * sp + hash(i*9.3) * vw * 1.4) % (vw + 260)) - 130, wy = 60 + i * 52 + Math.sin(time*0.05 + i) * 10;
+      ctx.globalAlpha = al * (0.35 + 0.3 * hash(i*2.2)); ctx.strokeStyle = "#cfeff0"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(wx - len, wy); ctx.quadraticCurveTo(wx - len*0.4, wy - 9, wx, wy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(wx - 12, wy - 8); ctx.lineTo(wx + 2, wy); ctx.lineTo(wx - 12, wy + 8); ctx.stroke();
+    }
+    // 항해사가 가리키는 쪽
+    ctx.globalAlpha = al; ctx.strokeStyle = "#8fd6d8"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x + 8, y - 2); ctx.lineTo(x + 30, y - 10); ctx.stroke();
+  }
+  if(cd.id === "music" && buff()){
+    // 앙코르 — 음표가 동료에게서 플레이어 쪽으로 흘러 오른다
+    for(let i=0;i<5;i++){
+      const u = ((time * 0.022 + i / 5) % 1), nx = x + (p.x - cam.x - x) * u + Math.sin(u * 7 + i) * 14, ny = y - 10 + (p.y - 30 - y) * u - Math.sin(u * Math.PI) * 34;
+      ctx.globalAlpha = Math.sin(u * Math.PI) * 0.95;
+      drawEmblem("note", nx, ny, 8 + 2 * Math.sin(i), i % 2 ? "#e6a8f0" : "#ffd76a");
+    }
+  }
+  if(cd.id === "arch"){
+    // 통 자리 — 화면 안 통 위엔 ▼, 화면 오른쪽 밖(900px까지)은 가장자리에 ▶ 와 거리
+    for(const b of barrels){
+      if(b.gone) continue;
+      const bx = b.x - cam.x, vw = W / cam.z, col = b.relic ? "#ffd76a" : "#c9a27a";
+      if(bx > 0 && bx < vw){
+        const by = barrelY(b) - 40 - Math.abs(Math.sin(time * 0.1)) * 6;
+        ctx.globalAlpha = 0.9; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.moveTo(bx - 7, by - 9); ctx.lineTo(bx + 7, by - 9); ctx.lineTo(bx, by); ctx.closePath(); ctx.fill();
+        if(b.relic){ ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 2; ctx.globalAlpha = 0.5 + 0.4 * Math.sin(time * 0.15); ctx.beginPath(); ctx.arc(bx, barrelY(b), 27, 0, Math.PI*2); ctx.stroke(); }
+      } else if(bx >= vw && bx < vw + 900){
+        const ey = SEA - 34;
+        ctx.globalAlpha = 0.85; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.moveTo(vw - 26, ey - 8); ctx.lineTo(vw - 12, ey); ctx.lineTo(vw - 26, ey + 8); ctx.closePath(); ctx.fill();
+        ctx.font = UIF(700, 11); ctx.textAlign = "right"; ctx.textBaseline = "middle";
+        ctx.fillText((b.relic ? "유물 " : "통 ") + Math.round((bx - vw) / 22 + 1) + "m", vw - 32, ey);
+      }
+    }
+  }
+  ctx.restore();
+}
+function drawCrewFx(f){
+  const k = 1 - f.t / f.t0, x1 = f.x1 - cam.x, y1 = f.y1, x2 = f.x2 - cam.x, y2 = f.y2, calm = settings.calm;
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  if(f.kind === "snipe"){
+    // 예광탄 — 굵은 빛줄기가 가늘어지며 남고, 맞은 자리에 조준 고리
+    const w = (f.big ? 7 : 4) * (1 - k);
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = INK; ctx.lineWidth = w + 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = "#fff3c4"; ctx.lineWidth = Math.max(0.5, w); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = f.col; ctx.lineWidth = 2.5; const r = (f.big ? 30 : 18) * (0.5 + 0.5 * ease.outCubic(k));
+    ctx.beginPath(); ctx.arc(x2, y2, r, 0, Math.PI*2); ctx.moveTo(x2 - r - 6, y2); ctx.lineTo(x2 - r + 8, y2); ctx.moveTo(x2 + r + 6, y2); ctx.lineTo(x2 + r - 8, y2); ctx.moveTo(x2, y2 - r - 6); ctx.lineTo(x2, y2 - r + 8); ctx.moveTo(x2, y2 + r + 6); ctx.lineTo(x2, y2 + r - 8); ctx.stroke();
+    ctx.globalAlpha = Math.max(0, 1 - k * 4); ctx.fillStyle = "#fff3c4"; ctx.beginPath(); ctx.arc(x1 + 12, y1, 9, 0, Math.PI*2); ctx.fill();   // 총구 불꽃
+    if(f.big && !calm) inkSplat(x2, y2, k, f.x2 * 0.01, 7, "40,26,16", 60);
+  } else if(f.kind === "hook"){
+    // 사슬 갈고리 — 동료에게서 고리로 날아가 걸린다
+    const e = ease.outCubic(clamp01(k * 2.2)), hx = x1 + (x2 - x1) * e, hy = y1 + (y2 - y1) * e - Math.sin(e * Math.PI) * 26;
+    ctx.globalAlpha = Math.min(1, f.t / 6); ctx.strokeStyle = INK; ctx.lineWidth = 4.5; ctx.setLineDash([7, 5]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + hx)/2, Math.min(y1, hy) - 20, hx, hy); ctx.stroke();
+    ctx.strokeStyle = "#c9ccd2"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + hx)/2, Math.min(y1, hy) - 20, hx, hy); ctx.stroke(); ctx.setLineDash([]);
+    drawEmblem("hook", hx, hy, 13, INK); drawEmblem("hook", hx, hy, 11, f.col);
+    if(e >= 1 && !calm) inkSplat(x2, y2, clamp01((k - 0.45) * 2), 4.2, 6, "240,162,78", 46);
+  } else if(f.kind === "wheel"){
+    // 조타 키가 돌고, 도약한 궤적이 붓 자국으로 남는다
+    ctx.globalAlpha = 1 - k;
+    ctx.save(); ctx.translate(x1, y1 + 14); ctx.rotate(k * 7); drawEmblem("wheel", 0, 0, 20 + 16 * ease.outCubic(k), f.col); ctx.restore();
+    const px = p.x - cam.x, py = p.y;
+    ctx.strokeStyle = "rgba(143,184,224," + (0.8 * (1 - k)).toFixed(2) + ")"; ctx.lineWidth = 9 * (1 - k) + 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1 + 10); ctx.quadraticCurveTo((x1 + px)/2 - 10, Math.max(y1, py) + 26, px, py + 8); ctx.stroke();
+  } else if(f.kind === "aid"){
+    // 응급 처치 — 초록 십자와 번지는 고리
+    const px = p.x - cam.x, py = p.y;
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = f.col; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(px, py, 16 + 40 * ease.outCubic(k), 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = "#f4f6f8"; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    const s = 9 + 5 * ease.outBack(clamp01(k * 3)), cy = py - 44 - 14 * k;
+    ctx.beginPath(); ctx.rect(px - s/3, cy - s, s/1.5, s*2); ctx.rect(px - s, cy - s/3, s*2, s/1.5); ctx.fill();
+    ctx.fillStyle = "#3fae5a"; ctx.fillRect(px - s/3 + 1.5, cy - s + 1.5, s/1.5 - 3, s*2 - 3); ctx.fillRect(px - s + 1.5, cy - s/3 + 1.5, s*2 - 3, s/1.5 - 3);
+  } else if(f.kind === "build"){
+    // 망치질 — 동료에게서 못이 날아가 박히고 나무 조각이 튄다
+    ctx.globalAlpha = Math.min(1, f.t / 8); ctx.strokeStyle = f.col; ctx.lineWidth = 3; ctx.setLineDash([3, 7]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.save(); ctx.translate(x2 + 16, y2 - 6); ctx.rotate(-0.9 + Math.abs(Math.sin(k * Math.PI * 3)) * 1.1); drawEmblem("hammer", 0, -12, 14, INK); ctx.restore();
+    ctx.strokeStyle = "#f4ecd9"; ctx.lineWidth = 2;
+    for(let i=0;i<6;i++){ const a = i * 1.05 + 0.3, r0 = 10 + 24 * k; ctx.beginPath(); ctx.moveTo(x2 + Math.cos(a)*r0, y2 + Math.sin(a)*r0); ctx.lineTo(x2 + Math.cos(a)*(r0 + 8), y2 + Math.sin(a)*(r0 + 8)); ctx.stroke(); }
+  } else if(f.kind === "find"){
+    // 돋보기 빛이 앞바다를 짚는다
+    ctx.globalAlpha = (1 - k) * 0.7; ctx.strokeStyle = f.col; ctx.lineWidth = 2; ctx.setLineDash([10, 8]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + x2)/2, Math.min(y1, y2) - 60, x2, y2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x2, y2, 12 + 26 * ease.outCubic(k), 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
 // 해군 군함 — 흰 선체에 파란 줄, 갈매기 문양 돛
 function drawNavy(){
   if(!navy) return;
@@ -12794,13 +13285,7 @@ function drawPort(){
     ctx.restore();
   });
   const L = B[items.length];
-  ctx.save();
-  ctx.fillStyle = "rgba(19,37,50,.9)"; ctx.fillRect(L.x, L.y, L.w, L.h);
-  ctx.strokeStyle = "#9fe0a0"; ctx.lineWidth = 2; ctx.strokeRect(L.x, L.y, L.w, L.h);
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "800 16px 'Gowun Batang', 'Pretendard', serif"; ctx.fillStyle = "#9fe0a0";
-  ctx.fillText((items.length + 1) + ") 출항 (Enter)", L.x + L.w/2, L.y + L.h/2 + 1);
-  ctx.restore();
+  drawBrassBtn(asBrass(Object.assign({ label: (items.length + 1) + ") 출항 (Enter)", col: "#a8ecaa", icon: "anchor" }, L)), UIF(800, 16));
   if(portMsg){
     centerText(portMsg.text, L.y + L.h + 26, "700 14px 'Gowun Batang', 'Pretendard', serif", portMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, portMsg.t/20));
     portMsg.t -= 1; if(portMsg.t <= 0) portMsg = null;
@@ -13124,7 +13609,11 @@ function drawShield(){
 
 function drawGun(){
   drawVolley();
+  drawComet();
+  drawShock();
+  drawTechStamp();
   if(!gun) return;
+  if(gun.kind === "top"){ drawTop(); return; }
   const k = 1 - Math.max(0, gun.t) / GUN_LIFE;      // 0 → 1
   const px = p.x - cam.x, py = p.y, f = gun.face;
   ctx.save();
@@ -13180,6 +13669,101 @@ function drawGun(){
   ctx.restore();
 }
 
+// 팽이 — 두 팔이 바퀴살처럼 돌고, 둘레에 붓 자국 고리가 따라 돈다. 처음 몇 프레임은 팔을 감았다 푸는 예비 동작
+function drawTop(){
+  const k = 1 - Math.max(0, gun.t) / TOP_T, px = p.x - cam.x, py = p.y, calm = settings.calm;
+  const open = calm ? 1 : ease.outBack(clamp01(k / 0.14), 2), R = TOP_R * open, th = k * Math.PI * 7, al = Math.min(1, gun.t / 8);
+  ctx.save(); ctx.lineCap = "round";
+  // 쓸리는 둘레 — 옅은 원반 + 돌아가는 붓 자국 셋
+  ctx.globalAlpha = al * 0.13; ctx.fillStyle = "#c08af0";
+  ctx.beginPath(); ctx.arc(px, py, Math.max(0, R), 0, Math.PI*2); ctx.fill();
+  for(let i=0;i<3;i++){
+    const a0 = th + i * Math.PI*2/3;
+    ctx.globalAlpha = al * 0.75; ctx.strokeStyle = INK; ctx.lineWidth = 7 - i;
+    ctx.beginPath(); ctx.arc(px, py, Math.max(0, R - 6 - i*13), a0 - 1.25, a0); ctx.stroke();
+    ctx.globalAlpha = al * 0.5; ctx.strokeStyle = "#e9d6ff"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, Math.max(0, R - 2 - i*13), a0 - 0.9, a0 - 0.1); ctx.stroke();
+  }
+  // 두 팔(바퀴살)과 주먹
+  ctx.globalAlpha = al;
+  for(const s of [0, Math.PI]){
+    const a = th + s, hx = px + Math.cos(a)*R, hy = py + Math.sin(a)*R*0.86;
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo(px + Math.cos(a - 0.5)*R*0.55, py + Math.sin(a - 0.5)*R*0.5, hx, hy); }, 8, "#e8b48c");
+    inkShape(() => { ctx.beginPath(); ctx.arc(hx, hy, 12, 0, Math.PI*2); }, "#e8b48c");
+  }
+  if(!calm) inkSplat(px, py, clamp01(k / 0.3), gun.seed, 8, "60,40,90", TOP_R * 0.9);
+  ctx.restore();
+}
+// 도끼 충격파 — 수면을 따라 양옆으로 달리는 물마루 둘
+function drawShock(){
+  if(!shock) return;
+  const d = shock.t * AXE_WAVE_SPD, k = d / AXE_WAVE_R, al = 1 - k*k;
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for(const s of [-1, 1]){
+    const x = shock.x - cam.x + s*d, h = AXE_WAVE_H * (0.55 + 0.45*Math.sin(Math.min(1, k*3) * Math.PI/2)) * (1 - k*0.5);
+    ctx.globalAlpha = al * 0.85;
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(x - s*46, SEA + 4); ctx.quadraticCurveTo(x - s*8, SEA - h*0.5, x + s*10, SEA - h); ctx.quadraticCurveTo(x + s*30, SEA - h*0.62, x + s*20, SEA - h*0.3); ctx.quadraticCurveTo(x + s*26, SEA - 10, x + s*40, SEA + 4); ctx.closePath(); }, "#bfe8ea", { line: 2 });
+    ctx.globalAlpha = al * 0.6; ctx.strokeStyle = "#f4ffff"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - s*20, SEA - h*0.3); ctx.quadraticCurveTo(x - s*2, SEA - h*0.7, x + s*8, SEA - h*0.9); ctx.stroke();
+  }
+  if(!settings.calm) inkSplat(shock.x - cam.x, SEA - 10, clamp01(shock.t / 16), shock.seed, 9, "150,210,214", 120);
+  ctx.restore();
+}
+// 별똥 — 팔이 하늘로 솟고(예비 동작), 표적에 조준 고리가 조여 들고, 주먹이 내리꽂히며 먹이 튄다
+function drawComet(){
+  if(!comet) return;
+  const c = comet, px = p.x - cam.x, py = p.y, tx = c.x - cam.x, ty = c.y, calm = settings.calm;
+  ctx.save(); ctx.lineCap = "round";
+  if(c.t < COMET_T){
+    const k = c.t / COMET_T, up = clamp01(c.t / 9);
+    // 조준 고리 — 조여 든다
+    ctx.globalAlpha = 0.35 + 0.5*k; ctx.strokeStyle = "#f0a24e"; ctx.lineWidth = 2.5; ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.arc(tx, ty, Math.max(0, COMET_R * (1.5 - 0.5*k)), time*0.12, time*0.12 + Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 0.5 * k; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tx - 14, ty); ctx.lineTo(tx + 14, ty); ctx.moveTo(tx, ty - 14); ctx.lineTo(tx, ty + 14); ctx.stroke();
+    // 솟는 팔 — 화면 위로 뻗어 나간다
+    ctx.globalAlpha = 1 - clamp01((c.t - 12) / 8);
+    const ax = px + (tx - px) * 0.25 * up, ay = py - (py + 80) * ease.outCubic(up);
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(px, py - 4); ctx.quadraticCurveTo(px - 8, (py + ay)/2, ax, ay); }, 8, "#e8b48c");
+    inkShape(() => { ctx.beginPath(); ctx.arc(ax, ay, 12, 0, Math.PI*2); }, "#e8b48c");
+    // 떨어지는 주먹 — 뒤로 불꼬리
+    const f = clamp01((c.t - 12) / (COMET_T - 12));
+    if(f > 0){
+      const e = f*f, fx0 = tx - 60*(1 - e), fy0 = -70 + (ty + 70) * e;
+      ctx.globalAlpha = 0.85; ctx.strokeStyle = "#ffcf7a"; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(fx0 - 26*(1 - e) - 8, fy0 - 96); ctx.lineTo(fx0, fy0); ctx.stroke();
+      ctx.strokeStyle = "#fff3c4"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(fx0 - 14*(1 - e) - 4, fy0 - 60); ctx.lineTo(fx0, fy0); ctx.stroke();
+      ctx.globalAlpha = 1;
+      inkShape(() => { ctx.beginPath(); ctx.arc(fx0, fy0, 17, 0, Math.PI*2); }, "#e8b48c");
+    }
+  } else {
+    const k = clamp01((c.t - COMET_T) / COMET_AFTER), e = ease.outCubic(k);
+    ctx.globalAlpha = (1 - k) * 0.3; ctx.fillStyle = "#ffcf7a";
+    ctx.beginPath(); ctx.arc(tx, ty, Math.max(0, COMET_R * (0.5 + 0.5*e)), 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = INK; ctx.lineWidth = 6 * (1 - k) + 1;
+    ctx.beginPath(); ctx.arc(tx, ty, Math.max(0, COMET_R * e), 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = "#f0a24e"; ctx.lineWidth = 3;
+    for(let i=0;i<10;i++){ const a = i * Math.PI/5 + c.seed; ctx.beginPath(); ctx.moveTo(tx + Math.cos(a)*COMET_R*0.35*e, ty + Math.sin(a)*COMET_R*0.35*e); ctx.lineTo(tx + Math.cos(a)*COMET_R*(0.6 + 0.5*e), ty + Math.sin(a)*COMET_R*(0.6 + 0.5*e)); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if(!calm) inkSplat(tx, ty, k, c.seed, 12, "40,26,16", COMET_R * 1.25);
+  }
+  ctx.restore();
+}
+// 기술 이름 도장 — 새 기술 둘은 이름이 머리 위에 붓 자국과 함께 찍힌다
+function drawTechStamp(){
+  if(!techStamp) return;
+  const s = techStamp, x = p.x - cam.x, y = p.y - 62, calm = settings.calm;
+  const k = clamp01(s.t / 9), sc = calm ? 1 : 1.5 - 0.5 * ease.outBack(k, 2.4), al = Math.min(1, (46 - s.t) / 10);
+  ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.rotate(-0.06); ctx.scale(sc, sc);
+  ctx.font = UIF(800, 17); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const w = ctx.measureText(s.text).width + 30;
+  ctx.fillStyle = "rgba(" + s.col + ",.9)"; brushBand(-w/2, w/2, -13, 26, 3.3); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(40,24,16,.75)"; ctx.strokeText(s.text, 0, 1);
+  ctx.fillStyle = "#fff6e0"; ctx.fillText(s.text, 0, 1);
+  ctx.restore();
+  if(!calm) inkSplat(x, y, clamp01(s.t / 14), 5.1, 6, s.col, 70);
+}
 // 개틀링 — 조준 방향 부채꼴로 주먹 여러 개가 번갈아 튀어나간다
 function drawVolley(){
   if(!volley) return;
@@ -13694,19 +14278,8 @@ function screenButtons(){
   return [];
 }
 function drawScreenButtons(){
-  for(const B of screenButtons()){
-    ctx.save();
-    ctx.fillStyle = B.sel ? "rgba(40,30,50,.85)" : "rgba(13,27,38,.72)"; ctx.fillRect(B.x, B.y, B.w, B.h);
-    ctx.strokeStyle = B.col; ctx.lineWidth = B.sel ? 3 : 1.5; ctx.strokeRect(B.x, B.y, B.w, B.h);
-    ctx.fillStyle = B.col; ctx.font = "700 14px 'Gowun Batang', 'Pretendard', serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    if(B.sub){
-      ctx.fillText(B.label, B.x + B.w/2, B.y + 14);
-      ctx.font = "500 11px 'Gowun Batang', 'Pretendard', serif";
-      ctx.fillText(B.sub, B.x + B.w/2, B.y + 31);
-    } else ctx.fillText(B.label, B.x + B.w/2, B.y + B.h/2 + 1);
-    ctx.restore();
-  }
+  // v60: 놋쇠 버튼으로(흐린 색 = 못 고르는 칸)
+  for(const B of screenButtons()) drawBrassBtn(asBrass(B), UIF(700, 14));
   if(state === STATE.READY){
     const t = gearMsg ? gearMsg.text : GEARS[gearSel].name + " — " + GEARS[gearSel].desc + "  (숫자 키 2~5로도 고른다)";
     centerText(t, H - 124, "600 13px 'Gowun Batang', 'Pretendard', serif", gearMsg ? (gearMsg.good ? "#9fe0a0" : "#f7a8a0") : GEARS[gearSel].col);
@@ -13998,6 +14571,95 @@ function rrPath(x, y, w, h, r){
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
+/* ---------- 문장(엠블럼) (v60) ----------
+   메뉴 아이콘·칭호 문장·러시 대진 카드가 같이 쓰는 작은 잉크 그림. 원점은 가운데, s는 반지름쯤.
+   한 가지 색(col)으로 선과 면을 그린다 — 바탕(놋쇠 메달·양피지)은 부르는 쪽이 깐다 */
+function drawEmblem(kind, x, y, s, col){
+  const c = ctx, L = (...a) => { c.beginPath(); c.moveTo(a[0], a[1]); for(let i=2;i<a.length;i+=2) c.lineTo(a[i], a[i+1]); },
+        S = () => c.stroke(), F = () => c.fill(), O = (cx, cy, r) => { c.beginPath(); c.arc(cx, cy, Math.max(0, r), 0, Math.PI*2); },
+        A = (cx, cy, r, a0, a1, ccw) => { c.beginPath(); c.arc(cx, cy, Math.max(0, r), a0, a1, !!ccw); };
+  c.save(); c.translate(x, y); c.scale(s, s);
+  c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 0.15; c.lineCap = "round"; c.lineJoin = "round";
+  switch(kind){
+    case "anchor": O(0, -0.62, 0.17); S(); L(0, -0.45, 0, 0.72); S(); L(-0.32, -0.2, 0.32, -0.2); S(); A(0, 0.1, 0.62, 0.15, Math.PI - 0.15); S();
+      L(-0.74, 0.02, -0.6, 0.2, -0.42, 0.1); S(); L(0.74, 0.02, 0.6, 0.2, 0.42, 0.1); S(); break;
+    case "map": L(-0.75, -0.5, -0.25, -0.62, 0.25, -0.5, 0.75, -0.62, 0.75, 0.5, 0.25, 0.62, -0.25, 0.5, -0.75, 0.62); c.closePath(); S();
+      L(-0.25, -0.62, -0.25, 0.5); S(); L(0.25, -0.5, 0.25, 0.62); S(); c.lineWidth = 0.11; L(0.4, -0.2, 0.6, 0.02); S(); L(0.6, -0.2, 0.4, 0.02); S(); break;
+    case "skull": c.beginPath(); c.arc(0, -0.15, 0.58, Math.PI*0.9, Math.PI*0.1); c.lineTo(0.34, 0.5); c.lineTo(-0.34, 0.5); c.closePath(); S();
+      O(-0.23, -0.12, 0.15); F(); O(0.23, -0.12, 0.15); F(); L(0, 0.1, -0.07, 0.25, 0.07, 0.25); c.closePath(); F(); c.lineWidth = 0.1; L(-0.12, 0.5, -0.12, 0.72); S(); L(0.12, 0.5, 0.12, 0.72); S(); break;
+    case "chest": L(-0.7, -0.1, -0.7, 0.6, 0.7, 0.6, 0.7, -0.1); S(); c.beginPath(); c.moveTo(-0.7, -0.1); c.quadraticCurveTo(-0.7, -0.62, 0, -0.62); c.quadraticCurveTo(0.7, -0.62, 0.7, -0.1); c.closePath(); S();
+      c.fillRect(-0.13, -0.2, 0.26, 0.34); break;
+    case "compass": O(0, 0, 0.72); S(); L(0, -0.52, 0.17, 0, 0, 0.52, -0.17, 0); c.closePath(); S(); L(0, -0.52, 0.17, 0, -0.17, 0); c.closePath(); F(); break;
+    case "book": L(0, -0.5, 0, 0.6); S(); c.beginPath(); c.moveTo(0, -0.5); c.quadraticCurveTo(-0.4, -0.72, -0.78, -0.5); c.lineTo(-0.78, 0.55); c.quadraticCurveTo(-0.4, 0.36, 0, 0.6); c.quadraticCurveTo(0.4, 0.36, 0.78, 0.55); c.lineTo(0.78, -0.5); c.quadraticCurveTo(0.4, -0.72, 0, -0.5); S();
+      c.lineWidth = 0.09; L(-0.55, -0.22, -0.22, -0.26); S(); L(-0.55, 0.04, -0.22, 0); S(); L(0.22, -0.26, 0.55, -0.22); S(); break;
+    case "cog": for(let i=0;i<8;i++){ const a = i*Math.PI/4; L(Math.cos(a)*0.5, Math.sin(a)*0.5, Math.cos(a)*0.76, Math.sin(a)*0.76); c.lineWidth = 0.22; S(); } c.lineWidth = 0.17; O(0, 0, 0.46); S(); O(0, 0, 0.14); F(); break;
+    case "person": O(0, -0.36, 0.27); S(); A(0, 0.66, 0.58, Math.PI, 0); S(); c.lineWidth = 0.12; L(-0.4, -0.5, 0.4, -0.5); S(); L(-0.27, -0.52, -0.2, -0.76, 0.2, -0.76, 0.27, -0.52); S(); break;
+    case "jelly": A(0, -0.08, 0.6, Math.PI, 0); c.closePath(); S(); c.lineWidth = 0.11; for(let i=-1;i<=1;i++){ c.beginPath(); c.moveTo(i*0.34, -0.02); c.quadraticCurveTo(i*0.34 + 0.16, 0.3, i*0.34 - 0.06, 0.72); S(); } break;
+    case "sword": L(-0.55, 0.6, 0.5, -0.56); c.lineWidth = 0.17; S(); L(0.5, -0.56, 0.66, -0.72); S(); c.lineWidth = 0.14; L(-0.52, 0.12, -0.12, 0.56); S(); O(-0.64, 0.7, 0.09); F(); break;
+    case "swords": c.lineWidth = 0.13; L(-0.6, 0.6, 0.55, -0.6); S(); L(0.6, 0.6, -0.55, -0.6); S(); L(-0.62, 0.2, -0.22, 0.58); S(); L(0.62, 0.2, 0.22, 0.58); S(); break;
+    case "dagger": L(0, -0.75, 0.16, 0.1, -0.16, 0.1); c.closePath(); F(); L(-0.36, 0.14, 0.36, 0.14); S(); L(0, 0.14, 0, 0.62); c.lineWidth = 0.2; S(); break;
+    case "harpoon": L(-0.6, 0.62, 0.42, -0.42); S(); L(0.68, -0.7, 0.5, -0.12, 0.14, -0.5); c.closePath(); F(); c.lineWidth = 0.09; A(-0.5, 0.42, 0.26, 0.4, 3.4); S(); break;
+    case "cannon": c.save(); c.rotate(-0.32); c.fillRect(-0.55, -0.22, 1.05, 0.4); c.fillRect(0.42, -0.28, 0.16, 0.52); c.restore(); O(-0.28, 0.42, 0.26); S(); O(-0.28, 0.42, 0.06); F(); break;
+    case "rope": A(0, -0.1, 0.44, 0.5, Math.PI*2 + 0.1); S(); L(0.3, 0.2, 0.62, 0.7); S(); c.lineWidth = 0.1; L(-0.74, 0.5, -0.3, 0.74); S(); L(-0.7, 0.74, -0.34, 0.5); S(); break;
+    case "wind": for(let i=0;i<3;i++){ const yy = -0.42 + i*0.42, w = [0.5, 0.72, 0.36][i]; c.beginPath(); c.moveTo(-0.74, yy); c.lineTo(w - 0.2, yy); c.arc(w - 0.2, yy - 0.15, 0.15, Math.PI/2, -Math.PI*0.8, true); S(); } break;
+    case "tentacle": c.lineWidth = 0.24; c.beginPath(); c.moveTo(-0.3, 0.74); c.bezierCurveTo(-0.5, 0, 0.5, 0, 0.3, -0.42); c.bezierCurveTo(0.2, -0.76, -0.24, -0.66, -0.12, -0.4); S(); c.lineWidth = 0.08; for(let i=0;i<3;i++){ O(-0.02 + i*0.1, 0.5 - i*0.3, 0.06); F(); } break;
+    case "octo": A(0, -0.16, 0.5, Math.PI, 0); c.lineTo(0.5, 0.12); c.lineTo(-0.5, 0.12); c.closePath(); S(); c.lineWidth = 0.12; for(let i=0;i<4;i++){ const xx = -0.42 + i*0.28; c.beginPath(); c.moveTo(xx, 0.12); c.quadraticCurveTo(xx + (i < 2 ? -0.22 : 0.22), 0.46, xx + (i < 2 ? -0.06 : 0.06), 0.74); S(); }
+      O(-0.18, -0.16, 0.08); F(); O(0.18, -0.16, 0.08); F(); break;
+    case "ship": L(-0.74, 0.22, 0.74, 0.22, 0.5, 0.62, -0.5, 0.62); c.closePath(); S(); L(0, 0.22, 0, -0.76); S(); L(0.08, -0.66, 0.6, 0.02, 0.08, 0.02); c.closePath(); F(); L(-0.08, -0.42, -0.5, 0.02, -0.08, 0.02); c.closePath(); S(); break;
+    case "ghost": c.beginPath(); c.arc(0, -0.16, 0.5, Math.PI, 0); c.lineTo(0.5, 0.7); c.lineTo(0.26, 0.5); c.lineTo(0, 0.7); c.lineTo(-0.26, 0.5); c.lineTo(-0.5, 0.7); c.closePath(); S(); O(-0.19, -0.14, 0.1); F(); O(0.19, -0.14, 0.1); F(); break;
+    case "star": c.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2 + i*Math.PI/5, r = i % 2 ? 0.34 : 0.78; c.lineTo(Math.cos(a)*r, Math.sin(a)*r); } c.closePath(); F(); break;
+    case "fin": c.beginPath(); c.moveTo(-0.5, 0.36); c.quadraticCurveTo(-0.1, -0.2, 0.3, -0.76); c.quadraticCurveTo(0.26, -0.1, 0.56, 0.36); c.closePath(); F(); c.lineWidth = 0.11; c.beginPath(); c.moveTo(-0.8, 0.52); c.quadraticCurveTo(-0.4, 0.34, 0, 0.52); c.quadraticCurveTo(0.4, 0.7, 0.8, 0.52); S(); break;
+    case "chain": c.lineWidth = 0.13; c.save(); c.rotate(-0.7); for(let i=-1;i<=1;i++){ c.beginPath(); c.ellipse(i*0.48, 0, 0.3, 0.18, 0, 0, Math.PI*2); S(); } c.restore(); break;
+    case "bolt": L(0.2, -0.78, -0.4, 0.08, -0.04, 0.08, -0.24, 0.78, 0.44, -0.16, 0.06, -0.16); c.closePath(); F(); break;
+    case "hammer": c.save(); c.rotate(0.6); c.fillRect(-0.5, -0.74, 1, 0.44); L(0, -0.3, 0, 0.76); c.lineWidth = 0.17; S(); c.restore(); break;
+    case "flame": c.beginPath(); c.moveTo(0, -0.8); c.bezierCurveTo(0.2, -0.3, 0.66, -0.1, 0.5, 0.36); c.bezierCurveTo(0.4, 0.7, -0.4, 0.7, -0.5, 0.36); c.bezierCurveTo(-0.6, 0.04, -0.3, -0.1, -0.24, -0.34); c.bezierCurveTo(-0.1, -0.2, 0, -0.3, 0, -0.8); S(); c.beginPath(); c.moveTo(0, 0.02); c.quadraticCurveTo(0.26, 0.3, 0, 0.5); c.quadraticCurveTo(-0.26, 0.3, 0, 0.02); F(); break;
+    case "lantern": L(0, -0.78, 0, -0.5); S(); L(-0.3, -0.5, 0.3, -0.5); S(); L(-0.34, 0.5, 0.34, 0.5); S(); L(-0.3, -0.5, -0.38, 0.5); S(); L(0.3, -0.5, 0.38, 0.5); S(); O(0, 0.02, 0.17); F(); L(-0.2, 0.5, -0.2, 0.7, 0.2, 0.7, 0.2, 0.5); S(); break;
+    case "whale": c.beginPath(); c.moveTo(-0.76, 0.1); c.quadraticCurveTo(-0.5, -0.56, 0.2, -0.36); c.quadraticCurveTo(0.5, -0.26, 0.56, 0.02); c.lineTo(0.8, -0.3); c.lineTo(0.74, 0.3); c.quadraticCurveTo(0, 0.7, -0.76, 0.1); c.closePath(); S(); O(-0.42, -0.02, 0.07); F(); c.lineWidth = 0.1; L(-0.2, -0.5, -0.3, -0.78); S(); L(-0.16, -0.5, -0.02, -0.76); S(); break;
+    case "serpent": c.lineWidth = 0.2; c.beginPath(); c.moveTo(-0.76, 0.5); c.bezierCurveTo(-0.5, -0.5, -0.1, -0.5, 0, 0.1); c.bezierCurveTo(0.1, 0.7, 0.5, 0.5, 0.52, -0.2); S(); L(0.52, -0.2, 0.3, -0.62, 0.78, -0.5); c.closePath(); F(); break;
+    case "key": O(-0.4, -0.3, 0.26); S(); L(-0.2, -0.12, 0.62, 0.62); S(); L(0.3, 0.32, 0.5, 0.14); S(); L(0.48, 0.5, 0.68, 0.32); S(); break;
+    case "lock": c.fillRect(-0.48, -0.06, 0.96, 0.72); A(0, -0.08, 0.32, Math.PI, 0); S(); break;
+    case "crown": L(-0.7, 0.44, -0.74, -0.4, -0.34, 0.02, 0, -0.62, 0.34, 0.02, 0.74, -0.4, 0.7, 0.44); c.closePath(); S(); c.fillRect(-0.7, 0.3, 1.4, 0.2); break;
+    case "clock": O(0, 0.06, 0.66); S(); L(0, 0.06, 0, -0.36); S(); L(0, 0.06, 0.28, 0.2); S(); c.fillRect(-0.12, -0.84, 0.24, 0.14); break;
+    case "hook": c.lineWidth = 0.19; L(0, -0.76, 0, 0.1); S(); A(-0.26, 0.16, 0.34, 0, Math.PI*0.95); S(); L(-0.6, 0.2, -0.66, -0.12); c.lineWidth = 0.13; S(); c.fillRect(-0.2, -0.8, 0.4, 0.16); break;
+    case "wheel": O(0, 0, 0.5); S(); O(0, 0, 0.12); F(); c.lineWidth = 0.11; for(let i=0;i<8;i++){ const a = i*Math.PI/4; L(Math.cos(a)*0.12, Math.sin(a)*0.12, Math.cos(a)*0.78, Math.sin(a)*0.78); S(); } break;
+    case "coin": O(0, 0, 0.66); S(); O(0, 0, 0.44); c.lineWidth = 0.08; S(); c.fillRect(-0.07, -0.26, 0.14, 0.52); break;
+    case "flag": L(-0.5, -0.78, -0.5, 0.78); S(); L(-0.5, -0.7, 0.7, -0.5, 0.36, -0.18, 0.7, 0.14, -0.5, 0.1); c.closePath(); F(); break;
+    case "target": O(0, 0, 0.68); S(); O(0, 0, 0.36); S(); O(0, 0, 0.1); F(); c.lineWidth = 0.1; L(0, -0.86, 0, -0.56); S(); L(0, 0.86, 0, 0.56); S(); L(-0.86, 0, -0.56, 0); S(); L(0.86, 0, 0.56, 0); S(); break;
+    case "note": c.save(); c.rotate(-0.3); c.beginPath(); c.ellipse(-0.36, 0.5, 0.22, 0.16, 0, 0, Math.PI*2); F(); c.beginPath(); c.ellipse(0.4, 0.34, 0.22, 0.16, 0, 0, Math.PI*2); F(); c.restore(); L(-0.02, 0.52, -0.02, -0.56, 0.72, -0.72, 0.72, 0.16); S(); break;
+    case "gull": c.beginPath(); c.moveTo(-0.8, -0.1); c.quadraticCurveTo(-0.4, -0.56, 0, 0.02); c.quadraticCurveTo(0.4, -0.56, 0.8, -0.1); S(); O(0, 0.12, 0.09); F(); break;
+    case "balloon": c.beginPath(); c.ellipse(0, -0.22, 0.48, 0.54, 0, 0, Math.PI*2); S(); L(-0.08, 0.34, 0.08, 0.34, 0, 0.22); c.closePath(); F(); c.lineWidth = 0.08; c.beginPath(); c.moveTo(0, 0.34); c.quadraticCurveTo(0.2, 0.52, 0, 0.8); S(); break;
+    case "shield": c.beginPath(); c.moveTo(0, -0.74); c.lineTo(0.6, -0.5); c.quadraticCurveTo(0.6, 0.4, 0, 0.78); c.quadraticCurveTo(-0.6, 0.4, -0.6, -0.5); c.closePath(); S(); c.fillRect(-0.08, -0.34, 0.16, 0.68); c.fillRect(-0.3, -0.1, 0.6, 0.16); break;
+    case "wave": for(let i=0;i<2;i++){ const yy = -0.2 + i*0.44; c.beginPath(); c.moveTo(-0.8, yy); c.quadraticCurveTo(-0.6, yy - 0.36, -0.4, yy); c.quadraticCurveTo(-0.2, yy + 0.36, 0, yy); c.quadraticCurveTo(0.2, yy - 0.36, 0.4, yy); c.quadraticCurveTo(0.6, yy + 0.36, 0.8, yy); S(); } break;
+    case "scroll": c.strokeRect(-0.5, -0.5, 1, 1); c.lineWidth = 0.2; L(-0.62, -0.56, 0.62, -0.56); S(); L(-0.62, 0.56, 0.62, 0.56); S(); c.lineWidth = 0.09; L(-0.28, -0.2, 0.28, -0.2); S(); L(-0.28, 0.06, 0.28, 0.06); S(); L(-0.28, 0.3, 0.1, 0.3); S(); break;
+    case "fist": rrPath(-0.46, -0.4, 0.92, 0.72, 0.2); S(); c.lineWidth = 0.1; for(let i=-1;i<=1;i++){ L(i*0.23, -0.4, i*0.23, -0.06); S(); } L(-0.3, 0.32, -0.3, 0.76, 0.3, 0.76, 0.3, 0.32); S(); break;
+    case "scarf": c.beginPath(); c.moveTo(-0.72, -0.2); c.quadraticCurveTo(0, -0.62, 0.5, -0.2); c.quadraticCurveTo(0, 0.02, -0.72, -0.2); F(); L(0.44, -0.2, 0.8, 0.3, 0.52, 0.22, 0.56, 0.66, 0.3, -0.1); c.closePath(); F(); break;
+    case "gem": L(-0.44, -0.5, 0.44, -0.5, 0.74, -0.12, 0, 0.74, -0.74, -0.12); c.closePath(); S(); c.lineWidth = 0.09; L(-0.74, -0.12, 0.74, -0.12); S(); L(-0.2, -0.5, 0, 0.74, 0.2, -0.5); S(); break;
+    case "bars": c.lineWidth = 0.14; for(let i=-2;i<=2;i++){ L(i*0.3, -0.7, i*0.3, 0.7); S(); } c.lineWidth = 0.17; L(-0.76, -0.7, 0.76, -0.7); S(); L(-0.76, 0.7, 0.76, 0.7); S(); break;
+    case "eye": c.beginPath(); c.moveTo(-0.8, 0); c.quadraticCurveTo(0, -0.7, 0.8, 0); c.quadraticCurveTo(0, 0.7, -0.8, 0); S(); O(0, 0, 0.24); F(); break;
+    case "island": A(0, 0.4, 0.66, Math.PI, 0); c.closePath(); F(); L(0.1, -0.26, 0.16, -0.76); S(); c.lineWidth = 0.11; c.beginPath(); c.moveTo(0.16, -0.76); c.quadraticCurveTo(-0.2, -0.86, -0.4, -0.52); S(); c.beginPath(); c.moveTo(0.16, -0.76); c.quadraticCurveTo(0.5, -0.84, 0.64, -0.48); S(); break;
+    case "bone": c.lineWidth = 0.2; L(-0.44, 0.44, 0.44, -0.44); S(); for(const q of [[-0.56, 0.36], [-0.36, 0.56], [0.56, -0.36], [0.36, -0.56]]){ O(q[0], q[1], 0.14); F(); } break;
+    case "back": L(0.6, 0, -0.6, 0); S(); L(-0.1, -0.5, -0.62, 0, -0.1, 0.5); S(); break;
+    default: O(0, 0, 0.5); S();
+  }
+  c.restore();
+}
+// 놋쇠 메달 — 엠블럼 바탕. tier: 0 놋쇠(기본) · 1 동 · 2 은 · 3 금 · 4 전설(보랏빛 금)
+const BRASS_COLS = [["#f3dc98", "#b8893c", "#6e4a1c"], ["#e9b58a", "#b06a3a", "#6a3a1c"], ["#f4f6f8", "#aab4be", "#5e6872"], ["#fff0a8", "#e0aa2c", "#8a5a10"], ["#f6d8ff", "#b46ad0", "#5a2a78"]];
+function drawMedal(x, y, r, tier, o){
+  o = o || {};
+  const m = BRASS_COLS[tier || 0], pu = paperUI; paperUI = false;
+  ctx.save();
+  if(o.dim) ctx.globalAlpha *= 0.42;
+  const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+  g.addColorStop(0, m[0]); g.addColorStop(0.55, m[1]); g.addColorStop(1, m[2]);
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, r*0.09); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r*0.8, 0, Math.PI*2); ctx.fillStyle = o.face || "#2e2118"; ctx.fill();
+  ctx.strokeStyle = "rgba(255,240,190,.5)"; ctx.lineWidth = Math.max(0.8, r*0.05); ctx.stroke();
+  if(o.kind) drawEmblem(o.kind, x, y, r*0.56, o.col || m[0]);
+  ctx.restore();
+  paperUI = pu;
+}
 function uiText(t, x, y, font, color, align){
   ctx.textAlign = align || "left"; ctx.textBaseline = "middle";
   ctx.font = font; ctx.fillStyle = color;
@@ -14057,22 +14719,444 @@ function drawPanel(r, rad){
   rrPath(r.x, r.y, r.w, r.h, R);
   ctx.strokeStyle = edge; ctx.lineWidth = r.on || hot || r.sel ? 2.4 : 1.6; ctx.lineJoin = "round";
   ctx.stroke();
+  // v60: 큰 카드는 놋쇠 모서리, 마우스를 올리면 금빛이 테를 따라 흐른다
+  if(r.w >= 90 && r.h >= 56){
+    if(hot && !r.dim){ const pu = paperUI; paperUI = false; rrPath(r.x + 2, r.y + 2, r.w - 4, r.h - 4, Math.max(2, R - 2)); ctx.strokeStyle = brassFill(r.x, r.y, r.w, r.h, true, false); ctx.lineWidth = 2.2; ctx.stroke(); paperUI = pu; }
+    brassCorners(r.x, r.y, r.w, r.h, hot || r.sel);
+  }
 }
 // 기본 버튼 — 글자 한 줄(+작은 줄). 키 번호가 있으면 왼쪽 위에 작게
+// v60: 카드(r.draw)는 양피지 카드, 탭은 깃발, 나머지는 놋쇠 테 버튼(drawBrassBtn)
 function drawBtn(r, font){
+  if(r.tab){ drawFlagTab(r, font); return; }
+  if(!r.draw){ drawBrassBtn(r, font); return; }
   drawPanel(r, r.rad);
-  if(r.draw){ r.draw(r); return; }
-  const col = r.on ? "#9fe0a0" : r.dim ? "rgba(217,184,119,.45)" : r.col || "#d9b877";
-  const f = font || UIF(700, 15);
-  if(r.sub){
-    uiText(r.label, r.x + r.w/2, r.y + r.h/2 - 8, f, col, "center");
-    uiText(r.sub, r.x + r.w/2, r.y + r.h/2 + 11, UIF(500, 11), r.dim ? "rgba(244,236,217,.35)" : "rgba(244,236,217,.65)", "center");
-  } else uiText(r.label, r.x + r.w/2, r.y + r.h/2 + 1, f, col, "center");
+  r.draw(r);
 }
 // 가운데 줄 메뉴(본 메뉴·설정·연습·미니게임) — y는 줄 가운데, 폭 w짜리 버튼으로 만든다
 function btnRows(rows, w, h){
   rows.forEach(r => { if(r.w === undefined){ r.x = W/2 - w/2; r.w = w; r.h = h; r.cy = r.y; r.y = r.y - h/2; } });
   return rows;
+}
+
+/* ---------- 대항해 UI (v60) — 놋쇠 버튼 · 깃발 탭 · 메인 메뉴 바다 · 금박 제목 ----------
+   drawBtn이 줄 모양을 보고 고른다: 카드(r.draw) → 양피지 카드(drawPanel, 놋쇠 모서리) · 탭(r.tab) → 깃발 · 나머지 → 놋쇠 테 버튼.
+   놋쇠 버튼은 짙은 나무 판에 밝은 글씨라 paperUI의 바꿔 칠하기를 끄고 그린다(양피지 영역으로 적지도 않는다).
+   반짝임(금빛이 테를 따라 흐름)은 마우스를 올렸거나 고른·켜진 버튼만. 누르면 2px 내려앉는다(uiPress — 그리기 전용).
+   전부 fx.clock(실제 시간) 기준이고 연출 줄이기면 흐름·등장 애니메이션 없이 정지 그림. */
+const UIK = { press: null };
+function uiPress(pos){ if(pos) UIK.press = { x: pos.x, y: pos.y, t: fx.clock }; }
+// 눌림 정도 0~1 — 누른 뒤 3프레임 꽉 눌렸다가 8프레임에 걸쳐 돌아온다
+function pressK(r){
+  const q = UIK.press;
+  if(!q || !inRect(q, r)) return 0;
+  const a = fx.clock - q.t;
+  return a < 0 ? 0 : a < 3 ? 1 : Math.max(0, 1 - (a - 3) / 8);
+}
+const UI_EMOJI = /^(\d\)\s*)?(?:[\u{1F300}-\u{1FAFF}☀-➿]️?\s*)/u;
+// 놋쇠 결 — lit이면 밝은 띠가 왼쪽에서 오른쪽으로 흐른다
+function brassFill(x, y, w, h, lit, dim){
+  const g = ctx.createLinearGradient(x, y, x + w*0.35, y + h*1.6);
+  if(dim){ g.addColorStop(0, "#9a8458"); g.addColorStop(0.5, "#6e5a36"); g.addColorStop(1, "#3e311c"); return g; }
+  const c0 = lit ? "#fff0b0" : "#ecd08a", c1 = lit ? "#d9a63c" : "#b08436", c2 = lit ? "#8a5a14" : "#6a4818";
+  g.addColorStop(0, c0); g.addColorStop(0.45, c1); g.addColorStop(1, c2);
+  return g;
+}
+// 테를 따라 흐르는 금빛 — 테(바깥 둥근 사각형 − 안쪽)만 잘라 비스듬한 빛 띠가 왼쪽에서 오른쪽으로 지나간다
+function brassGlint(x, y, w, h, R, fi){
+  if(settings.calm) return;
+  const span = w + 160, gx = x - 60 + ((fx.clock * 5 + x * 0.7) % span);
+  ctx.save();
+  rrPath(x, y, w, h, R);
+  const ix = x + fi, iy = y + fi, iw = w - 2*fi, ih = h - 2*fi, ir = Math.max(0, Math.min(R - fi, iw/2, ih/2));
+  ctx.moveTo(ix + ir, iy); ctx.lineTo(ix, iy + ir); ctx.lineTo(ix, iy + ih - ir); ctx.lineTo(ix + ir, iy + ih); ctx.lineTo(ix + iw - ir, iy + ih); ctx.lineTo(ix + iw, iy + ih - ir); ctx.lineTo(ix + iw, iy + ir); ctx.lineTo(ix + iw - ir, iy); ctx.closePath();
+  ctx.clip("evenodd");
+  const g = ctx.createLinearGradient(gx - 30, 0, gx + 30, 0);
+  g.addColorStop(0, "rgba(255,252,225,0)"); g.addColorStop(0.5, "rgba(255,252,225,.95)"); g.addColorStop(1, "rgba(255,252,225,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(gx - 30 + h*0.4, y - 2); ctx.lineTo(gx + 30 + h*0.4, y - 2); ctx.lineTo(gx + 30 - h*0.4, y + h + 2); ctx.lineTo(gx - 30 - h*0.4, y + h + 2); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // 판 위로도 아주 옅게 한 번
+  ctx.save(); rrPath(x + fi, y + fi, w - 2*fi, h - 2*fi, Math.max(2, R - fi)); ctx.clip();
+  const g2 = ctx.createLinearGradient(gx - 40, 0, gx + 40, 0);
+  g2.addColorStop(0, "rgba(255,230,160,0)"); g2.addColorStop(0.5, "rgba(255,230,160,.10)"); g2.addColorStop(1, "rgba(255,230,160,0)");
+  ctx.fillStyle = g2; ctx.fillRect(gx - 40, y, 80, h);
+  ctx.restore();
+}
+// 리벳 — 놋쇠 못 머리
+function rivet(x, y, r){
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = "#6a4818"; ctx.fill();
+  ctx.beginPath(); ctx.arc(x - r*0.15, y - r*0.15, r*0.72, 0, Math.PI*2); ctx.fillStyle = "#e8c878"; ctx.fill();
+  ctx.beginPath(); ctx.arc(x - r*0.35, y - r*0.35, r*0.28, 0, Math.PI*2); ctx.fillStyle = "rgba(255,250,220,.9)"; ctx.fill();
+}
+// 밧줄 감개 — 버튼 양 끝 테를 감은 밧줄 몇 바퀴
+function ropeWrap(x, y, h){
+  const n = Math.max(3, Math.round(h / 7)), wd = 7;
+  ctx.save();
+  rrPath(x - wd/2, y - 2, wd, h + 4, 2.5); ctx.fillStyle = "#b8925a"; ctx.fill();
+  ctx.strokeStyle = "#3b2a1e"; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.beginPath(); rrPath(x - wd/2, y - 2, wd, h + 4, 2.5); ctx.clip();
+  ctx.strokeStyle = "rgba(70,44,20,.85)"; ctx.lineWidth = 1.3;
+  for(let i=0;i<=n;i++){ const yy = y - 2 + i * (h + 4) / n; ctx.beginPath(); ctx.moveTo(x - wd/2, yy + 3); ctx.lineTo(x + wd/2, yy - 2); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(255,236,190,.45)"; ctx.lineWidth = 0.8;
+  for(let i=0;i<n;i++){ const yy = y - 2 + (i + 0.5) * (h + 4) / n; ctx.beginPath(); ctx.moveTo(x - wd/2 + 1, yy + 1.6); ctx.lineTo(x + wd/2 - 1, yy - 1); ctx.stroke(); }
+  ctx.restore();
+}
+// 얼굴(판) 색 — 짙은 나무. 켜짐은 짙은 초록, 새 소식은 짙은 보라, 예전 r.fill(어두운 색)은 그 색조로
+function faceCols(r, hot){
+  if(r.on) return ["#2c5232", "#14281a"];
+  if(r.glow) return ["#4a2a58", "#24132c"];
+  if(r.fill){ const c = parseCol(r.fill); if(c){ const [h, s] = toHsl(c[0], c[1], c[2]); const S = Math.round(Math.min(0.45, s)*100), H2 = Math.round(h);
+    return ["hsl(" + H2 + "," + S + "%," + (hot ? 26 : 21) + "%)", "hsl(" + H2 + "," + S + "%,10%)"]; } }
+  return hot ? ["#563720", "#2a1a0e"] : ["#432a17", "#1f130a"];
+}
+// 화면 버튼({x,y,w,h,label,sub,act,col,sel}) → 놋쇠 버튼 줄. 알파가 낮은 글씨색은 '못 고르는 칸'
+function asBrass(B){
+  const c = typeof B.col === "string" ? parseCol(B.col) : null;
+  return { x: B.x, y: B.y, w: B.w, h: B.h, label: B.label, sub: B.sub, sel: B.sel, icon: B.icon, action: B.act || B.action,
+           dim: !!c && c[3] < 0.5, col: c && c[3] < 1 ? "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + Math.max(0.9, c[3]).toFixed(2) + ")" : B.col };
+}
+function drawBrassBtn(r, font){
+  const pu = paperUI; paperUI = false;
+  const hot = !!r.action && !r.dim && inRect(hoverPos, r), lit = hot || r.sel || (r.on && r.back !== true) || r.glow;
+  const pk = r.action && !r.dim ? pressK(r) : 0, dy = pk * 2;
+  const x = r.x, y = r.y + dy, w = r.w, h = r.h, R = Math.min(r.rad === undefined ? 8 : r.rad, h/2), fi = h >= 30 ? 3.5 : 2.5;
+  ctx.save();
+  if(r.dim) ctx.globalAlpha *= 0.82;
+  // 깊이 — 아래로 떨어진 그림자. 누르면 판이 내려앉아 그림자가 짧아진다
+  rrPath(x + 1, y + 4 - dy, w, h, R); ctx.fillStyle = "rgba(6,3,1," + (0.55 - pk*0.25).toFixed(2) + ")"; ctx.fill();
+  if(r.glow && !settings.calm){ ctx.save(); ctx.shadowColor = "#c77ad8"; ctx.shadowBlur = 10 + 6*Math.sin(fx.clock/16); rrPath(x, y, w, h, R); ctx.fillStyle = "#c77ad8"; ctx.fill(); ctx.restore(); }
+  else if(lit && !settings.calm){ ctx.save(); ctx.shadowColor = "rgba(255,200,90,.55)"; ctx.shadowBlur = 12; rrPath(x, y, w, h, R); ctx.fillStyle = "#b08436"; ctx.fill(); ctx.restore(); }
+  // 놋쇠 테
+  rrPath(x, y, w, h, R); ctx.fillStyle = brassFill(x, y, w, h, lit, r.dim); ctx.fill();
+  ctx.strokeStyle = "#24160a"; ctx.lineWidth = 1.2; ctx.stroke();
+  // 판
+  const fx0 = x + fi, fy0 = y + fi, fw = w - 2*fi, fh = h - 2*fi, fr = Math.max(2, R - fi);
+  const fc = faceCols(r, hot);
+  const g = ctx.createLinearGradient(0, fy0, 0, fy0 + fh); g.addColorStop(0, fc[0]); g.addColorStop(1, fc[1]);
+  rrPath(fx0, fy0, fw, fh, fr); ctx.fillStyle = g; ctx.fill();
+  ctx.save();
+  rrPath(fx0, fy0, fw, fh, fr); ctx.clip();
+  // 나뭇결 — 버튼 자리로 정해지는 몇 줄
+  ctx.strokeStyle = "rgba(255,220,170,.06)"; ctx.lineWidth = 1;
+  for(let i=0;i<3;i++){ const yy = fy0 + fh * (0.25 + i*0.25) + (hash(x*0.13 + i) - 0.5) * 4; ctx.beginPath(); ctx.moveTo(fx0, yy);
+    ctx.bezierCurveTo(fx0 + fw*0.3, yy - 3, fx0 + fw*0.6, yy + 3, fx0 + fw, yy - 1); ctx.stroke(); }
+  // 윗면 빛 · 아랫면 그늘(눌리면 뒤집힌다)
+  ctx.fillStyle = pk > 0.5 ? "rgba(0,0,0,.28)" : "rgba(255,236,190,.10)"; ctx.fillRect(fx0, fy0, fw, Math.max(2, fh*0.38));
+  ctx.restore();
+  ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.lineWidth = 1; rrPath(fx0 + 0.5, fy0 + 0.5, fw - 1, fh - 1, fr); ctx.stroke();
+  // 리벳 — 판 네 귀퉁이(작은 버튼은 생략)
+  if(h >= 28 && w >= 70){ const rv = h >= 40 ? 2.4 : 2, m = fi + 4.5;
+    rivet(x + m, y + m, rv); rivet(x + w - m, y + m, rv); rivet(x + m, y + h - m, rv); rivet(x + w - m, y + h - m, rv); }
+  // 밧줄 감개 — 넓은 버튼 양 끝
+  if(w >= 300 && h >= 26){ ropeWrap(x + 1, y, h); ropeWrap(x + w - 1, y, h); }
+  if(lit && !r.dim) brassGlint(x, y, w, h, R, fi);
+  // 문장 — 왼쪽 놋쇠 메달
+  let tx = x + w/2, label = r.label || "";
+  if(r.icon){
+    const mr = Math.min(h*0.36, 15), mx = x + (w >= 300 ? 14 : fi + 3) + mr + 4;
+    drawMedal(mx, y + h/2, mr, r.on ? 3 : 0, { kind: r.icon, face: "#1c120a", col: r.dim ? "#9a8458" : "#f3dc98" });
+    label = label.replace(UI_EMOJI, "$1");
+    if(r.back) label = label.replace(/^←\s*/, "");
+    tx = x + w/2 + (w < 140 ? mr + 2 : 0);
+  }
+  // 글씨 — 어두운 테두리 + 밝은 색(대비)
+  const col = r.on ? "#a8ecaa" : r.dim ? "rgba(226,206,160,.62)" : r.col || "#f0d79a";
+  const f = font || UIF(700, 15);
+  const txt = (s, yy, ff, cc) => {
+    ctx.font = ff; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    let mw = w - (r.icon ? Math.min(h*0.72, 30) + 26 : 16);
+    ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(10,5,2,.85)"; ctx.lineWidth = 3;
+    ctx.strokeText(s, tx, yy, mw); ctx.fillStyle = cc; ctx.fillText(s, tx, yy, mw);
+  };
+  if(r.sub){ txt(label, y + h/2 - 8, f, col); txt(r.sub, y + h/2 + 11, UIF(600, 11), r.dim ? "rgba(226,206,160,.5)" : "rgba(244,232,205,.82)"); }
+  else txt(label, y + h/2 + 1, f, col);
+  ctx.restore();
+  paperUI = pu;
+}
+// 깃발 탭 — 위 가로대에 매달린 천, 아래가 제비꼬리로 갈라진다. 고른 탭은 붉은 천이 더 길게 내려오고 금실 테
+function drawFlagTab(r, font){
+  const pu = paperUI; paperUI = false;
+  const hot = !!r.action && inRect(hoverPos, r), sel = !!r.sel, pk = r.action ? pressK(r) : 0;
+  const x = r.x, y = r.y + pk*1.5, w = r.w, h = r.h + (sel ? 5 : 0), notch = Math.min(8, h*0.22);
+  const wave = settings.calm ? 0 : (hot || sel ? 1.6 : 0.6) * Math.sin(fx.clock/14 + x*0.05);
+  const path = () => {
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w + wave*0.4, y + h); ctx.lineTo(x + w*0.5, y + h - notch + wave); ctx.lineTo(x - wave*0.4, y + h); ctx.closePath();
+  };
+  ctx.save();
+  // 그림자
+  ctx.save(); ctx.translate(2, 3); path(); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fill(); ctx.restore();
+  if(r.glow && !settings.calm){ ctx.save(); ctx.shadowColor = "#c77ad8"; ctx.shadowBlur = 10 + 6*Math.sin(fx.clock/16); path(); ctx.fillStyle = "#c77ad8"; ctx.fill(); ctx.restore(); }
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  if(sel){ g.addColorStop(0, "#9a2a22"); g.addColorStop(1, "#5a1410"); }
+  else if(hot){ g.addColorStop(0, "#2e5260"); g.addColorStop(1, "#18303a"); }
+  else { g.addColorStop(0, "#22404c"); g.addColorStop(1, "#12242c"); }
+  path(); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); path(); ctx.clip();
+  // 천 주름 — 세로로 옅은 줄
+  ctx.fillStyle = "rgba(255,255,255,.05)"; for(let i=1;i<4;i++) ctx.fillRect(x + w*i/4 - 1, y, 2, h);
+  ctx.restore();
+  // 테두리 — 고른 탭은 금실
+  path(); ctx.strokeStyle = sel ? "#f0c860" : hot ? "#c8a050" : "#8a6a38"; ctx.lineWidth = sel ? 2 : 1.3; ctx.stroke();
+  if(sel){ ctx.save(); path(); ctx.clip(); path(); ctx.strokeStyle = "rgba(255,230,150,.35)"; ctx.lineWidth = 6; ctx.stroke(); ctx.restore(); }
+  // 가로대(놋쇠 막대)와 고리
+  rrPath(x - 3, y - 3, w + 6, 5, 2.5); ctx.fillStyle = brassFill(x - 3, y - 3, w + 6, 5, sel || hot, false); ctx.fill();
+  ctx.strokeStyle = "#24160a"; ctx.lineWidth = 0.8; ctx.stroke();
+  rivet(x + 5, y, 2); rivet(x + w - 5, y, 2);
+  // 글씨
+  const col = sel ? "#ffe08a" : r.col ? r.col.replace(/,\s*\.?\d*\.?\d+\)$/, ",.95)") : "#e8d4a2";
+  ctx.font = font || UIF(800, 14); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(8,4,2,.85)"; ctx.lineWidth = 3;
+  const ty = y + (h - notch*0.6)/2 + 1;
+  ctx.strokeText(r.label, x + w/2, ty, w - 12); ctx.fillStyle = col; ctx.fillText(r.label, x + w/2, ty, w - 12);
+  ctx.restore();
+  paperUI = pu;
+}
+// 양피지 카드의 놋쇠 모서리 — 귀퉁이마다 ㄱ자 쇠붙이와 못 하나
+function brassCorners(x, y, w, h, lit){
+  const L = Math.min(18, w*0.18, h*0.3), t = 4;
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  for(const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]){
+    ctx.beginPath(); ctx.moveTo(cx - sx*1, cy - sy*1); ctx.lineTo(cx + sx*L, cy - sy*1); ctx.lineTo(cx + sx*L, cy + sy*(t - 1)); ctx.lineTo(cx + sx*(t + 0.5), cy + sy*(t + 0.5));
+    ctx.lineTo(cx + sx*(t - 1), cy + sy*L); ctx.lineTo(cx - sx*1, cy + sy*L); ctx.closePath();
+    ctx.fillStyle = brassFill(cx - L, cy - L, L*2, L*2, lit, false); ctx.fill();
+    ctx.strokeStyle = "#24160a"; ctx.lineWidth = 0.9; ctx.stroke();
+    rivet(cx + sx*4.5, cy + sy*4.5, 1.7);
+  }
+  ctx.restore();
+  paperUI = pu;
+}
+// 화면 제목 — 짙은 천 띠(양 끝 제비꼬리) 위 금박 글씨
+function drawHeading(text, y, size, o){
+  o = o || {};
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  const f = UIF(800, size || 24);
+  ctx.font = f;
+  const tw = ctx.measureText(text).width, bw = Math.max(160, tw + 90), bx = W/2 - bw/2, bh = (size || 24) + 18, by = y - bh/2;
+  const band = () => { ctx.beginPath(); ctx.moveTo(bx - 18, by); ctx.lineTo(bx + bw + 18, by); ctx.lineTo(bx + bw + 4, by + bh/2); ctx.lineTo(bx + bw + 18, by + bh);
+    ctx.lineTo(bx - 18, by + bh); ctx.lineTo(bx - 4, by + bh/2); ctx.closePath(); };
+  ctx.save(); ctx.translate(0, 3); band(); ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fill(); ctx.restore();
+  const g = ctx.createLinearGradient(0, by, 0, by + bh); g.addColorStop(0, o.cloth ? o.cloth[0] : "#5a1c16"); g.addColorStop(1, o.cloth ? o.cloth[1] : "#2e0c08");
+  band(); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = "#d9aa48"; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.save(); band(); ctx.clip(); ctx.strokeStyle = "rgba(240,200,96,.5)"; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(bx - 10, by + 4); ctx.lineTo(bx + bw + 10, by + 4); ctx.moveTo(bx - 10, by + bh - 4); ctx.lineTo(bx + bw + 10, by + bh - 4); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  goldText(text, W/2, y + 1, f, tw);
+  ctx.restore();
+  paperUI = pu;
+}
+// 금박 글씨 — 먹 테두리 + 위아래 금 그러데이션 + 흐르는 빛(연출 줄이기면 멈춤)
+function goldText(text, x, y, f, tw, sh){
+  ctx.font = f; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  const sz = parseFloat(/(\d+)px/.exec(f)[1]);
+  ctx.strokeStyle = "rgba(14,7,3,.95)"; ctx.lineWidth = Math.max(3, sz*0.16); ctx.strokeText(text, x, y);
+  const g = ctx.createLinearGradient(0, y - sz*0.55, 0, y + sz*0.5);
+  g.addColorStop(0, "#fff6cf"); g.addColorStop(0.45, "#f2c55a"); g.addColorStop(0.55, "#c48a24"); g.addColorStop(1, "#f6d27a");
+  ctx.fillStyle = g; ctx.fillText(text, x, y);
+  if(!settings.calm && sh !== false){
+    const s = ((fx.clock * 0.006) % 1.6) - 0.3, cl = (v) => Math.max(0, Math.min(1, v));
+    const L = x - tw/2, g2 = ctx.createLinearGradient(L, y - sz, L + tw, y + sz);
+    g2.addColorStop(0, "rgba(255,255,240,0)"); g2.addColorStop(cl(s - 0.08), "rgba(255,255,240,0)"); g2.addColorStop(cl(s), "rgba(255,255,240,.75)");
+    g2.addColorStop(cl(s + 0.08), "rgba(255,255,240,0)"); g2.addColorStop(1, "rgba(255,255,240,0)");
+    ctx.fillStyle = g2; ctx.fillText(text, x, y);
+  }
+}
+// 하위 메뉴 바탕 — 짙은 호두나무(뒤 장면은 거의 안 비친다) + 화면 둘레 놋쇠 이중선과 모서리 장식
+function drawMenuBg(a){
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  drawMenuSea(true);
+  ctx.fillStyle = "rgba(26,17,10," + (a === undefined ? 0.8 : a) + ")"; ctx.fillRect(0, 0, W, H);
+  if(paperPat){ ctx.globalAlpha = 0.6; ctx.fillStyle = paperPat; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.35, W/2, H/2, H*0.9);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.45)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  paperUI = pu;
+  drawScreenFrame();
+}
+function drawScreenFrame(){
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  ctx.strokeStyle = "rgba(200,160,80,.55)"; ctx.lineWidth = 1.2; ctx.strokeRect(5.5, 5.5, W - 11, H - 11);
+  ctx.strokeStyle = "rgba(200,160,80,.25)"; ctx.strokeRect(9.5, 9.5, W - 19, H - 19);
+  ctx.restore();
+  paperUI = pu;
+  for(const [cx, cy, sx, sy] of [[5, 5, 1, 1], [W - 5, 5, -1, 1], [5, H - 5, 1, -1], [W - 5, H - 5, -1, -1]]){
+    const pu2 = paperUI; paperUI = false;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + sx*34, cy); ctx.lineTo(cx + sx*34, cy + sy*4); ctx.quadraticCurveTo(cx + sx*12, cy + sy*6, cx + sx*6, cy + sy*12);
+    ctx.quadraticCurveTo(cx + sx*4, cy + sy*24, cx + sx*4, cy + sy*34); ctx.lineTo(cx, cy + sy*34); ctx.closePath();
+    ctx.fillStyle = brassFill(cx - 34, cy - 34, 68, 68, false, false); ctx.fill(); ctx.strokeStyle = "#24160a"; ctx.lineWidth = 0.9; ctx.stroke();
+    rivet(cx + sx*5, cy + sy*5, 2.2);
+    ctx.restore();
+    paperUI = pu2;
+  }
+}
+/* 메인 메뉴 바다 — 밤하늘·달·구름 두 겹·먼 섬·수평선을 지나는 배·파도 세 겹(패럴랙스).
+   dim이면(하위 메뉴 바탕) 움직임만 남기고 위에 짙은 막을 덮는다. 밝은 막은 쓰지 않는다 */
+function drawMenuSea(dim){
+  const T = settings.calm ? 0 : fx.clock, hz = H*0.64;
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  let g = ctx.createLinearGradient(0, 0, 0, hz);
+  g.addColorStop(0, "#0b121a"); g.addColorStop(0.5, "#16222e"); g.addColorStop(0.82, "#3a3034"); g.addColorStop(1, "#7a4e30");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, hz + 1);
+  // 별
+  for(let i=0;i<34;i++){ const sx = hash(i*7.1) * W, sy = hash(i*3.3) * hz*0.6, tw = 0.35 + 0.35*Math.sin(T*0.04 + i*1.7);
+    ctx.fillStyle = "rgba(255,244,214," + tw.toFixed(2) + ")"; ctx.fillRect(sx, sy, 1.6, 1.6); }
+  // 달과 달무리
+  const mx = W*0.82, my = 84;
+  ctx.beginPath(); ctx.arc(mx, my, 26, 0, Math.PI*2); ctx.fillStyle = "#f4e2b0"; ctx.fill();
+  ctx.beginPath(); ctx.arc(mx + 11, my - 6, 23, 0, Math.PI*2); ctx.fillStyle = "#10191f"; ctx.fill();
+  const mg = ctx.createRadialGradient(mx, my, 8, mx, my, 120); mg.addColorStop(0, "rgba(255,230,170,.26)"); mg.addColorStop(1, "rgba(255,230,170,0)");
+  ctx.fillStyle = mg; ctx.fillRect(mx - 120, my - 120, 240, 240);
+  // 구름 — 먼 겹은 느리게, 가까운 겹은 빠르게
+  const cloud = (cx, cy, s, col, rim) => {
+    ctx.fillStyle = col; ctx.beginPath();
+    ctx.ellipse(cx, cy, 70*s, 16*s, 0, 0, Math.PI*2); ctx.ellipse(cx - 34*s, cy - 8*s, 30*s, 16*s, 0, 0, Math.PI*2);
+    ctx.ellipse(cx + 18*s, cy - 14*s, 36*s, 20*s, 0, 0, Math.PI*2); ctx.ellipse(cx + 54*s, cy - 4*s, 24*s, 12*s, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = rim; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(cx + 18*s, cy - 14*s, 36*s, 20*s, 0, Math.PI*1.1, Math.PI*1.75); ctx.stroke();
+  };
+  for(let i=0;i<4;i++){ const sp = 0.05, span = W + 360, cx = ((hash(i*5.5)*span + T*sp) % span) - 180; cloud(cx, 60 + hash(i*2.2)*90, 0.8 + hash(i)*0.5, "rgba(34,40,52,.85)", "rgba(255,210,150,.18)"); }
+  // 먼 섬
+  ctx.fillStyle = "#1a1e26";
+  ctx.beginPath(); ctx.moveTo(40, hz); ctx.quadraticCurveTo(110, hz - 46, 170, hz - 18); ctx.quadraticCurveTo(210, hz - 30, 260, hz); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(W - 300, hz); ctx.quadraticCurveTo(W - 250, hz - 24, W - 200, hz - 12); ctx.quadraticCurveTo(W - 160, hz - 34, W - 110, hz); ctx.fill();
+  // 수평선을 지나는 배 — 아주 천천히 오른쪽으로, 파도에 흔들
+  {
+    const span = W + 240, sx = ((T * 0.12 + W*0.15) % span) - 120, sy = hz - 2 + Math.sin(T*0.03)*1.5, s = 1;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(Math.sin(T*0.025)*0.05); ctx.scale(s, s);
+    ctx.fillStyle = "#0e1218";
+    ctx.beginPath(); ctx.moveTo(-46, -10); ctx.lineTo(48, -10); ctx.lineTo(36, 4); ctx.lineTo(-38, 4); ctx.closePath(); ctx.fill();
+    ctx.fillRect(-46, -16, 14, 7); ctx.fillRect(-2, -78, 3, 68); ctx.fillRect(-26, -62, 2.5, 52); ctx.fillRect(22, -58, 2.5, 48);
+    ctx.beginPath(); ctx.moveTo(1, -74); ctx.quadraticCurveTo(22, -58, 1, -36); ctx.closePath(); ctx.moveTo(1, -32); ctx.quadraticCurveTo(26, -24, 1, -14); ctx.closePath();
+    ctx.moveTo(-24, -58); ctx.quadraticCurveTo(-8, -46, -24, -30); ctx.closePath(); ctx.moveTo(24, -54); ctx.quadraticCurveTo(40, -42, 24, -26); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(1, -78); ctx.lineTo(14, -74 + Math.sin(T*0.1)*1.5); ctx.lineTo(1, -70); ctx.fill();
+    ctx.restore();
+  }
+  // 바다
+  g = ctx.createLinearGradient(0, hz, 0, H); g.addColorStop(0, "#2a2a30"); g.addColorStop(0.3, "#14222a"); g.addColorStop(1, "#081014");
+  ctx.fillStyle = g; ctx.fillRect(0, hz, W, H - hz);
+  // 달빛 기둥 — 흔들리는 짧은 붓질
+  for(let i=0;i<14;i++){ const yy = hz + 4 + i*8, ww = (30 - i) * (0.8 + 0.3*Math.sin(T*0.05 + i)), xx = mx + Math.sin(T*0.03 + i*1.3)*6;
+    ctx.fillStyle = "rgba(255,226,160," + (0.28 - i*0.016).toFixed(2) + ")"; ctx.fillRect(xx - ww/2, yy, ww, 1.6); }
+  // 파도 세 겹 — 멀수록 느리고 낮다
+  const layers = [[hz + 16, 4, 0.25, "#16262e", 0.10], [hz + 52, 7, 0.5, "#0f1d24", 0.13], [hz + 100, 10, 0.9, "#09141a", 0.16]];
+  layers.forEach(([by, amp, sp, col, hl], li) => {
+    const off = T * sp, wl = 120 + li*40;
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for(let xx=0; xx<=W; xx+=12) ctx.lineTo(xx, by + Math.sin((xx + off) / wl * Math.PI*2) * amp + Math.sin((xx - off*0.6) / (wl*0.45)) * amp*0.35);
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    ctx.strokeStyle = "rgba(255,220,160," + hl + ")"; ctx.lineWidth = 1.4; ctx.beginPath();
+    for(let xx=0; xx<=W; xx+=12){ const yy = by + Math.sin((xx + off) / wl * Math.PI*2) * amp + Math.sin((xx - off*0.6) / (wl*0.45)) * amp*0.35; if(xx) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); }
+    ctx.stroke();
+  });
+  if(!dim){
+    const vg = ctx.createRadialGradient(W/2, H*0.46, H*0.3, W/2, H*0.5, H*0.95);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.5)");
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+  paperUI = pu;
+}
+// 메인 메뉴 제목 — 붓 먹 자국 위 금박 붓글씨. 들어올 때 도장처럼 커졌다 자리 잡는다
+function drawMenuLogo(y){
+  const pu = paperUI; paperUI = false;
+  const k = settings.calm ? 1 : clamp01(fx.menuT / 22), sc = settings.calm ? 1 : 0.6 + 0.4*ease.outBack(k, 2.2);
+  ctx.save();
+  ctx.globalAlpha = settings.calm ? 1 : Math.min(1, k*2);
+  // 먹 자국
+  ctx.fillStyle = "rgba(8,5,3,.62)"; brushBand(W/2 - 250, W/2 + 250 * (settings.calm ? 1 : ease.outCubic(k)), y - 30, 58, 3.7); ctx.fill();
+  ctx.translate(W/2, y); ctx.scale(sc, sc);
+  const f = UIF(800, 46), t1 = "고무팔", t2 = "대항해";
+  ctx.font = f;
+  const w1 = ctx.measureText(t1).width, w2 = ctx.measureText(t2).width, gap = 46;
+  const x1 = -(w1 + gap + w2)/2 + w1/2, x2 = (w1 + gap + w2)/2 - w2/2;
+  // 붓 자국처럼 거친 가장자리 — 먹을 살짝 어긋나게 두 번
+  ctx.fillStyle = "rgba(12,6,2,.7)"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(t1, x1 + 2.5, 3); ctx.fillText(t2, x2 + 2.5, 3);
+  goldText(t1, x1, 0, f, w1); goldText(t2, x2, 0, f, w2);
+  // 가운데 닻 문장
+  drawMedal(0, 2, 15, 3, { kind: "anchor", face: "#1c120a" });
+  // 금박 부스러기
+  if(!settings.calm) for(let i=0;i<10;i++){ const a = 0.4 + 0.6*Math.abs(Math.sin(fx.clock*0.03 + i*2.1)), px = (hash(i*9.1) - 0.5) * (w1 + w2 + gap + 40), py = (hash(i*4.7) - 0.5) * 60;
+    ctx.save(); ctx.translate(px, py); ctx.rotate(hash(i)*3); ctx.fillStyle = "rgba(255,214,110," + (a*0.8).toFixed(2) + ")"; ctx.fillRect(-1.6, -1.6, 3.2, 3.2); ctx.restore(); }
+  ctx.restore();
+  // 아래 장식선 — 금줄 가운데 마름모
+  ctx.save(); ctx.globalAlpha = settings.calm ? 1 : clamp01((fx.menuT - 10) / 16);
+  ctx.strokeStyle = "rgba(230,190,100,.75)"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(W/2 - 170, y + 34); ctx.lineTo(W/2 - 10, y + 34); ctx.moveTo(W/2 + 10, y + 34); ctx.lineTo(W/2 + 170, y + 34); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W/2, y + 28); ctx.lineTo(W/2 + 6, y + 34); ctx.lineTo(W/2, y + 40); ctx.lineTo(W/2 - 6, y + 34); ctx.closePath(); ctx.fillStyle = "#e8c070"; ctx.fill();
+  ctx.restore();
+  paperUI = pu;
+}
+// 버튼 줄이 차례로 미끄러져 들어온다(그리기만 옮긴다 — 누르는 자리는 처음부터 제자리)
+function slideIn(i, t, fn){
+  if(settings.calm || t > 18 + i*4 + 2){ fn(); return; }
+  const k = clamp01((t - i*4) / 18);
+  if(k <= 0) return;
+  ctx.save(); ctx.translate((1 - ease.outBack(k, 1.4)) * -120, 0); ctx.globalAlpha *= Math.min(1, k*1.6);
+  fn();
+  ctx.restore();
+}
+/* 팩 열기 연출 — 상자가 들썩이다 열리며 빛살, 결과 카드가 솟는다. 그리기 전용(결과는 openPack이 이미 정했다).
+   화면 가운데만 어둡게(밝은 막 없음). 누르면 바로 걷힌다 */
+const PACK_T = 120;
+function drawPackReveal(){
+  const P = UIK.pack;
+  if(!P) return;
+  P.t += fx.dt;
+  if(P.t > PACK_T){ UIK.pack = null; return; }
+  const pu = paperUI; paperUI = false;
+  const t = P.t, calm = settings.calm, out = t > PACK_T - 16 ? (PACK_T - t) / 16 : 1;
+  const cx = W/2, cy = H/2 + 10, C = TECH_CATS[P.cat] || { col: "#ffd76a" };
+  ctx.save(); ctx.globalAlpha = out;
+  const vg = ctx.createRadialGradient(cx, cy, 40, cx, cy, 330); vg.addColorStop(0, "rgba(10,6,3,.88)"); vg.addColorStop(1, "rgba(10,6,3,0)");
+  ctx.fillStyle = vg; ctx.fillRect(cx - 330, cy - 330, 660, 660);
+  const open = clamp01((t - 24) / 10);
+  // 빛살
+  if(open > 0){
+    const rare = P.res.kind === "tech";
+    ctx.save(); ctx.translate(cx, cy - 20); if(!calm) ctx.rotate(t * 0.01);
+    for(let i=0;i<14;i++){ ctx.rotate(Math.PI*2/14); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -170*open); ctx.lineTo(10, -170*open); ctx.closePath();
+      ctx.fillStyle = rare ? "rgba(255,214,110,.22)" : "rgba(220,200,160,.12)"; ctx.fill(); }
+    ctx.restore();
+  }
+  // 상자
+  const shake = !calm && t < 24 ? Math.sin(t*1.7) * (t/24) * 4 : 0;
+  ctx.save(); ctx.translate(cx + shake, cy + 40);
+  rrPath(-46, -10, 92, 50, 6); ctx.fillStyle = "#5a3418"; ctx.fill(); ctx.strokeStyle = "#1c0e04"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = brassFill(-46, -10, 92, 50, true, false); ctx.fillRect(-46, 4, 92, 6); ctx.fillRect(-6, -10, 12, 50);
+  ctx.save(); ctx.translate(-46, -10); ctx.rotate(-open * 1.25);      // 뒤쪽 경첩(왼쪽 끝)을 축으로 젖혀진다
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(0, -26, 46, -28); ctx.quadraticCurveTo(92, -26, 92, 0); ctx.closePath();
+  ctx.fillStyle = "#6a3e1c"; ctx.fill(); ctx.strokeStyle = "#1c0e04"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+  // 결과 카드 — 상자에서 솟아 자리 잡는다
+  const up = calm ? 1 : ease.outBack(clamp01((t - 30) / 22), 1.6);
+  if(t > 30 || calm){
+    const bw = 340, bh = 104, bx = cx - bw/2, by = cy - 150 + (1 - up) * 90;
+    ctx.globalAlpha = out * Math.min(1, calm ? 1 : (t - 30) / 8);
+    rrPath(bx, by + 4, bw, bh, 10); ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fill();
+    rrPath(bx, by, bw, bh, 10); ctx.fillStyle = brassFill(bx, by, bw, bh, P.res.kind === "tech", false); ctx.fill();
+    rrPath(bx + 4, by + 4, bw - 8, bh - 8, 7); const g = ctx.createLinearGradient(0, by, 0, by + bh); g.addColorStop(0, "#3a2414"); g.addColorStop(1, "#1a0f07"); ctx.fillStyle = g; ctx.fill();
+    const t0 = P.res.kind === "tech" ? techOf(P.res.id) : null;
+    drawMedal(bx + 46, by + bh/2, 28, P.res.kind === "tech" ? 3 : 0, { kind: P.res.kind === "mat" ? "scroll" : P.cat === "gear" ? "cog" : P.cat === "ranged" ? "target" : "fist", face: "#1c120a" });
+    const head = P.res.kind === "tech" ? "★ 새 기술!" : P.res.kind === "dup" ? "이미 가진 기술" : (TECH_CATS[P.cat] ? TECH_CATS[P.cat].mat : "비급") + " +" + P.res.n;
+    const name = t0 ? t0.name : P.res.kind === "dup" ? (techOf(P.res.id) || {}).name + " → 비급 +" + P.res.n : "보유 " + (mats[P.cat] || 0) + "개";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    const tl = (s, x, y, f, c) => { ctx.font = f; ctx.strokeStyle = "rgba(8,4,2,.9)"; ctx.lineWidth = 3; ctx.strokeText(s, x, y, bw - 100); ctx.fillStyle = c; ctx.fillText(s, x, y, bw - 100); };
+    tl(head, bx + 86, by + 30, UIF(800, 15), P.res.kind === "tech" ? "#ffd76a" : C.col || "#f0d79a");
+    tl(name || "", bx + 86, by + 56, UIF(800, 19), "#f6ead0");
+    if(t0) tl(t0.desc.length > 30 ? t0.desc.slice(0, 29) + "…" : t0.desc, bx + 86, by + 80, UIF(500, 12), "rgba(244,232,205,.85)");
+    if(open > 0 && !calm && t < 60) inkSplat(cx, by + bh/2, (t - 30) / 30, 7.7, 9, "255,214,110", 160);
+  }
+  ctx.restore();
+  paperUI = pu;
 }
 
 /* ---------- 보물 창고 — 탭 + 카드 ---------- */
@@ -14098,7 +15182,7 @@ function shopTab(i){
 function shopUI(){
   if(shopPage === 2) shopPage = 3;              // 예전 '기술 뽑기' 쪽은 기술 탭에 합쳤다
   const cards = [], rows = [];
-  rows.push({ key:0, x:16, y:16, w:96, h:34, label:"← 메뉴", action: () => { state = STATE.MENU; shopPage = 0; crewStory = null; } });
+  rows.push(backRow(0));
   const tw = (SHOP_W - 5*8) / 6, cur = shopTabIdx();
   SHOP_TABS.forEach((t, i) => {
     const news = t.page === 4 && crewNewsCount();
@@ -14139,25 +15223,27 @@ function shopUI(){
       uiText(gearCat ? "특성은 기어(E)에 붙는다 — 가지고만 있으면 늘 적용" : "장착 중 — " + (techCat === "ranged" ? "Q " + techOf(eqRanged).name : "W " + techOf(eqMelee).name),
              SHOP_X + 4, SHOP_TOP + 38, UIF(500, 13), "rgba(244,236,217,.72)");
     } });
-    rows.push({ key:7, x: W - 16 - 320, y: SHOP_TOP - 2, w:320, h:52, col:C.col, dim: bank < C.price,
-                label:"📦 " + C.name + " 팩 열기 · 💰 " + commas(C.price), sub:(gearCat ? "특성 " : "기술 ") + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + " 2~6개  (7)",
+    // v60: 기술이 분류마다 넷이 될 수 있어 카드 수만큼 나눈다 — 장착 1~n, 강화 n+1~2n, 팩은 9
+    rows.push({ key:9, x: W - 16 - 320, y: SHOP_TOP - 2, w:320, h:52, col:C.col, dim: bank < C.price, icon:"chest",
+                label:"📦 " + C.name + " 팩 열기 · 💰 " + commas(C.price), sub:(gearCat ? "특성 " : "기술 ") + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + " 2~6개  (9)",
                 action: () => openPack(techCat) });
-    const cw = (SHOP_W - 24) / 3, cy = SHOP_TOP + 62, ch = SHOP_BOT - cy;
+    const nT = list.length, cw = (SHOP_W - 12*(nT - 1)) / nT, cy = SHOP_TOP + 62, ch = SHOP_BOT - cy;
     list.forEach((t, i) => {
       const x = SHOP_X + i*(cw + 12), lv = tlv(t.id), on = t.id === eqRanged || t.id === eqMelee;
       cards.push({ x, y:cy, w:cw, h:ch, on: lv > 0 && (on || gearCat), dim: !lv, col: C.col, draw: () => {
-        uiText(t.name, x + 16, cy + 26, UIF(800, 17), lv ? "#f4ecd9" : "rgba(244,236,217,.45)");
+        uiText(t.name, x + 16, cy + 26, UIF(800, nT > 3 ? 16 : 17), lv ? "#f4ecd9" : "rgba(244,236,217,.45)");
         drawPips(x + cw - 18, cy + 52, lv, TECH_MAX, C.col);
         uiText(lv ? "Lv." + lv : "🔒 아직 없음", x + 16, cy + 52, UIF(700, 13), lv ? C.col : "rgba(244,236,217,.4)");
         drawWrapped(t.desc, x + 16, cy + 82, cw - 32, 19, UIF(500, 13), lv ? "rgba(244,236,217,.78)" : "rgba(244,236,217,.4)", 4);
         if(t.base) uiText("기본 기술", x + cw - 16, cy + 26, UIF(600, 11), "rgba(244,236,217,.45)", "right");
+        else if(t.id === "top" || t.id === "comet") uiText("새 기술", x + cw - 16, cy + 26, UIF(700, 11), "#ffd76a", "right");
       } });
       rows.push({ key:i + 1, x: x + 12, y: cy + ch - 88, w: cw - 24, h:34, dim: !lv, on: lv > 0 && (on || gearCat),
-                  label: !lv ? "🔒 팩에서 뽑아야 한다" : gearCat ? "✓ 늘 적용 중" : on ? "✓ 장착 중 (" + (t.cat === "ranged" ? "Q" : "W") + ")" : (i + 1) + ") 장착하기",
+                  label: !lv ? (nT > 3 ? "🔒 팩에서 뽑는다" : "🔒 팩에서 뽑아야 한다") : gearCat ? "✓ 늘 적용 중" : on ? "✓ 장착 중 (" + (t.cat === "ranged" ? "Q" : "W") + ")" : (i + 1) + ") 장착하기",
                   action: () => equipTech(t.id) });
       const need = TECH_UP[lv], maxed = lv >= TECH_MAX;
-      rows.push({ key:i + 4, x: x + 12, y: cy + ch - 46, w: cw - 24, h:34, col: C.col, dim: !lv || maxed || mats[t.cat] < need,
-                  label: !lv ? "강화 — 뽑은 뒤에" : maxed ? "최고 Lv." + TECH_MAX : (i + 4) + ") 강화 Lv." + lv + "→" + (lv + 1) + " · 비급 " + need,
+      rows.push({ key:i + 1 + nT, x: x + 12, y: cy + ch - 46, w: cw - 24, h:34, col: C.col, dim: !lv || maxed || mats[t.cat] < need,
+                  label: !lv ? "강화 — 뽑은 뒤에" : maxed ? "최고 Lv." + TECH_MAX : (i + 1 + nT) + ") 강화 " + lv + "→" + (lv + 1) + " · 비급 " + need,
                   action: () => upgradeTech(t.id) });
     });
   } else if(shopPage === 4){
@@ -14218,16 +15304,16 @@ function shopUI(){
     const c = crewStory, bw = 220;
     modal = [
       { key:1, x: W/2 - bw - 8, y: H/2 + 104, w: bw, h: 42, col:"#9fe0a0", label:"1) 동료로 맞이하기", action: () => acceptCrew(c) },
-      { key:9, x: W/2 + 8, y: H/2 + 104, w: bw, h: 42, label:"9) 나중에", action: () => { crewStory = null; } }
+      { key:9, x: W/2 + 8, y: H/2 + 104, w: bw, h: 42, label:"9) 나중에", action: () => { crewStory = null; } },
+      backRow(0)
     ];
   }
   return { cards, rows: modal || rows, base: rows, modal };
 }
 function drawShop(){
-  ctx.fillStyle = "rgba(10,20,30,0.9)";
-  ctx.fillRect(0, 0, W, H);
+  drawMenuBg();
   const ui = shopUI();
-  centerText("보물 창고", 33, UIF(800, 24), "#f4ecd9");
+  drawHeading("보물 창고", 33, 22);
   uiText("💰 " + bigNum(bank), W - 20, 33, "700 18px 'Gowun Batang', serif", "#ffd76a", "right");
   const hv = hoverPos;
   if(ui.modal) hoverPos = null;                // 이야기 창 뒤쪽 버튼은 밝아지지 않게
@@ -14264,20 +15350,27 @@ function drawShop(){
   const foot = shopPage === 4 ? "이야기 선원은 스토리 장 보스를 깨면 합류 · 고용 선원은 보물로 · 함께 항해한 거리만큼 레벨이 오른다(최고 Lv.5)"
              : "본게임이 끝나면 모은 보물이 창고에 쌓인다 · 숫자 키·클릭 · ← → 탭 바꾸기 · Esc 메뉴로";
   centerText(foot, H - 16, UIF(400, 12), "rgba(244,236,217,.55)");
+  if(state === STATE.SHOP) drawPackReveal();
 }
 
 let uiState = -1;
+const MENU_SCREENS = [STATE.MENU, STATE.CHALLENGE, STATE.PRACTICE_SELECT, STATE.SHOP, STATE.LOG, STATE.SETTINGS, STATE.MINI_SELECT];
 // 상태가 바뀐 프레임 — 스토리 흐름의 화면 전환(잉크 덮개)과 화면별 등장 타이머를 건다. 상태는 이미 바뀌어 있고 그림만 따라간다
 function fxStateChange(from, to){
   const S = STATE;
   if(to === S.OVER) fx.resT = 0;
+  if(from === S.SHOP) UIK.pack = null;
   if(to === S.STORY_MAP && from !== S.STORY_TALK) fx.mapT = 0;
+  // v60: 메뉴 화면에 들어오면 버튼이 차례로 미끄러져 들어온다(fx.menuT)
+  if(MENU_SCREENS.indexOf(to) >= 0) fx.menuT = 0;
   if(from < 0) return;
+  // 메뉴끼리 옮길 때도 짧은 잉크 전환(스토리 흐름보다 짧게)
+  if(MENU_SCREENS.indexOf(from) >= 0 && MENU_SCREENS.indexOf(to) >= 0){ fx.wipe = fx.wipeT = 18; return; }
   if((to === S.STORY_MAP && (from === S.MENU || from === S.OVER || from === S.READY || from === S.STORY_END)) ||
      (from === S.STORY_MAP && (to === S.STORY_TALK || to === S.READY || to === S.MENU)) ||
      (from === S.STORY_TALK && to === S.STORY_END) ||
      (storyMode && from === S.OVER && (to === S.READY || to === S.STORY_TALK)) ||
-     (from === S.STORY_END)) fx.wipe = WIPE_T;
+     (from === S.STORY_END)){ fx.wipe = fx.wipeT = WIPE_T; }
 }
 function draw(){
   if(state !== uiState) fxStateChange(uiState, state);
@@ -14443,6 +15536,7 @@ function drawFrame(){
   if(state === STATE.PLAY) drawRivalHud();
   if(state === STATE.PLAY) drawBossIntro();
   if(state === STATE.PLAY) drawSinkBanner();
+  if(state === STATE.PLAY) drawTitleToast();
   if(state === STATE.PLAY && !storyMode) drawMissions();
   if(state === STATE.PLAY && storyMode && storyRun) drawStoryHud();
   if(state === STATE.PLAY) drawArtScreen();
@@ -14488,7 +15582,7 @@ function drawFrame(){
     centerText("닻을 내렸다", H/2 - 120, "700 30px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
     if(storyMode) centerText("스토리 " + storyStage().id + " " + storyStage().name + " — " + storyGoalText(storyStage()), H/2 - 88, "600 14px 'Gowun Batang', 'Pretendard', serif", "#ffd76a");
     else if(practiceMode || dailyMode || blitzMode || rushMode)
-      centerText(practiceMode ? "연습 모드 — " + practiceLabel() : dailyMode ? "오늘의 항해" : blitzMode ? "60초 보물 사냥 · 남은 " + Math.ceil(blitzT/60) + "초" : "보스 러시 " + Math.min(rushIdx+1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length,
+      centerText(practiceMode ? "연습 모드 — " + practiceLabel() : dailyMode ? "오늘의 항해" : blitzMode ? "60초 보물 사냥 · 남은 " + Math.ceil(blitzT/60) + "초" : "보스 러시 " + Math.min(rushIdx+1, RUSH_N) + "/" + RUSH_N + " — " + rushList.map((t, i) => (i < rushIdx ? "✓" : "") + BOSSES[t].name).join(" → "),
                  H/2 - 88, "600 14px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
     // 이번 판 상황
     const facts = [Math.floor(dist) + "m", "보물 " + bigNum(treasure)];
@@ -14513,9 +15607,9 @@ function drawFrame(){
     drawVersion();
     drawScreenButtons();
   } else if(state === STATE.READY){
-    ctx.fillStyle = "rgba(13,27,38,0.66)";
+    ctx.fillStyle = rushMode ? "rgba(13,27,38,0.9)" : "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
-    if(rushMode) centerText("보스 러시 — 중간보스 6종과 크라켄·유령선·해군 대장 군함까지 9연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : ""), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
+    if(rushMode){ drawRushBracket(); drawScreenButtons(); return; }
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 하루 한 판 · 바다에 빠지면 끝" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
@@ -14536,7 +15630,12 @@ function drawFrame(){
     if(missions.length) centerText("이번 항해 미션: " + missions.map(m => m.text).join(" · "), H/2 + 84, "600 13px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0");
     if(tip) centerText("팁 · " + tip, H/2 + 106, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(255,215,106,.8)");
     const readyTitle = currentTitleName();
-    if(readyTitle) centerText("현재 칭호: " + readyTitle, H/2 - 78, "600 14px 'Gowun Batang', 'Pretendard', serif", "#ffd76a");
+    if(readyTitle){
+      const rt = currentTitle(), txt = "현재 칭호: " + readyTitle;
+      ctx.font = UIF(600, 14);
+      drawTitleMedal(rt, W/2 - ctx.measureText(txt).width/2 - 16, H/2 - 78, 10);
+      uiText(txt, W/2 + 8, H/2 - 78, UIF(600, 14), TITLE_TIERS[rt.tier].col, "center");
+    }
     if(bestChain > 1) centerText("최고 콤보 ×" + bestChain, H/2 - 96, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(217,184,119,.8)");
     drawScreenButtons();
   } else if(state === STATE.PICK){
@@ -14551,13 +15650,7 @@ function drawFrame(){
     const k = Math.max(0, reviveT / REVIVE_T);
     ctx.fillStyle = "rgba(244,236,217,.15)"; ctx.fillRect(W/2 - 150, H/2 - 8, 300, 6);
     ctx.fillStyle = "#ffd76a"; ctx.fillRect(W/2 - 150, H/2 - 8, 300 * k, 6);
-    const btn = (B, text, col) => {
-      ctx.fillStyle = "rgba(13,27,38,.7)"; ctx.fillRect(B.x, B.y, B.w, B.h);
-      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(B.x, B.y, B.w, B.h);
-      ctx.fillStyle = col; ctx.font = "700 15px 'Gowun Batang', 'Pretendard', serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(text, B.x + B.w/2, B.y + B.h/2 + 1);
-    };
+    const btn = (B, text, col) => drawBrassBtn(asBrass(Object.assign({ label: text, col, act: true }, B)), UIF(700, 15));
     btn(REVIVE_BTN, "부활 (Space)", "#ffd76a");
     btn(GIVEUP_BTN, "포기 (Esc)", "rgba(244,236,217,.7)");
   } else if(state === STATE.OVER){
@@ -14583,7 +15676,7 @@ function drawFrame(){
     if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8", 26);
     if(storyMode) line("스토리 " + storyStage().id + " " + storyStage().name, "700 14px 'Gowun Batang', 'Pretendard', serif", "#ffd76a", 26);
     if(rushMode) line(rushDone ? ((newRushRecord ? "★ 최단 기록 " : "완주 기록 ") + fmtTime(rushT) + (rushBest && !newRushRecord ? " · 최단 " + fmtTime(rushBest) : ""))
-                               : ("보스 " + rushIdx + "/" + RUSH_ORDER.length + " 격파" + (rushBest ? " · 최단 " + fmtTime(rushBest) : "")),
+                               : ("보스 " + rushIdx + "/" + RUSH_N + " 격파" + (rushList && rushList[rushIdx] !== undefined ? " — " + BOSSES[rushList[rushIdx]].name + "에게 막혔다" : "") + (rushBest ? " · 최단 " + fmtTime(rushBest) : "")),
                       "700 14px 'Gowun Batang', 'Pretendard', serif", newRushRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(blitzMode) line((newBlitzRecord ? "★ 60초 사냥 신기록 " : "60초 보물 사냥 · 최고 ") + Math.floor(blitzBest), "700 14px 'Gowun Batang', 'Pretendard', serif", newBlitzRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(dailyMode && streakReward) line("🔥 " + streak + "일 연속 출석! 창고 보물 +" + streakReward, "700 14px 'Gowun Batang', 'Pretendard', serif", "#ffb070", 26);
@@ -14648,34 +15741,43 @@ function drawFrame(){
       line((newChainRecord ? "★ 신기록 " : "") + "최고 콤보 ×" + maxChain, "600 14px 'Gowun Batang', 'Pretendard', serif",
            newChainRecord ? "#ffd76a" : "rgba(217,184,119,.85)", 24);
     }
-    if(newTitle) line("★ 새 칭호 획득: " + newTitle, "700 15px 'Gowun Batang', 'Pretendard', serif", "#ffd76a", 26);
+    if(newTitle){
+      // 새 칭호 — 문장이 도장처럼 찍힌다
+      const nt = TITLES.find(q => q.name === newTitle);
+      if(nt) drawTitleStamp(nt, lx + 14, overY, 13, (fx.resT - 30) / 34);
+      leftText("새 칭호 획득: " + newTitle + (nt ? "  (" + TITLE_TIERS[nt.tier].name + ")" : ""), lx + (nt ? 36 : 0), overY, "700 15px 'Gowun Batang', 'Pretendard', serif", "#ffd76a"); overY += 30;
+    }
     if(crewNews) line("✉ 새 동료 소식: " + crewNews.name + " — 창고 → 선원 칸에서 맞이하기", "700 15px 'Gowun Batang', 'Pretendard', serif", "#e6a8f0", 24);
     if(crewLvUp) line("⚓ 선원 " + crewLvUp.name + " Lv." + crewLvUp.lv + " 승급!", "700 15px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0", 24);
     if(runXp > 0) drawXpBar(lx, H - 112);
     drawScreenButtons();
     drawShareButton();
   } else if(state === STATE.MENU){
-    ctx.fillStyle = "rgba(13,27,38,0.72)";
-    ctx.fillRect(0,0,W,H);
-    centerText("고무팔 · 대항해", H/2 - 214, "700 30px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    for(const row of menuRows()){
-      row.col = row.mini ? "#e6a8f0" : row.story ? "#ffd76a" : row.acct ? "#8fd6d8" : row.glow ? "#e6a8f0" : "#f0a24e";
-      drawBtn(row, UIF(700, 17));
-    }
-    centerText((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + bigNum(bank), H/2 - 182, "600 14px 'Gowun Batang', serif", "#ffd76a");
+    // v60: 움직이는 밤바다 + 금박 붓글씨 제목 + 놋쇠 버튼이 차례로 미끄러져 들어온다
+    drawMenuSea(false);
+    drawMenuLogo(52);
+    const pu = paperUI; paperUI = false;
+    const sub = (t, y, f, c) => { ctx.font = f; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(8,4,2,.85)"; ctx.lineWidth = 3.5; ctx.strokeText(t, W/2, y); ctx.fillStyle = c; ctx.fillText(t, W/2, y); };
+    sub((account ? "👤 " + account + "  ·  " : "") + "선장 Lv." + levelOf(lifeLog.xp || 0).L + "  ·  창고 보물 " + bigNum(bank), 104, UIF(700, 14), "#ffd76a");
     const wkNow = weeklyNow();
-    centerText("🌊 이번 주 해류: " + wkNow.name + " — " + wkNow.desc, H/2 - 150, "600 13px 'Gowun Batang', 'Pretendard', serif", wkNow.col);
-    centerText("숫자 키 또는 클릭으로 선택", H/2 + 236, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
+    sub("🌊 이번 주 해류: " + wkNow.name + " — " + wkNow.desc, 126, UIF(600, 13), wkNow.col);
+    paperUI = pu;
+    menuRows().forEach((row, i) => {
+      row.col = row.mini ? "#efb8f6" : row.story ? "#ffd76a" : row.acct ? "#9ee0e2" : row.glow ? "#efb8f6" : "#f6c27a";
+      slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 16)));
+    });
+    centerText("숫자 키 또는 클릭으로 선택", H - 16, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)");
     drawVersion();
   } else if(state === STATE.SETTINGS){
-    ctx.fillStyle = "rgba(13,27,38,0.86)";
-    ctx.fillRect(0,0,W,H);
-    centerText("설정", H/2 - 140, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
+    drawMenuBg();
+    drawHeading("설정", H/2 - 150, 24);
     centerText("멀미나 번쩍임이 불편하면 연출을 끌 수 있다 — 게임 규칙은 그대로", H/2 - 110, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)");
-    for(const row of menuRows()){
+    menuRows().forEach((row, i) => {
       row.dim = /꺼짐/.test(row.label) && !/연출 줄이기/.test(row.label);
-      drawBtn(row, UIF(700, 16));
-    }
+      if(!row.back) row.icon = ["wave", "bolt", "wind", "eye", "book"][i];
+      slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 16)));
+    });
     if(shopMsg){
       shopMsg.t -= 1;
       centerText(shopMsg.text, H/2 + 204, "700 14px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0", Math.min(1, shopMsg.t/20));
@@ -14684,21 +15786,10 @@ function drawFrame(){
   } else if(state === STATE.LOG && dexPage){
     drawDex();
   } else if(state === STATE.LOG && titlePage){
-    ctx.fillStyle = "rgba(13,27,38,0.9)";
-    ctx.fillRect(0,0,W,H);
-    centerText("칭호 고르기", 50, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    centerText("지금 단 칭호: " + (currentTitleName() || "없음") + (titleSel ? "" : " (자동)"), 84, "600 14px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0");
-    for(const row of menuRows()) centerText(row.label, row.y, "500 15px 'Gowun Batang', 'Pretendard', serif", row.on ? "#9fe0a0" : row.dim ? "rgba(244,236,217,.35)" : "#d9b877");
-    if(shopMsg){
-      shopMsg.t -= 1;
-      centerText(shopMsg.text, H - 44, "700 14px 'Gowun Batang', 'Pretendard', serif", shopMsg.good ? "#9fe0a0" : "#f7a8a0", Math.min(1, shopMsg.t/20));
-      if(shopMsg.t <= 0) shopMsg = null;
-    }
-    centerText("출항 화면과 현상수배 포스터에 고른 칭호가 붙는다 · 숫자 키 또는 클릭 · Esc 뒤로", H - 18, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
+    drawTitles();
   } else if(state === STATE.LOG){
-    ctx.fillStyle = "rgba(13,27,38,0.86)";
-    ctx.fillRect(0,0,W,H);
-    centerText("항해 일지", 44, "700 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
+    drawMenuBg();
+    drawHeading("항해 일지", 38, 24);
     const L = lifeLog;
     const stats = [
       ["항해 횟수", L.runs + "판"], ["총 항해 거리", commas(L.dist) + "m"], ["최고 거리", Math.floor(best) + "m"],
@@ -14713,26 +15804,32 @@ function drawFrame(){
       leftText(st[0], cx, cy, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)");
       leftText(st[1], cx + 96, cy, "700 14px 'Gowun Batang', serif", "#ffd76a");
     });
-    const cur = currentTitleName();
-    TITLES.forEach((t, i) => {
-      // 칭호가 많아져 이름만 세 줄씩 — 조건은 '칭호 고르기'에서 본다. 아래 최근 기록 그래프(414)와 겹치지 않게
-      const cx = [W/2 - 310, W/2 - 95, W/2 + 120][i % 3], cy = 292 + Math.floor(i / 3) * 21;
-      const has = unlockedTitles.has(t.id);
-      leftText((has ? "★ " : "☆ ") + t.name, cx, cy, "700 13px 'Gowun Batang', 'Pretendard', serif",
-               t.name === cur ? "#9fe0a0" : has ? "#ffd76a" : "rgba(244,236,217,.35)");
-    });
+    // 칭호 — 지금 단 것과 범주별 모은 수(목록·조건은 '칭호 보기'에서). 아래 최근 기록 그래프(414)와 겹치지 않게
+    {
+      const cur = currentTitle(), y0 = 300;
+      if(cur){ drawTitleMedal(cur, W/2 - 290, y0 + 26, 24); leftText(cur.name, W/2 - 256, y0 + 16, UIF(800, 17), TITLE_TIERS[cur.tier].col); leftText(cur.desc, W/2 - 256, y0 + 38, UIF(500, 12), "rgba(244,236,217,.7)"); }
+      else leftText("아직 딴 칭호가 없다", W/2 - 310, y0 + 26, UIF(600, 14), "rgba(244,236,217,.6)");
+      TITLE_CATS.forEach((c, i) => {
+        const all = TITLES.filter(t => t.cat === c.id), got = all.filter(t => unlockedTitles.has(t.id)).length;
+        const cx = W/2 - 20 + (i % 3) * 112, cy = y0 + 14 + Math.floor(i / 3) * 26;
+        leftText(c.name, cx, cy, UIF(600, 13), "rgba(244,236,217,.65)");
+        leftText(got + "/" + all.length, cx + 52, cy, UIF(800, 13), got === all.length ? "#9fe0a0" : got ? "#ffd76a" : "rgba(244,236,217,.4)");
+      });
+    }
     drawRecentChart(W/2 - 310, 414, 620, 32);
-    menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 || row.key === 3 ? "600 16px 'Gowun Batang', 'Pretendard', serif" : "500 14px 'Gowun Batang', 'Pretendard', serif",
-                                              i === 0 ? "#d9b877" : row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
+    menuRows().forEach((row, i) => {
+      if(row.w !== undefined){ drawBtn(row, UIF(700, 14)); return; }
+      centerText(row.label, row.y, row.key === 3 ? "600 16px 'Gowun Batang', 'Pretendard', serif" : "500 14px 'Gowun Batang', 'Pretendard', serif",
+                 row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)");
+    });
   } else if(state === STATE.SHOP){
     drawShop();
   } else if(state === STATE.MINI_SELECT){
-    ctx.fillStyle = "rgba(13,27,38,0.84)";
-    ctx.fillRect(0,0,W,H);
-    centerText("🪼 미니게임", H/2 - 180, "800 28px 'Gowun Batang', 'Pretendard', serif", "#e6a8f0");
+    drawMenuBg();
+    drawHeading("미니게임", H/2 - 186, 24, { cloth: ["#4a2058", "#22082c"] });
     centerText("짧게 한 판 — 보물은 메달을 처음 딸 때만(동 " + MINI_MEDAL_BONUS[0] + " · 은 " + MINI_MEDAL_BONUS[1] + " · 금 " + MINI_MEDAL_BONUS[2] + ") · 셋 다 금메달이면 '해파리 두건'",
                H/2 - 146, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.7)");
-    for(const row of menuRows()) drawBtn(row, UIF(700, 18));
+    menuRows().forEach((row, i) => { if(!row.back) row.icon = ["jelly", "gull", "chest", "star"][i] || "star"; slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 18))); });
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.STORY_MAP){
     drawStoryMap();
@@ -14741,17 +15838,15 @@ function drawFrame(){
   } else if(state === STATE.STORY_END){
     drawEnding();
   } else if(state === STATE.CHALLENGE){
-    ctx.fillStyle = "rgba(13,27,38,0.78)";
-    ctx.fillRect(0,0,W,H);
-    centerText("도전", H/2 - 160, "800 26px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    centerText("매일 바뀌는 바다 · 하루 한 판 보물 사냥 · 보스 9연전 · 연습", H/2 - 130, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.7)");
-    for(const row of menuRows()) drawBtn(row, UIF(700, 16));
+    drawMenuBg();
+    drawHeading("도전", H/2 - 166, 24);
+    centerText("매일 바뀌는 바다 · 하루 한 판 보물 사냥 · 무작위 보스 5연전 · 연습", H/2 - 130, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.7)");
+    menuRows().forEach((row, i) => { if(!row.back) row.icon = ["compass", "coin", "skull", "target"][i]; slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 16))); });
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
   } else if(state === STATE.PRACTICE_SELECT){
-    ctx.fillStyle = "rgba(13,27,38,0.78)";
-    ctx.fillRect(0,0,W,H);
-    centerText("연습 모드 — 연습할 항목을 고르세요", H/2 - 196, "700 21px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
-    for(const row of menuRows()) drawBtn(row, UIF(600, 15));
+    drawMenuBg();
+    drawHeading("연습 모드", 36, 22);
+    menuRows().forEach((row, i) => slideIn(i, fx.menuT, () => drawBtn(row, UIF(600, 15))));
     centerText("숫자 키 또는 클릭으로 선택 · Esc로 뒤로", H - 22, "400 12px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.55)");
   }
 }
@@ -15596,6 +16691,7 @@ window.__swing = {
   streak: () => ({ date: streakDate, n: streak, reward: streakReward, set: (d, n) => { streakDate = d; streak = n; } }),
   startBlitz: startBlitz,
   startRush: startRush,
+  rush: () => ({ list: rushList, best: rushBest, best9: rushBest9, idx: rushIdx, n: RUSH_N, pool: RUSH_POOL, roll: rollRush, cls: rushClass, setList: (l) => { rushList = l; }, setBest: (v, v9) => { rushBest = v; if(v9 !== undefined) rushBest9 = v9; } }),
   revive: () => revive(), decline: () => declineRevive(),
   log: () => lifeLog,
   level: () => levelOf(lifeLog.xp || 0),
@@ -15607,9 +16703,12 @@ window.__swing = {
   resultText: () => resultText(),
   ghost: () => ({ best: ghostBest, rec: ghostRec }),
   tech: () => ({ lv: techLv, mats, eqR: eqRanged, eqM: eqMelee, open: openPack, up: upgradeTech, equip: equipTech,
-                 set: (id, lv) => { techLv[id] = lv; }, rangedCd: rangedCd(), meleeCd: meleeCd(), volley, aim: (spd, range) => pickAimTarget(spd, range, PISTOL_BOSS_RANGE) }),
-  title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage }),
+                 set: (id, lv) => { techLv[id] = lv; }, rangedCd: rangedCd(), meleeCd: meleeCd(), volley, comet, shock, stamp: techStamp, K: { BAZOOKA_R, BAZOOKA_POW, AXE_W, AXE_POW, AXE_WAVE_R, GATLING_POW, TOP_R, TOP_T, COMET_R, COMET_T, COMET_RANGE }, list: TECHS, aim: (spd, range) => pickAimTarget(spd, range, PISTOL_BOSS_RANGE) }),
+  titleUnlock: (ids, fresh, toast) => { ids.concat(fresh || []).forEach(id => unlockedTitles.add(id)); (fresh || []).forEach(id => titleFresh.add(id)); if(toast && fresh && fresh.length) titleToast = { id: fresh[fresh.length - 1], t: 0 }; },
+  title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage, cur: currentTitle(), list: TITLES, cats: TITLE_CATS, tiers: TITLE_TIERS, fresh: titleFresh, toast: titleToast, check: checkTitles, stats: titleStats,
+                  open: () => { state = STATE.LOG; dexPage = false; openTitles(); }, close: closeTitles, tab: titleTab, run: titleRun, setKill: (k) => { lastKill = k; } }),
   rows: () => menuRows(),
+  nav: () => ({ stack: navStack, id: navId(), back: navBack, sync: navSync, btn: BACK_BTN, key: (k) => { if((k === "Escape" || k === "Backspace") && inMenu() && state !== STATE.MENU) navBack(); } }),
   shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
   shopUi: () => ({ tab: (i) => { state = STATE.SHOP; shopTab(i); }, page: () => shopPage, cat: () => techCat, idx: shopTabIdx,
                    key: (k) => { if(k === "ArrowLeft" || k === "ArrowRight") shopTab(shopTabIdx() + (k === "ArrowRight" ? 1 : -1)); },
@@ -15622,6 +16721,7 @@ window.__swing = {
   pickCard: (i) => choosePick(i || 0),
   pick2: () => ({ offer: pickOffer, pending: pickPending, perks, back: pickReturn }),
   slingStart: startSling, slingFire: fireSling, sling: () => ({ s: sling, cd: slingCd, n: slings, target: slingTarget() }),
+  crewK: () => ({ SKILL: CREW_SKILL, SNIPE_CD: CREW_SNIPE_CD, SNIPE_R: CREW_SNIPE_R, JACK_CD, AID_CD: CREW_AID_CD, RELIC_K: CREW_RELIC_K, ENCORE: CREW_ENCORE, HELM_JUMP: CREW_HELM_JUMP, START: CREW_MUSIC_START, fx: crewFx, mult: chainMult, list: CREW }),
   crew: () => ({ owned: crewOwned, sel: crewSel, mate: crewMate, loot: crewLoot(), navyT: navyT(), helmJump, kills: crewKills, hire: (i) => hireCrew(CREW[i]), cycle: cycleCrew, set: (id) => { if(id && crewOwned.indexOf(id) < 0) crewOwned.push(id); crewSel = id; } }),
   navy: () => ({ n: navy, next: nextNavyAt, esc: navyEscapes, chases: navyChases, beaten: navyBeaten, setNext: (v) => { nextNavyAt = v; }, setChases: (v) => { navyChases = v; },
                  caught: navyCaught, setCaught: (v) => { navyCaught = v; }, cuff: cuffT, setCuff: (v) => { cuffT = v; }, ranks: NAVY_RANKS, jail: NAVY_JAIL, jailEsc: jailEscaped }),
