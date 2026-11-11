@@ -4697,7 +4697,7 @@ function weakPoints(b){
   } else if(b.type === FIREBIRD){
     // 휩쓸고 돌아와 앞에서 숨을 고르는 동안만 — 축 늘어진 꼬리깃(플레이어 반대쪽)과 몸속 불씨 심장
     if(b.st === "rest"){
-      out.push({ x:b.x - 44*(b.face || -1), y:b.y + 8, r:30, mark:"꼬리깃" });
+      out.push({ x:b.x - 58*(b.face || -1), y:b.y + 26, r:30, mark:"꼬리깃" });   // v60: 그림이 커지고 꼬리가 아래로 늘어져서
       out.push({ x:b.x, y:b.y, r:22, mark:"불씨 심장" });
     }
 
@@ -9671,7 +9671,7 @@ function updateFirebird(b, dt){
     } else {
       b.face = 1;
       b.x += (Math.max(0, p.vx) + 22) * dt;
-      const ty = b.x < p.x ? 48 : 48 + (FB_REST_Y - 48) * Math.min(1, (b.x - p.x) / 260);   // 머리 위를 지나 앞으로 나서며 쉴 높이로 내려앉는다
+      const ty = b.x < p.x ? FB_LOOP_Y : FB_LOOP_Y + (FB_REST_Y - FB_LOOP_Y) * Math.min(1, (b.x - p.x) / 260);   // 머리 위를 지나 앞으로 나서며 쉴 높이로 내려앉는다(v60: 48 → FB_LOOP_Y — 날개 끝이 화면 위에 잘렸다)
       b.y += (ty - b.y) * Math.min(1, 0.14 * dt);
       if(b.embers > 0 && b.x > p.x - 200 && b.t % 18 < 1){
         b.embers--;
@@ -9691,17 +9691,50 @@ function updateFirebird(b, dt){
     if(b.stT <= 0){ b.st = "hover"; b.stT = FB_HOVER; }
   }
 }
+// 불새 그림(v60 다시) — "어색하고 끝(꼬리깃·날개 끝)이 잘린다"는 피드백.
+//   원인: ① 불꽃 띠를 fillRect 사각형으로 칠해 양끝이 칼로 자른 듯했고 ② 꼬리깃·날개가 납작한 단색 도형이라 끝이 뭉툭하게 끊겼으며
+//   ③ 맴돌기(loop)에서 화면 위 48px 높이를 지나 날개 끝·볏이 화면 위 가장자리에 잘렸다.
+//   이제 띠는 붓 자국(brushBand) + 양끝으로 사라지는 그라데이션, 날개는 어깨→팔꿈치→끝으로 위상이 늦게 따라오는 마디 날개, 꼬리는 끝으로 갈수록 가늘어지며
+//   투명해지는 불꽃 깃(fbFeather), 맴돌기 높이는 FB_LOOP_Y로 내렸다
+const FB_S = 1.45, FB_LOOP_Y = 86;
+// 끝으로 가늘어지며 사라지는 불꽃 깃 하나 — 점점 옅어지는 여러 겹으로 그려 끝이 '잘리지' 않고 녹아 없어진다
+function fbFeather(x0, y0, len, ang, wav, w, cols, ph){
+  const N = 10, pts = [];
+  for(let i=0;i<=N;i++){
+    const u = i/N, a = ang + Math.sin(ph - u*2.6) * wav * u;
+    const px = i ? pts[i-1][0] + Math.cos(a) * len / N : x0, py = i ? pts[i-1][1] + Math.sin(a) * len / N : y0;
+    pts.push([px, py, a]);
+  }
+  const edge = (sgn, wk) => pts.map(([px, py, a], i) => { const u = i/N, ww = w * wk * Math.sin(Math.min(1, u * 3 + 0.15) * Math.PI/2) * Math.pow(1 - u, 0.9); return [px - Math.sin(a) * ww * sgn, py + Math.cos(a) * ww * sgn]; });
+  cols.forEach((c, k) => {
+    const wk = 1 - k * 0.32, L = edge(1, wk), R = edge(-1, wk);
+    const g = ctx.createLinearGradient(x0, y0, pts[N][0], pts[N][1]);
+    g.addColorStop(0, c + "1)"); g.addColorStop(0.6, c + "0.85)"); g.addColorStop(1, c + "0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(L[0][0], L[0][1]);
+    for(let i=1;i<=N;i++) ctx.lineTo(L[i][0], L[i][1]);
+    for(let i=N;i>=0;i--) ctx.lineTo(R[i][0], R[i][1]);
+    ctx.closePath(); ctx.fill();
+  });
+}
 function drawFirebird(b, x, hurt){
-  // 불꽃 띠
+  const calm = settings.calm;
+  // 불꽃 띠 — 붓 자국으로, 양끝은 그라데이션으로 사라진다(예전 fillRect 사각형의 칼로 자른 끝을 없앴다)
   for(const d of b.bands){
-    const x0 = d.x0 - cam.x, x1 = d.x1 - cam.x, a = Math.min(1, d.t / 30);
-    ctx.fillStyle = "rgba(255,120,50," + (0.35 * a).toFixed(2) + ")";
-    ctx.fillRect(x0, d.y - FB_BAND_H, x1 - x0, FB_BAND_H * 2);
-    ctx.fillStyle = "rgba(255,210,120," + (0.55 * a).toFixed(2) + ")";
-    for(let fx = Math.max(x0, -20); fx < Math.min(x1, W + 20); fx += 26){
-      const fh = 10 + Math.sin(time*0.3 + fx*0.1)*6;
-      ctx.beginPath(); ctx.moveTo(fx - 8, d.y + 6); ctx.quadraticCurveTo(fx, d.y - fh*2, fx + 8, d.y + 6); ctx.fill();
+    const x0 = d.x0 - cam.x, x1 = d.x1 - cam.x, a = Math.min(1, d.t / 30), len = x1 - x0;
+    if(len < 4) continue;
+    const g = ctx.createLinearGradient(x0 - 30, 0, x1 + 30, 0), fe = Math.min(0.4, 60 / (len + 60));
+    g.addColorStop(0, "rgba(255,120,50,0)"); g.addColorStop(fe, "rgba(255,120,50," + (0.38*a).toFixed(2) + ")");
+    g.addColorStop(1 - fe, "rgba(255,120,50," + (0.38*a).toFixed(2) + ")"); g.addColorStop(1, "rgba(255,120,50,0)");
+    ctx.save(); ctx.fillStyle = g; brushBand(x0 - 30, x1 + 30, d.y - FB_BAND_H, FB_BAND_H * 2, d.x0 * 0.01); ctx.fill();
+    for(let fx2 = Math.max(x0 - 10, -20); fx2 < Math.min(x1 + 10, W/cam.z + 20); fx2 += 22){
+      const edgeK = Math.min(1, (fx2 - x0 + 10) / 50, (x1 + 10 - fx2) / 50);
+      if(edgeK <= 0) continue;
+      const fh = (10 + Math.sin(time*0.3 + fx2*0.1)*6) * edgeK;
+      const fg = ctx.createLinearGradient(0, d.y + 6, 0, d.y - fh*2);
+      fg.addColorStop(0, "rgba(255,170,80," + (0.7*a).toFixed(2) + ")"); fg.addColorStop(1, "rgba(255,240,170,0)");
+      ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(fx2 - 8, d.y + 6); ctx.quadraticCurveTo(fx2 - 2, d.y - fh, fx2 + Math.sin(time*0.2 + fx2)*3, d.y - fh*2); ctx.quadraticCurveTo(fx2 + 2, d.y - fh, fx2 + 8, d.y + 6); ctx.fill();
     }
+    ctx.restore();
   }
   if(b.st === "warn"){
     // 휩쓸 높이 예고 — 불새 앞에서 화면 뒤끝까지 가로줄. 굳으면(마지막 FB_LOCK) 붉게
@@ -9710,42 +9743,64 @@ function drawFirebird(b, x, hurt){
     ctx.setLineDash(lock ? [] : [14, 10]);
     ctx.beginPath(); ctx.moveTo(-40, b.by); ctx.lineTo(x, b.by); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = lock ? "rgba(255,110,70,.18)" : "rgba(255,200,120,.08)";
-    ctx.fillRect(-40, b.by - FB_BAND_H, x + 40, FB_BAND_H * 2);
+    const wg = ctx.createLinearGradient(-40, 0, x, 0); wg.addColorStop(0, "rgba(255,150,90,0)"); wg.addColorStop(0.15, lock ? "rgba(255,110,70,.18)" : "rgba(255,200,120,.08)"); wg.addColorStop(1, lock ? "rgba(255,110,70,.18)" : "rgba(255,200,120,.08)");
+    ctx.fillStyle = wg; ctx.fillRect(-40, b.by - FB_BAND_H, x + 40, FB_BAND_H * 2);
     ctx.strokeStyle = "rgba(255,176,96,.5)"; ctx.lineWidth = 2; ctx.setLineDash([4, 6]);   // 불새에서 그 높이로 내리꽂힐 길
     ctx.beginPath(); ctx.moveTo(x, b.y); ctx.quadraticCurveTo(x - 30, b.by, x - 90, b.by); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = "#ffb060"; ctx.font = "800 13px 'Gowun Batang', 'Pretendard', serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
     ctx.fillText("◀ 불새 휩쓸기", x - 40, b.by - FB_BAND_H - 10);
   }
-  const y = b.y, rest = b.st === "rest";
-  const flap = Math.sin(b.t * (b.st === "dash" ? 0.12 : rest ? 0.18 : 0.3));
+  const y = b.y, rest = b.st === "rest", dash = b.st === "dash";
+  const sp = dash ? 0.16 : rest ? 0.07 : 0.13, ph = b.t * sp;                // 날갯짓 위상 — 숨 고를 땐 느리게
+  const glow = rest ? 0.35 : 1;
+  // 몸 둘레 열기(아래 레이어처럼 부드럽게)
+  const hg = ctx.createRadialGradient(x, y, 4, x, y, 80 * FB_S * 0.7);
+  hg.addColorStop(0, "rgba(255,190,90," + (0.35*glow).toFixed(2) + ")"); hg.addColorStop(1, "rgba(255,120,40,0)");
+  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(x, y, 80 * FB_S * 0.7, 0, Math.PI*2); ctx.fill();
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(b.face || -1, 1);
-  if(b.st === "dash") ctx.rotate(0.12);
-  // 꼬리깃 — 숨 고를 땐 축 늘어져 밝게(약점), 날 땐 불꽃처럼 휘날린다
-  for(let i=-1;i<=1;i++){
-    ctx.fillStyle = hurt ? "#f4ecd9" : rest ? "#ffd76a" : "#ff7a3a";
-    const tl = rest ? 66 : b.st === "dash" ? 78 : 58;
-    ctx.beginPath(); ctx.moveTo(-14, 0); ctx.quadraticCurveTo(-40, i*10 + 4, -tl, i*(rest ? 22 : 10) + (rest ? 10 : 0)); ctx.quadraticCurveTo(-40, i*10 - 4, -14, 0); ctx.fill();
+  ctx.scale((b.face || -1) * FB_S, FB_S);
+  if(dash) ctx.rotate(0.12);
+  const body = hurt ? "#f4ecd9" : rest ? "#c8603a" : "#ff6a3a", wingC = hurt ? "#f4ecd9" : rest ? "#b8502e" : "#e0502a";
+  const fcol = rest ? ["rgba(255,215,106,", "rgba(255,240,190,"] : ["rgba(255,110,50,", "rgba(255,190,80,", "rgba(255,245,200,"];
+  // 꼬리깃 — 끝으로 갈수록 가늘어지고 투명해진다(잘리지 않는다). 숨 고를 땐 축 늘어져 밝게(약점)
+  const tl = rest ? 70 : dash ? 92 : 74;
+  for(let i=-2;i<=2;i++){
+    const ang = Math.PI + i * (rest ? 0.2 : 0.11) - (rest ? 0.75 : 0.05);   // 숨 고를 땐 아래로 축 늘어진다
+    fbFeather(-12, 2, tl * (1 - Math.abs(i) * 0.12), ang, calm ? 0.15 : rest ? 0.25 : 0.5, 7 - Math.abs(i), fcol, ph * 1.3 + i * 0.7);
   }
-  // 날개
-  ctx.fillStyle = hurt ? "#f4ecd9" : rest ? "#b8502e" : "#e0502a";
-  ctx.beginPath(); ctx.moveTo(-6, -2); ctx.quadraticCurveTo(4, -30*flap - 6, 26, -40*flap); ctx.quadraticCurveTo(14, -8, 6, 2); ctx.fill();
-  // 몸·머리·부리
-  ctx.fillStyle = hurt ? "#f4ecd9" : rest ? "#c8603a" : "#ff6a3a";
-  ctx.beginPath(); ctx.ellipse(0, 0, 20, 11, 0, 0, Math.PI*2); ctx.fill();
+  // 뒤 날개(멀리 있는 쪽) — 앞 날개와 반 박자 엇갈려, 옅게
+  const wing = (side, k) => {
+    // 어깨 → 팔꿈치 → 날개 끝. 끝으로 갈수록 위상이 늦다(채찍처럼 휘어진다)
+    const a1 = -2.25 + Math.sin(ph) * 0.95 * k, a2 = -2.5 + Math.sin(ph - 0.9) * 0.8 * k, a3 = -2.75 + Math.sin(ph - 1.7) * 0.6 * k;
+    const sx = 2, sy = -4, ex = sx + Math.cos(a1) * 22, ey = sy + Math.sin(a1) * 22, wx = ex + Math.cos(a2) * 24, wy = ey + Math.sin(a2) * 24, tx = wx + Math.cos(a3) * 18, ty = wy + Math.sin(a3) * 18;
+    const back = (ox, oy, l) => [ox + Math.sin(a2 + 0.3) * l, oy - Math.cos(a2 + 0.3) * l];      // 뒷전(깃 쪽) — 날개 뼈에서 뒤·아래로
+    const [e2x, e2y] = back(ex, ey, 22), [w2x, w2y] = back(wx, wy, 18);
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(sx - 8, sy + 4); ctx.quadraticCurveTo(sx, sy - 4, ex, ey); ctx.quadraticCurveTo((ex + wx)/2, (ey + wy)/2 - 3, wx, wy); ctx.quadraticCurveTo(wx + 4, wy, tx, ty);
+      ctx.quadraticCurveTo((w2x + tx)/2, (w2y + ty)/2 + 6, w2x, w2y); ctx.quadraticCurveTo((e2x + w2x)/2, (e2y + w2y)/2 + 8, e2x, e2y); ctx.quadraticCurveTo(sx - 4, sy + 10, sx - 8, sy + 4); ctx.closePath(); },
+      side ? "#c84a26" : wingC, { shade:() => { ctx.beginPath(); ctx.moveTo(sx, sy + 6); ctx.lineTo(w2x, w2y); ctx.lineTo(tx, ty); ctx.lineTo(wx, wy); ctx.closePath(); }, shadeCol:"rgba(255,220,120,.35)", pool:"rgba(120,30,10,.3)", line:1.6 });
+    // 첫째 날개깃 — 뒷전을 따라 부채처럼, 끝에서 불꽃이 녹아 사라진다
+    for(let i=0;i<5;i++){ const u = i/4, bx2 = ex + (tx - ex) * u, by2 = ey + (ty - ey) * u, fa = a3 + (Math.PI/2 - 0.2) * (1 - u) * 0.9 + 0.15; fbFeather(bx2, by2, 22 + u*14, fa, calm ? 0.1 : 0.3, 4.2, fcol.slice(0, 2), ph * 1.4 + i*0.5); }
+  };
+  ctx.save(); ctx.translate(6, -2); ctx.globalAlpha = 0.75; wing(1, 0.8); ctx.restore();
+  // 몸·머리
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-18, 2); ctx.quadraticCurveTo(-10, -12, 8, -11); ctx.quadraticCurveTo(24, -10, 24, -2); ctx.quadraticCurveTo(18, 12, 0, 11); ctx.quadraticCurveTo(-12, 10, -18, 2); ctx.closePath(); }, body,
+    { shade:() => { ctx.beginPath(); ctx.ellipse(2, 8, 20, 6, 0, 0, Math.PI*2); }, shadeCol:"rgba(150,40,10,.3)", pool:"rgba(150,40,10,.3)", line:1.8 });
+  ctx.fillStyle = "rgba(255,230,150,.7)"; ctx.beginPath(); ctx.ellipse(6, 5, 10, 4, -0.1, 0, Math.PI*2); ctx.fill();          // 가슴 깃털 밝은 결
   if(rest){                                                           // 불씨 심장 — 사그라든 몸속에서 깜빡인다
-    ctx.fillStyle = "rgba(255,240,170," + (0.6 + Math.sin(time*0.3)*0.3).toFixed(2) + ")";
-    ctx.beginPath(); ctx.arc(2, 1, 6, 0, Math.PI*2); ctx.fill();
+    const hp2 = 0.6 + Math.sin(time*0.3)*0.3, cg = ctx.createRadialGradient(2, 1, 1, 2, 1, 10);
+    cg.addColorStop(0, "rgba(255,250,200," + hp2.toFixed(2) + ")"); cg.addColorStop(1, "rgba(255,200,90,0)");
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(2, 1, 10, 0, Math.PI*2); ctx.fill();
   }
-  ctx.fillStyle = hurt ? "#f4ecd9" : rest ? "#c8603a" : "#ff6a3a";
-  ctx.beginPath(); ctx.arc(20, -6, 9, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#ffd76a"; ctx.beginPath(); ctx.moveTo(28, -8); ctx.lineTo(40, -4); ctx.lineTo(28, -1); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.arc(22, -8, 2.2, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#ffd76a";                                            // 머리 볏
-  ctx.beginPath(); ctx.moveTo(14, -12); ctx.lineTo(10, -24); ctx.lineTo(18, -14); ctx.lineTo(18, -26); ctx.lineTo(22, -14); ctx.closePath(); ctx.fill();
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(14, -6); ctx.quadraticCurveTo(14, -18, 24, -17); ctx.quadraticCurveTo(32, -16, 31, -8); ctx.quadraticCurveTo(28, -2, 18, -1); ctx.closePath(); }, body, { pool:false, line:1.6 });
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(30, -12); ctx.lineTo(42, -8); ctx.lineTo(30, -6); ctx.closePath(); }, "#ffd76a", { pool:false, line:1.2 });
+  ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.arc(25, -12, 1.9, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#fff6d0"; ctx.beginPath(); ctx.arc(25.6, -12.6, 0.7, 0, Math.PI*2); ctx.fill();
+  // 볏 — 불꽃처럼 뒤로 날린다(끝은 녹아 사라진다)
+  for(let i=0;i<3;i++) fbFeather(20 - i*3, -16, 16 + i*3, -Math.PI*0.62 - i*0.28, calm ? 0.1 : 0.4, 3.2, ["rgba(255,215,106,", "rgba(255,250,220,"], ph + i);
+  // 앞 날개
+  wing(0, 1);
   ctx.restore();
 }
 

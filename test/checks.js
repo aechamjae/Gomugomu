@@ -3867,6 +3867,17 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     for(const k of Object.keys(ST().stars)) delete ST().stars[k]; Object.assign(ST().stars, stars0);
     E("storyMode = null; storyResult = null; storyTalk = null; chapCard = null");
   }
+
+  /* --- 불새 염익(14): 끝이 잘리던 그림 — 맴돌기 높이 · 그리기 --- */
+  {
+    let K = fresh(14); calm(); H.step();
+    K.st = "loop"; K.loop = 1; K.face = 1; K.x = P().x - 300; K.y = 60; K.embers = 0;
+    let minY = 1e9;
+    for(let i=0;i<120 && K.st === "loop";i++){ calm(); pin(P().x, 300); H.step(); if(K.x > P().x - 100) minY = Math.min(minY, K.y); }
+    ok("v60 bosses: 불새 — 머리 위를 지날 때도 날개 끝·볏이 화면 위에 안 잘린다(맴돌기 높이 ≥ FB_LOOP_Y − 10, 날개 폭 안)", minY >= E("FB_LOOP_Y") - 10 && minY - 46 * E("FB_S") > -10, "minY " + Math.round(minY));
+    let err = null; try{ for(const st of ["hover", "warn", "dash", "rest"]){ K.st = st; K.stT = 30; K.by = 300; K.bands = [{ x0: K.x - 400, x1: K.x, y: 300, t: 60 }]; E("drawBoss()"); } }catch(e){ err = e.message; }
+    ok("v60 bosses: 불새 — 띠·날개·꼬리깃을 그려도 오류가 없다", !err, err);
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 
