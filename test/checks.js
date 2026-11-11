@@ -1563,11 +1563,11 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   H.step();
   const s = a.peek();
   ok("대령에게 붙잡히면 벌금(보물 40%) — 항해는 이어진다", s.state === 1 && !a.navy().n && a.navy().caught === 1 && Math.round(s.treasure) <= 620 && s.treasure >= 590, "state=" + s.state + " 보물=" + s.treasure);
-  // v52: 세 번째로 붙잡히면 해저 감옥 — 간수장 마젤란(20) 탈옥전
+  // v52: 세 번째로 붙잡히면 해저 감옥 — 간수장 그롬(20, 예전 마젤란) 탈옥전
   a.navy().setCaught(2); a.navy().setNext(0); H.step();
   a.navy().n.x = T().P().x - 50; H.step();
   const mg = a.boss();
-  ok("세 번째로 붙잡히면 해저 감옥 — 마젤란 탈옥전, 항해는 이어진다", a.peek().state === 1 && mg && mg.type === 20 && mg.named && a.navy().cuff > 0,
+  ok("세 번째로 붙잡히면 해저 감옥 — 그롬 탈옥전, 항해는 이어진다", a.peek().state === 1 && mg && mg.type === 20 && mg.named && a.navy().cuff > 0,
      "state=" + a.peek().state + " 보스=" + (mg && mg.type) + " 사인=" + a.peek().deathReason);
   ok("열쇠를 잡기 전엔 수갑이 안 풀리고 몸통도 안 드러난다", !mg.keyGot && (mg.st = "rest", T().wp(mg).length === 0));
   mg.st = "idle"; mg.wait = 999;
@@ -1576,7 +1576,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   mg.st = "rest"; mg.stT = 100;
   ok("숨을 고를 땐 몸통이 약점", T().wp(mg).some(w => w.mark === "몸통"));
   for(let i=0;i<10 && a.boss();i++){ mg.invul = 0; T().dmg(true, "몸통"); }
-  ok("마젤란을 꺾으면 탈옥 — 전과가 지워지고 항해를 잇는다", !a.boss() && a.peek().state === 1 && a.navy().caught === 0 && a.navy().jailEsc,
+  ok("그롬을 꺾으면 탈옥 — 전과가 지워지고 항해를 잇는다", !a.boss() && a.peek().state === 1 && a.navy().caught === 0 && a.navy().jailEsc,
      "boss=" + !!a.boss() + " state=" + a.peek().state + " 전과=" + a.navy().caught);
   ok("탈옥 칭호 '탈옥수'", T().titles().has("jail"));
   // 탈옥한 뒤 또 세 번째로 붙잡히면 — 도황과 친구가 된다
@@ -1586,16 +1586,16 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("탈옥한 뒤 또 잡히면 끝 — 도황과 친구가 됐다", a.peek().state === 2 && a.peek().deathReason === "도황", "state=" + a.peek().state + " 사인=" + a.peek().deathReason);
 }
 {
-  // 감옥에서 독룡에 휩쓸리면 끝(보호막이 없을 때)
+  // v60: 독룡(즉사)은 없어졌다 — 그롬의 쇠창살은 휘청하며 튕길 뿐, 지는 조건은 제한 시간뿐
   const a = start();
   T().teleport(300 * 22); H.step();
   a.navy().setCaught(2); a.navy().setNext(0); H.step();
   a.navy().n.x = T().P().x - 50; H.step();
   const mg = a.boss();
   T().setShield(0); T().setIframes(0);
-  mg.st = "sweep"; mg.stT = 1; mg.bands = [{ y: T().P().y, off: 0 }];
+  mg.st = "bars"; mg.stT = 100; mg.gates = [{ x: T().P().x + 4, up: false, open: 0 }]; T().P().y = 150;
   H.step();
-  ok("독룡의 높이에 있으면 끝 — 마젤란의 독", a.peek().state === 2 && a.peek().deathReason === "독", "state=" + a.peek().state + " 사인=" + a.peek().deathReason);
+  ok("v60: 그롬의 쇠창살에 닿아도 죽지 않는다(휘청) — 즉사 패턴 없음", a.peek().state === 1 && a.peek().stun > 0 && a.peek().deathReason !== "독", "state=" + a.peek().state + " stun=" + a.peek().stun);
 }
 {
   const a = start();
@@ -2101,7 +2101,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 바다 도감 --- */
 {
   const a = A(), X = () => a.dex();
-  ok("도감은 50종 — 생물·보스 21종(마젤란)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 50 && X().list.filter(e => e.cat === "boss").length === 21);
+  ok("도감은 50종 — 생물·보스 21종(그롬)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 50 && X().list.filter(e => e.cat === "boss").length === 21);
   a.startMain(); H.step(); a.hold(true); H.step();
   ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
   delete X().book.wind;
@@ -3086,7 +3086,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   function stepFrames(k){ for(let i=0;i<k;i++) H.step(); }
 }
 
-/* --- v53: 해군 추격·마젤란 연습 --- */
+/* --- v53: 해군 추격·그롬(예전 마젤란) 연습 --- */
 {
   const a = A();
   const run = (n) => { for(let i=0;i<n;i++){ a.hold(true); H.step(); } };
@@ -3102,7 +3102,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("추격 연습은 잡혀도 감옥·게임오버 없이 계속", a.peek().state === 1 && !a.boss() && a.navy().caught === 0, "state=" + a.peek().state);
   a.startPractice(24); H.step(); a.hold(true); H.step();
   T().teleport(100 * 22); run(3);
-  ok("연습 — 간수장 마젤란이 나온다(수갑·열쇠부터)", a.boss() && a.boss().type === 20 && !a.boss().keyGot && a.navy().cuff > 0, a.boss() ? "type=" + a.boss().type : "보스 없음");
+  ok("연습 — 간수장 그롬이 나온다(수갑·열쇠부터)", a.boss() && a.boss().type === 20 && !a.boss().keyGot && a.navy().cuff > 0, a.boss() ? "type=" + a.boss().type : "보스 없음");
   a.toMenu();
 }
 
@@ -3212,11 +3212,11 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   stepN(2);
   ok("v57: 보스 러시에서 시간 초과면 끝", a.peek().state === 2 && a.peek().deathReason === "시간 초과");
   E("rushMode = false");
-  // 탈옥전 마젤란 — 본게임에서 시간 초과면 다시 감옥
+  // 탈옥전 그롬 — 본게임에서 시간 초과면 다시 감옥
   E("practiceMode = null; reset(); state = STATE.PLAY");
   b = a.spawnBoss(false, 20); E("bossIntro = null"); b.tLeft = 1;
   stepN(2);
-  ok("v57: 탈옥전에서 시간 안에 마젤란을 못 꺾으면 끝(간수)", a.peek().state === 2 && a.peek().deathReason === "간수");
+  ok("v57: 탈옥전에서 시간 안에 그롬을 못 꺾으면 끝(간수)", a.peek().state === 2 && a.peek().deathReason === "간수");
 
   // 3) 작살잡이 — 고래잡이 보트
   fresh();
@@ -3683,6 +3683,42 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     ok("v60 bosses: 루미나 — 깜빡임은 곧 돌아오고, 연출 줄이기면 깜빡이지 않는다", E("jqLit(boss)") && !(fc > 0));
     let err = null; try{ E("drawLuminaDark()"); }catch(e){ err = e.message; }
     ok("v60 bosses: 루미나 — 어둠을 그려도 오류가 없다", !err, err);
+  }
+
+  /* --- 간수장 그롬(20, 예전 마젤란): 쇠창살 감옥 칸 · 떨어지는 열쇠 · 다시 수갑 --- */
+  {
+    const src = require("fs").readFileSync(process.env.GAME || require("path").join(__dirname, "..", "index.html"), "utf8");
+    ok("v60 bosses: 그롬 — 이름이 '간수장 그롬'이고 화면에 보이는 글에 옛 이름이 없다", E("BOSSES[20].name") === "간수장 그롬" && E("MAGELLAN") === 20 &&
+       !src.split("\n").some(l => /마젤란|독룡/.test(l) && !/^\s*\/\//.test(l) && !/\/\/[^"']*(마젤란|독룡)/.test(l)));
+    ok("v60 bosses: 그롬 — 칭호 '탈옥수' 설명도 새 이름", /그롬/.test(E("TITLES.find(t => t.id === 'jail').desc")) && E("PRACTICE_OPTIONS.some(o => o.bossType === 20 && /그롬/.test(o.label))"));
+    let K = fresh(20);
+    calm(); H.step();
+    ok("v60 bosses: 그롬 — 처음엔 수갑, 열쇠가 떠 있다", !K.keyGot && !!K.key && a.navy().cuff > 0 && E("MG_WARN") * 0.75 >= 45);
+    pin(K.key.x, K.key.y); H.step();
+    ok("v60 bosses: 그롬 — 열쇠를 잡으면 수갑이 풀린다", K.keyGot && !K.key && a.navy().cuff === 0);
+    K.wait = 0; K.fire = 1e6; calm(); pin(P().x, 150); H.step();
+    const g = K.gates[0];
+    ok("v60 bosses: 그롬 — 쇠창살 예고(앞쪽에 한 칸)", K.st === "warn" && K.gates.length === 1 && g.x > P().x + 60 && !g.up);
+    let early = false;
+    for(let i=0;i<90 && K.st === "warn";i++){ calm(); pin(g.x, 150); H.step(); if(a.peek().stun > 0) early = true; }
+    ok("v60 bosses: 그롬 — 예고 동안엔 그 자리에 있어도 안 맞는다", !early && K.st === "bars");
+    for(let i=0;i<12;i++){ calm(); pin(g.x - 200, 150); H.step(); }
+    calm(); pin(g.x, E("SEA") - 60); H.step();
+    ok("v60 bosses: 그롬 — 아래 틈으로는 지나간다", a.peek().stun <= 0);
+    calm(); pin(g.x, 150); H.step();
+    ok("v60 bosses: 그롬 — 창살에 닿으면 휘청하며 튕긴다(죽지 않는다)", a.peek().stun > 0 && a.peek().state === 1 && P().x < g.x, "stun " + a.peek().stun);
+    K.keys = 1; E("stun = 0"); calm(); pin(g.x, 150); H.step();
+    ok("v60 bosses: 그롬 — 칸 열쇠가 있으면 닿는 순간 열린다(열쇠 하나 소모, 안 맞음)", g.open > 0 && K.keys === 0 && a.peek().stun <= 0);
+    K.st = "rest"; K.stT = 100; K.gates = []; calm(); H.step();
+    ok("v60 bosses: 그롬 — 숨을 고를 때 몸통(열린 자물쇠)이 약점", a.weak().some(w => w.mark === "몸통"));
+    K.invul = 0; T().dmg(true, "몸통"); calm(); H.step();
+    ok("v60 bosses: 그롬 — 맞히면 몸에 걸린 열쇠가 떨어진다", !!K.key && K.key.drop && K.keyGot);
+    pin(K.key.x, K.key.y); H.step();
+    ok("v60 bosses: 그롬 — 떨어진 열쇠를 잡으면 칸 열쇠가 된다", K.keys === 1 && !K.key);
+    K.invul = 0; K.hp = 3; pin(K.x - 400, 300); T().dmg(true, "몸통"); calm(); H.step();
+    ok("v60 bosses: 그롬 — 격노하면 다시 수갑(약점이 닫히고 열쇠가 떨어져 있다)", K.p2 && !K.keyGot && !!K.key && a.navy().cuff > 0 && a.weak().length === 0, [K.p2, K.keyGot, !!K.key, a.navy().cuff, a.weak().length, K.hp].join(" "));
+    K.st = "idle"; K.wait = 0; calm(); pin(P().x, 150); H.step();
+    ok("v60 bosses: 그롬 — 격노하면 두 칸(위에서 내려온 창살 + 아래에서 솟은 창살)", K.gates.length === 2 && !K.gates[0].up && K.gates[1].up && K.stT >= 45);
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }

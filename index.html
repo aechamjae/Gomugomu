@@ -1194,7 +1194,7 @@ const PRACTICE_OPTIONS = [
   { type:"navy", rank:0, label:"해군 대령 추격 연습 (벌금)" },
   { type:"navy", rank:1, label:"해군 소장 추격 연습 (그물)" },
   { type:"navy", rank:2, label:"해군 중장 추격 연습 (포격)" },
-  { type:"boss", bossType:20, label:"간수장 마젤란 연습 (네임드 · 해저 감옥)" }
+  { type:"boss", bossType:20, label:"간수장 그롬 연습 (네임드 · 해저 감옥)" }
 ];
 
 function practiceLabel(){
@@ -4150,9 +4150,9 @@ const BOSSES = [
   { name:"해파리 여왕 루미나",  tag:"여왕의 빛이 닿는 곳만 환하다 — 전기 해파리·촉수 장막을 피하고 빛이 꺼질 때 핵을", named:true },
   { name:"폭풍고래 뇌경",       tag:"물기둥·해일을 피하고 숨구멍을, 솟구칠 땐 흰 배를 쳐라", big:true },
   { name:"해룡 군주 요르문",    tag:"아치처럼 솟은 몸을 빠져나가며 역린을 — 덮친 머리가 박힌 틈을 노려라", big:true },
-  { name:"간수장 마젤란",       tag:"열쇠를 낚아채 수갑을 풀어라 — 독룡이 휩쓰는 높이를 피하고, 숨을 고를 때 몸통을 쳐라", named:true }
+  { name:"간수장 그롬",         tag:"열쇠로 수갑을 풀고 쇠창살은 틈으로 — 숨 고를 때 열린 자물쇠를 쳐라", named:true }
 ];
-const ANGLER = 16, JELLYQ = 17, WHALE = 18, SERPENT = 19, MAGELLAN = 20;   // 마젤란 — 해저 감옥 탈옥전에만 나온다
+const ANGLER = 16, JELLYQ = 17, WHALE = 18, SERPENT = 19, MAGELLAN = 20;   // 간수장 그롬(v60에 이름·능력 교체 — 상수 이름만 예전 그대로) — 해저 감옥 탈옥전에만 나온다
 const BIG_BOSSES = [5, 7, WHALE, SERPENT];   // 대형 슬롯(2000m마다)은 크라켄·유령선·폭풍고래·해룡 중 무작위
 const AWAKEN_CHANCE = 0.2;   // 크라켄이 뽑히면 이 확률로 '각성한 크라켄'이 대신 나온다(운이 나쁘면)
 const ADMIRAL = 8;           // 해군 대장 군함 — 대형 슬롯이 아니라 두 번째 해군 추격 자리에 나온다
@@ -4195,9 +4195,9 @@ const CHASERS = [SHARK, VICE];
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
 const BOSS_HP = { 0:3, 1:3, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:3, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9, 20:NAMED_HP };
-// 격침 현상금 — 일반 150 · 네임드 350 · 대형(과 탈옥한 마젤란) 600, 격파할수록 40·60·80씩 더 (v50 수천만 단위 현상금은 보물이 너무 많아 되돌렸다)
+// 격침 현상금 — 일반 150 · 네임드 350 · 대형(과 탈옥전 그롬) 600, 격파할수록 40·60·80씩 더 (v50 수천만 단위 현상금은 보물이 너무 많아 되돌렸다)
 const bossBounty = (b) => b.big || b.type === MAGELLAN ? (600 + bossKills*80) : b.named ? (350 + bossKills*60) : (150 + bossKills*40);
-// v57 보스 제한 시간(초) — 일반 60 · 네임드 100 · 대형 120 · 탈옥전 마젤란 100. 등장 컷인이 끝난 뒤부터 잰다.
+// v57 보스 제한 시간(초) — 일반 60 · 네임드 100 · 대형 120 · 탈옥전 그롬 100. 등장 컷인이 끝난 뒤부터 잰다.
 //   다 지나면 보스가 달아난다(현상금·카드 없음). 스토리 보스 스테이지·보스 러시·탈옥전에선 그대로 실패.
 //   빨리 잡을수록 남은 1초마다 BOSS_QUICK만큼 '빠른 격침' 보물을 더 준다
 const BOSS_TIME = { mid: 60, named: 100, big: 120 }, BOSS_TIME_MG = 100, BOSS_TIME_AW = 150, BOSS_QUICK = { mid: 4, named: 6, big: 8 };
@@ -4371,7 +4371,7 @@ const TITLES = [
   { id:"naturalist", name:"바다의 박물학자",  desc:"바다 도감을 모두 채운다",  need:(s) => (s.dexN || 0) >= DEX.length },
   { id:"voyage_end", name:"대항해의 끝",      desc:"스토리 최종장을 깬다",     need:(s) => (s.storyEnd || 0) >= 1 },
   { id:"star81",    name:"별을 모은 항해자",  desc:"스토리 별 81개",          need:(s) => (s.stars || 0) >= STORY_STAR_MAX },
-  { id:"jail",      name:"탈옥수",            desc:"해저 감옥에서 마젤란을 꺾고 탈옥", need:(s) => ((s.dex || {}).boss20 || 0) >= 1 }
+  { id:"jail",      name:"탈옥수",            desc:"해저 감옥에서 간수장 그롬을 꺾고 탈옥", need:(s) => ((s.dex || {}).boss20 || 0) >= 1 }
 ];
 
 /* 항해 일지 — 본게임·오늘의 항해 누적 기록 (swing:log) */
@@ -4493,7 +4493,7 @@ function spawnBoss(big, forceType){
   if(type === SMITH){ boss.y = SEA - 64; boss.st = "idle"; boss.wait = 80; boss.cols = []; boss.hotCd = 120; boss.meltCd = 120; boss.blob = null; }
   if(type === FIREBIRD){ boss.st = "hover"; boss.stT = FB_HOVER + 60; boss.by = Math.max(70, Math.min(SEA - 70, p.y)); boss.x = p.x + 560; boss.y = -40; boss.face = -1; boss.bands = []; boss.band = null; }
   if(type === ADMIRAL){ boss.y = SEA - 10; boss.fire = 100; boss.net = 160; boss.walk = 0; }
-  if(type === MAGELLAN){ boss.x = p.x + 420; boss.y = MG_Y; boss.st = "idle"; boss.wait = 120; boss.fire = 100; boss.bands = []; boss.keyGot = false; boss.key = { x: p.x + 480, y: 200 }; }
+  if(type === MAGELLAN){ boss.x = p.x + 420; boss.y = MG_Y; boss.st = "idle"; boss.wait = 120; boss.fire = 100; boss.gates = []; boss.keyGot = false; boss.key = { x: p.x + 480, y: 200 }; }
   bossIntro = { type, big:!!big, named:boss.named, t: 0, bounty: bossBounty(boss) };
   if(type === AWAKEN && !storyMode && !practiceMode && !rushMode) pops.push({ x:p.x, y:p.y - 90, t:160, text:"운이 나쁘다… 크라켄이 각성했다!", color:"#d9a8f0" });
   dexMeet("boss" + type);
@@ -4685,7 +4685,7 @@ function weakPoints(b){
   } else if(b.type === ANGLER){
     anglerWeak(b, out);
   } else if(b.type === MAGELLAN){
-    if(b.keyGot && b.st === "rest") out.push({ x:b.x, y:b.y + 6, r:32, mark:"몸통" });   // 수갑을 푼 뒤, 독룡을 내보내고 숨을 고를 때만
+    if(b.keyGot && b.st === "rest") out.push({ x:b.x, y:b.y + 6, r:32, mark:"몸통" });   // 수갑을 푼 뒤, 쇠창살을 내리고 숨을 고를 때만(가슴의 큰 자물쇠가 열린다)
   } else if(b.type === JELLYQ){
     if(b.st === "dim") out.push({ x:b.x, y:b.y - 8, r:34, mark:"핵" });   // 빛이 꺼진 동안만 붉은 핵
   } else if(b.type === WHALE){
@@ -6528,12 +6528,12 @@ function cuffed(){
   return true;
 }
 // 붙잡혔다 — 계급마다 처벌이 다르다. 스토리 스테이지는 그대로 실패.
-// 세 번째 체포는 해저 감옥 — 간수장 마젤란을 꺾으면 탈옥해 항해를 잇는다(한 항해에 한 번). 탈옥한 뒤 또 잡히면 항해 끝
+// 세 번째 체포는 해저 감옥 — 간수장 그롬을 꺾으면 탈옥해 항해를 잇는다(한 항해에 한 번). 탈옥한 뒤 또 잡히면 항해 끝
 function navyCatch(){
   const R = navy.rank;
   navy = null;
   navyCaught++;
-  if(practiceMode) navyCaught = 0;          // 추격 연습은 몇 번 잡혀도 처벌만 받고 계속 — 감옥은 '마젤란 연습'으로
+  if(practiceMode) navyCaught = 0;          // 추격 연습은 몇 번 잡혀도 처벌만 받고 계속 — 감옥은 '그롬 연습'으로
   for(let i=0;i<20;i++) spark(p.x, p.y, i % 2 ? R.col : "#f4ecd9");
   if(storyMode){ die("해군"); return; }
   if(navyCaught >= NAVY_JAIL){
@@ -8705,11 +8705,9 @@ function drawShots(){
       }
       continue;
     } else if(q.kind === 9){
-      // 마젤란의 독 구슬
-      ctx.fillStyle = "rgba(150,90,220,.9)";
-      ctx.beginPath(); ctx.arc(0, 0, q.r, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = "rgba(190,255,150,.85)";
-      ctx.beginPath(); ctx.arc(-q.r*0.3, -q.r*0.3, q.r*0.4, 0, Math.PI*2); ctx.fill();
+      // 그롬이 던지는 자물쇠 추(v60 — 예전엔 독 구슬)
+      ctx.rotate(q.spin * 0.4);
+      drawPadlock(0, 3, q.r * 1.9, "#8d939d", false);
     } else if(q.kind === 4){
       // 해군 그물 — 빙글 돌며 펼쳐진다
       ctx.rotate(q.spin * 0.5);
@@ -10204,12 +10202,16 @@ function drawLuminaDark(){
   ctx.restore();
 }
 
-// 해저 감옥 — 해군에게 세 번째로 붙잡히면 끌려온다. 간수장 마젤란(네임드)을 꺾어야 탈옥해 항해를 잇는다.
-//   처음엔 해루석 수갑(기술 봉인) — 위아래로 떠다니는 열쇠를 낚아채야 풀리고, 그 전엔 몸통이 드러나지 않는다.
-//   idle → warn(MG_WARN, 독룡이 휩쓸 높이 띠 예고, 마지막 MG_LOCK은 고정) → sweep(MG_SWEEP, 독룡 머리가 오른쪽에서 왼쪽으로 지나가고 몸이 띠를 채운다)
-//   → rest(MG_REST, 숨을 고르는 동안 몸통이 약점) → idle. 독룡에 닿으면 끝(보호막은 한 번 막는다). 독 구슬은 휘청.
-//   2페이즈엔 독룡이 둘 — 두 띠 사이(MG_GAP)로 빠져야 한다. 감옥에 있는 동안 거리는 다른 보스처럼 멈춘다
-const MG_Y = 118, MG_WARN = 80, MG_LOCK = 20, MG_SWEEP = 44, MG_REST = 120, MG_BAND = 40, MG_GAP = 170, MG_KEY_R = 26;
+// 해저 감옥 — 해군에게 세 번째로 붙잡히면 끌려온다. 간수장 그롬(네임드)을 꺾어야 탈옥해 항해를 잇는다.
+//   v60: 이름·능력 교체 — 예전 '간수장 마젤란'(독룡·독 구슬)은 유명 만화 인물과 너무 닮아 '자물쇠 그롬'으로 바꿨다.
+//   내부 상수 MAGELLAN(= 20)·함수 이름 updateMagellan/drawMagellan·MG_* 는 그대로 둔다(저장 데이터의 boss20·검사·도감 id가 이 번호를 쓴다).
+//   처음엔 해루석 수갑(기술 봉인) — 떠다니는 열쇠를 낚아채야 풀리고, 그 전엔 몸통이 드러나지 않는다.
+//   idle → warn(MG_WARN, 쇠창살이 내려올 자리 예고) → bars(MG_BARS_T, 쇠창살이 내려와 '감옥 칸'으로 길을 막는다. 위에서 내려온 창살은 아래 틈 MG_GAP으로,
+//   아래에서 솟은 창살(격노)은 MG_TOP 위로 지나간다. 닿으면 휘청하며 튕긴다) → rest(MG_REST, 숨을 고르는 동안 가슴의 큰 자물쇠가 열려 몸통이 약점) → idle.
+//   그롬을 맞히면 몸에 걸린 열쇠가 하나 떨어진다(b.key) — 잡으면 칸 열쇠(b.keys, 최대 MG_KEYS_MAX): 쇠창살에 닿는 순간 열쇠 하나를 써서 그 칸이 열린다.
+//   격노하는 순간 다시 수갑을 채운다 — 그때 떨어진 열쇠로 푼다. 틈틈이 자물쇠 추(shot kind 9, 보통 휘청)를 던진다.
+//   즉사 패턴(독룡)은 없앴다 — 지는 조건은 제한 시간뿐. 감옥에 있는 동안 거리는 다른 보스처럼 멈춘다
+const MG_Y = 118, MG_WARN = 80, MG_BARS_T = 140, MG_REST = 120, MG_GAP = 150, MG_TOP = 200, MG_BAR_W = 15, MG_KEY_R = 26, MG_KEYS_MAX = 2, MG_BAR_DROP = 9;
 const jailCuffed = () => !!(boss && boss.type === MAGELLAN && !boss.keyGot);
 function startJail(){
   if(boss){ clearCuts(); boss = null; shots = []; }      // 싸우던 보스는 놓친다 — 감옥으로 끌려간다
@@ -10218,8 +10220,8 @@ function startJail(){
   p.vx = Math.max(p.vx, 8); p.vy = Math.min(p.vy, -10);
   spawnBoss(false, MAGELLAN);
   cuffT = Math.max(cuffT, 60); gear = 0;
-  pops.push({ x:p.x, y:p.y - 60, t:150, text:"해저 감옥으로 압송됐다… 간수장 마젤란이 기다린다", color:"#c9a0ff" });
-  missionFlash = { text: "탈옥하라! 열쇠로 수갑을 풀고 마젤란을 꺾어라 — 지면 항해 끝", reward:0, t:200, weather:"storm" };
+  pops.push({ x:p.x, y:p.y - 60, t:150, text:"해저 감옥으로 압송됐다… 간수장 그롬이 기다린다", color:"#c9a0ff" });
+  missionFlash = { text: "탈옥하라! 열쇠로 수갑을 풀고 그롬을 꺾어라 — 시간 안에 못 꺾으면 항해 끝", reward:0, t:200, weather:"storm" };
   addShake(10, 24);
 }
 function jailEscape(){
@@ -10230,108 +10232,206 @@ function jailEscape(){
   nextNavyAt = dist + NAVY_EVERY[0] + navyRand()*(NAVY_EVERY[1] - NAVY_EVERY[0]);
   pops.push({ x:p.x, y:p.y - 90, t:170, text:"탈옥 성공! 다시 바다로 — 또 잡히면 그땐 끝이다", color:"#c9a0ff" });
 }
-function mgPoison(text){
-  if(invinc() || iframes > 0 || state !== STATE.PLAY) return;
-  if(shield > 0){ knock(false); return; }   // 보호막이 대신 막는다
-  pops.push({ x:p.x, y:p.y - 40, t:80, text, color:"#c9a0ff" });
-  for(let i=0;i<24;i++) spark(p.x, p.y, i % 2 ? "#9a5adc" : "#bfff96");
-  die("독");
+// 쇠창살이 막는 세로 범위 — 위에서 내려온 창살은 0~SEA-MG_GAP, 아래에서 솟은 창살은 MG_TOP~SEA
+const mgBarRange = (g) => g.up ? [MG_TOP, SEA] : [0, SEA - MG_GAP];
+// 다 내려온 정도 0~1 (bars 상태에서만) — 열쇠로 열린 칸은 다시 올라간다
+const mgBarK = (b, g) => b.st !== "bars" ? 0 : g.open ? Math.max(0, 1 - g.open / 14) : Math.min(1, (MG_BARS_T - b.stT) / MG_BAR_DROP) * Math.min(1, Math.max(0, b.stT) / 10);
+function mgDropKey(b){
+  if(b.key) return;
+  b.key = { x: b.x - 30, y: b.y + 30, t: 0, drop: true };
+  for(let i=0;i<10;i++) spark(b.x, b.y + 20, "#ffd76a");
 }
 function updateMagellan(b, dt){
-  if(!b.keyGot){
-    cuffT = Math.max(cuffT, 2);                                       // 열쇠를 잡기 전엔 수갑이 안 풀린다
-    const k = b.key;
+  if(b.keys === undefined){ b.keys = 0; b.hpPrev = b.hp; if(!b.gates) b.gates = []; }
+  if(b.hp < b.hpPrev){ b.hpPrev = b.hp; mgDropKey(b); }               // 맞으면 몸에 걸린 열쇠가 하나 떨어진다
+  if(b.p2 && !b.recuff){                                               // 격노 — 다시 수갑
+    b.recuff = true; b.keyGot = false;
+    pops.push({ x:p.x, y:p.y - 70, t:120, text:"그롬이 다시 수갑을 채웠다 — 떨어진 열쇠를 잡아라!", color:"#c9a0ff" });
+  }
+  if(!b.keyGot){ cuffT = Math.max(cuffT, 2); if(!b.key) mgDropKey(b); }  // 열쇠를 잡기 전엔 수갑이 안 풀린다
+  const k = b.key;
+  if(k){
+    k.t = (k.t || 0) + dt;
+    if(k.drop && k.t < 40) k.x += (p.x + 300 - k.x) * 0.05 * dt;       // 떨어진 열쇠는 앞쪽으로 튕겨 나온다
     k.y += ((120 + (Math.sin(b.t*0.025)*0.5 + 0.5) * (SEA - 290)) - k.y) * 0.06 * dt;   // 위아래로 천천히 오르내린다
     if(k.x < p.x - 200) k.x = p.x + 420 + Math.random()*120;          // 지나쳤으면 다시 앞쪽에
-    if(state === STATE.PLAY && Math.hypot(p.x - k.x, p.y - k.y) < MG_KEY_R + 16){
-      b.keyGot = true; cuffT = 0;
-      pops.push({ x:p.x, y:p.y - 50, t:110, text:"열쇠를 낚아챘다 — 수갑이 풀렸다!", color:"#ffd76a" });
+    const d = Math.hypot(p.x - k.x, p.y - k.y);
+    if(d < 150){ k.x += (p.x - k.x) * 0.05 * dt; k.y += (p.y - k.y) * 0.05 * dt; }   // 가까이 가면 살짝 끌려온다
+    if(state === STATE.PLAY && d < MG_KEY_R + 16){
       for(let i=0;i<20;i++) spark(k.x, k.y, "#ffd76a");
+      b.key = null;
+      if(!b.keyGot){ b.keyGot = true; cuffT = 0; pops.push({ x:p.x, y:p.y - 50, t:110, text:"열쇠를 낚아챘다 — 수갑이 풀렸다!", color:"#ffd76a" }); }
+      else { b.keys = Math.min(MG_KEYS_MAX, b.keys + 1); pops.push({ x:p.x, y:p.y - 50, t:110, text:"칸 열쇠 " + b.keys + "개 — 쇠창살에 닿으면 열린다", color:"#ffd76a" }); }
     }
   }
-  if(skyRelocate(b, dt, MG_Y, 360)) return;
-  const CAP = 9.4;
-  const want = Math.min(p.vx, CAP*0.9) + ((p.x + 330) - b.x) * 0.03;
-  b.x += Math.max(-4, Math.min(CAP, want)) * dt;
-  b.y = MG_Y + Math.sin(b.t*0.03)*14;
+  keepFront(b, 330, dt);
+  b.y = MG_Y + Math.sin(b.t*0.03)*10;
   const rage = b.p2 ? 0.75 : 1;
   b.fire -= dt;
   if(b.fire <= 0 && b.st !== "rest"){
-    b.fire = 130 * rage;
-    aimShot({ x:b.x - 30, y:b.y + 10 }, 8.6, 0, 9, 11);
-    if(b.p2) aimShot({ x:b.x - 30, y:b.y + 10 }, 8.6, 0.16, 9, 11);
+    b.fire = 150 * rage;
+    aimShot({ x:b.x - 30, y:b.y + 10 }, 8.2, 0, 9, 12);
+    b.thT = 16;
   }
+  if(b.thT > 0) b.thT -= dt;
+  for(const g of b.gates) if(g.open) g.open += dt;
   if(b.st === "idle"){
     b.wait -= dt;
     if(b.wait <= 0){
-      b.st = "warn"; b.stT = MG_WARN * rage;
-      b.bands = b.p2 ? [{ y:0, off:-MG_GAP/2 }, { y:0, off:MG_GAP/2 }] : [{ y:0, off:0 }];
+      b.st = "warn"; b.stT = b.stT0 = MG_WARN * rage;
+      const lead = p.x + Math.max(0, p.vx) * b.stT * 0.9 + 90;
+      b.gates = b.p2 ? [{ x: lead, up:false, open:0 }, { x: lead + 300, up:true, open:0 }] : [{ x: lead, up:false, open:0 }];
     }
   } else if(b.st === "warn"){
     b.stT -= dt;
-    if(b.stT > MG_LOCK) for(const d of b.bands) d.y = Math.max(70 + MG_BAND, Math.min(SEA - 40, p.y + d.off));   // 마지막 순간엔 띠가 고정된다
-    if(b.stT <= 0){ b.st = "sweep"; b.stT = MG_SWEEP; addShake(6, 14); }
-  } else if(b.st === "sweep"){
+    if(b.stT <= 0){ b.st = "bars"; b.stT = MG_BARS_T; addShake(8, 16); for(const g of b.gates) for(let i=0;i<8;i++) spark(g.x, g.up ? MG_TOP : SEA - MG_GAP, "#b5bbc5"); }
+  } else if(b.st === "bars"){
     b.stT -= dt;
-    const head = mgHead(b);
-    if(state === STATE.PLAY && p.x > head - 30 && b.bands.some(d => Math.abs(p.y - d.y) < MG_BAND)) mgPoison("독룡에 휩쓸렸다!");
-    if(b.stT <= 0){ b.st = "rest"; b.stT = MG_REST; b.bands = []; if(b.keyGot) pops.push({ x:b.x, y:b.y - 60, t:60, text:"마젤란이 숨을 고른다 — 몸통을 노려라!", color:"#ffd76a" }); }
+    if(state === STATE.PLAY){
+      for(const g of b.gates){
+        if(g.open || mgBarK(b, g) < 1) continue;
+        const [y0, y1] = mgBarRange(g);
+        if(Math.min(p.x, pPrevX) > g.x + MG_BAR_W || Math.max(p.x, pPrevX) < g.x - MG_BAR_W || p.y < y0 || p.y > y1) continue;
+        if(b.keys > 0){
+          b.keys--; g.open = 1; storyCount("gate");
+          pops.push({ x:g.x, y:p.y - 40, t:80, text:"열쇠로 칸을 열었다!", color:"#ffd76a" });
+          for(let i=0;i<14;i++) spark(g.x, p.y, "#ffd76a");
+        } else if(stun <= 0 && iframes <= 0 && !invinc()){
+          const s0 = stun, sh0 = shield; knock(false);
+          if(stun > s0 || shield < sh0){ if(stun > s0){ p.vx = -Math.max(3, Math.abs(p.vx) * 0.5); p.x = Math.min(p.x, g.x - MG_BAR_W - 2); } pops.push({ x:p.x, y:p.y - 46, t:60, text:"쇠창살! " + (g.up ? "위로 넘어라" : "아래 틈으로"), color:"#b5bbc5" }); }
+        }
+      }
+    }
+    if(b.stT <= 0){ b.st = "rest"; b.stT = MG_REST; b.gates = []; if(b.keyGot) pops.push({ x:b.x, y:b.y - 70, t:60, text:"그롬이 숨을 고른다 — 열린 자물쇠(몸통)를 노려라!", color:"#ffd76a" }); }
   } else if(b.st === "rest"){
     b.stT -= dt;
     if(b.stT <= 0){ b.st = "idle"; b.wait = 70 * rage; }
   }
 }
-// 독룡 머리의 월드 x — 화면 오른쪽 밖에서 왼쪽 밖까지 MG_SWEEP 동안 지나간다
-const mgHead = (b) => cam.x + W + 80 - (W + 200) * (1 - Math.max(0, b.stT) / MG_SWEEP);
-function drawMagellan(b, x, hurt){
-  for(const d of b.bands){
-    if(b.st === "warn"){
-      const lock = b.stT <= MG_LOCK;
-      ctx.strokeStyle = lock ? "rgba(255,110,140,.9)" : "rgba(201,160,255,.6)"; ctx.lineWidth = lock ? 3 : 2;
-      ctx.setLineDash(lock ? [] : [12, 10]);
-      ctx.beginPath(); ctx.moveTo(-200, d.y - MG_BAND); ctx.lineTo(W + 200, d.y - MG_BAND); ctx.moveTo(-200, d.y + MG_BAND); ctx.lineTo(W + 200, d.y + MG_BAND); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = "rgba(150,90,220,.1)"; ctx.fillRect(-200, d.y - MG_BAND, W + 400, MG_BAND*2);
-    } else if(b.st === "sweep"){
-      const hx = mgHead(b) - cam.x;
-      ctx.fillStyle = "rgba(120,60,190,.75)";                       // 독룡의 몸 — 머리 뒤로 띠를 꽉 채운다
-      ctx.beginPath(); ctx.moveTo(hx, d.y - MG_BAND*0.8);
-      for(let xx = hx; xx <= W + 220; xx += 40) ctx.lineTo(xx, d.y - MG_BAND*0.8 + Math.sin(xx*0.03 + time*0.3)*8);
-      ctx.lineTo(W + 220, d.y + MG_BAND*0.8);
-      for(let xx = W + 220; xx >= hx; xx -= 40) ctx.lineTo(xx, d.y + MG_BAND*0.8 + Math.sin(xx*0.03 + time*0.3)*8);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "rgba(190,255,150,.35)";
-      for(let xx = hx + 30; xx < W + 200; xx += 70){ ctx.beginPath(); ctx.arc(xx, d.y + Math.sin(xx*0.05 + time*0.2)*14, 7, 0, Math.PI*2); ctx.fill(); }
-      ctx.fillStyle = "#5a2a96";                                     // 머리 — 벌린 아가리
-      ctx.beginPath(); ctx.moveTo(hx + 30, d.y - MG_BAND); ctx.lineTo(hx - 50, d.y - 18); ctx.lineTo(hx - 10, d.y); ctx.lineTo(hx - 50, d.y + 18); ctx.lineTo(hx + 30, d.y + MG_BAND); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#bfff96"; ctx.beginPath(); ctx.arc(hx + 4, d.y - 22, 5, 0, Math.PI*2); ctx.fill();
-    }
-  }
-  if(!b.keyGot){                                                    // 떠다니는 수갑 열쇠
-    const kx = b.key.x - cam.x, ky = b.key.y;
-    const g = 0.5 + Math.sin(time*0.2)*0.25;
-    ctx.fillStyle = "rgba(255,215,106," + (g*0.4).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(kx, ky, MG_KEY_R + 8, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(kx - 8, ky, 8, 0, Math.PI*2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(kx + 18, ky); ctx.moveTo(kx + 12, ky); ctx.lineTo(kx + 12, ky + 7); ctx.moveTo(kx + 18, ky); ctx.lineTo(kx + 18, ky + 9); ctx.stroke();
-  }
-  const tired = b.st === "rest";
+// 자물쇠·열쇠 — 그롬의 몸·쇠창살·떠다니는 열쇠가 같이 쓴다
+function drawPadlock(x, y, s, col, open, hole){
+  ctx.save(); ctx.translate(x, y);
+  ctx.lineCap = "round";
+  const sh = () => { ctx.beginPath(); if(open){ ctx.moveTo(-s*0.3, -s*0.3); ctx.lineTo(-s*0.3, -s*0.72); ctx.arc(0, -s*0.72, s*0.3, Math.PI, 0); ctx.lineTo(s*0.3, -s*0.6); } else { ctx.moveTo(-s*0.3, -s*0.3); ctx.lineTo(-s*0.3, -s*0.52); ctx.arc(0, -s*0.52, s*0.3, Math.PI, 0); ctx.lineTo(s*0.3, -s*0.3); } };
+  sh(); ctx.strokeStyle = INK; ctx.lineWidth = s*0.2 + 2.4; ctx.stroke();
+  sh(); ctx.strokeStyle = "#b5bbc5"; ctx.lineWidth = s*0.2; ctx.stroke();
+  inkShape(() => { rrPath(-s*0.5, -s*0.36, s, s*0.8, s*0.16); }, col, { shade: () => { ctx.beginPath(); ctx.rect(s*0.12, -s*0.4, s*0.5, s); }, shadeCol:"rgba(40,20,0,.25)", pool:false, line: s > 16 ? 2.2 : 1.4 });
+  if(hole !== false){ ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(0, -s*0.02, s*0.11, 0, Math.PI*2); ctx.fill(); ctx.fillRect(-s*0.045, 0, s*0.09, s*0.24); }
+  ctx.restore();
+}
+function drawKeyIcon(x, y, rot, s, col){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const path = () => { ctx.beginPath(); ctx.arc(-s*0.55, 0, s*0.34, 0, Math.PI*2); ctx.moveTo(-s*0.2, 0); ctx.lineTo(s*0.9, 0); ctx.moveTo(s*0.55, 0); ctx.lineTo(s*0.55, s*0.34); ctx.moveTo(s*0.86, 0); ctx.lineTo(s*0.86, s*0.42); };
+  path(); ctx.strokeStyle = INK; ctx.lineWidth = s*0.2 + 2.6; ctx.stroke();
+  path(); ctx.strokeStyle = col || "#ffd76a"; ctx.lineWidth = s*0.2; ctx.stroke();
+  ctx.restore();
+}
+// 쇠창살 한 칸 — 예고(점선 띠 + 끝에서 삐죽 내민 창살) → 쿵 내려옴(창살 셋·가로대·큰 자물쇠) → 열쇠로 열리면 도로 올라간다
+function drawJailGate(b, g){
+  const gx = g.x - cam.x, [y0, y1] = mgBarRange(g), len = y1 - y0;
+  if(gx < -80 || gx > W/(cam.z || 1) + 80) return;
   ctx.save();
-  ctx.translate(x, b.y);
-  ctx.fillStyle = "rgba(150,90,220,.25)";                           // 독 기운
-  ctx.beginPath(); ctx.arc(0, 4, 62 + Math.sin(time*0.12)*5, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = hurt ? "#f4ecd9" : "#2a1e3a";                     // 거구의 몸
-  ctx.beginPath(); ctx.ellipse(0, 14, 36, 42, 0, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = tired ? "#ff8f80" : "#4a3466";                    // 숨을 고를 땐 가슴이 붉게 드러난다
-  ctx.beginPath(); ctx.ellipse(0, 8, 18, 20, 0, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(0, -36, 15, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#1b1218";                                        // 뿔 달린 간수 모자
-  ctx.beginPath(); ctx.moveTo(-18, -44); ctx.lineTo(18, -44); ctx.lineTo(12, -56); ctx.lineTo(-12, -56); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(-12, -54); ctx.lineTo(-24, -74); ctx.lineTo(-6, -56); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(12, -54); ctx.lineTo(24, -74); ctx.lineTo(6, -56); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = tired ? "#f4ecd9" : "#bfff96";
-  ctx.beginPath(); ctx.arc(-5, -36, 2.4, 0, Math.PI*2); ctx.arc(5, -36, 2.4, 0, Math.PI*2); ctx.fill();
-  if(tired){ ctx.fillStyle = "rgba(244,236,217,.7)"; ctx.font = "700 14px 'Gowun Batang', 'Pretendard', serif"; ctx.textAlign = "center"; ctx.fillText("헉… 헉…", 0, -84); }
+  let k;
+  if(b.st === "warn"){
+    const u = 1 - Math.max(0, b.stT) / (b.stT0 || MG_WARN);
+    ctx.fillStyle = "rgba(190,200,220," + (0.08 + u*0.14).toFixed(2) + ")"; ctx.fillRect(gx - MG_BAR_W, y0, MG_BAR_W*2, len);
+    ctx.strokeStyle = "rgba(255,120,110," + (0.45 + u*0.45).toFixed(2) + ")"; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.lineDashOffset = -time;
+    ctx.beginPath(); ctx.moveTo(gx - MG_BAR_W, y0); ctx.lineTo(gx - MG_BAR_W, y1); ctx.moveTo(gx + MG_BAR_W, y0); ctx.lineTo(gx + MG_BAR_W, y1); ctx.stroke(); ctx.setLineDash([]);
+    // 지나갈 틈 쪽을 가리키는 화살표
+    const ay = g.up ? MG_TOP - 40 : SEA - MG_GAP + 50, bob = Math.sin(time*0.2)*4;
+    ctx.fillStyle = "rgba(159,224,160," + (0.6 + u*0.4).toFixed(2) + ")"; ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(gx - 30 + bob, ay - 9); ctx.lineTo(gx - 6 + bob, ay - 9); ctx.lineTo(gx - 6 + bob, ay - 17); ctx.lineTo(gx + 14 + bob, ay); ctx.lineTo(gx - 6 + bob, ay + 17); ctx.lineTo(gx - 6 + bob, ay + 9); ctx.lineTo(gx - 30 + bob, ay + 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    k = 0.05 + 0.06 * u;
+  } else k = mgBarK(b, g) >= 1 ? 1 : ease.outCubic(mgBarK(b, g));
+  const L = len * k, ya = g.up ? y1 - L : y0, yb = g.up ? y1 : y0 + L, tip = g.up ? ya : yb, dir = g.up ? -1 : 1;
+  for(const ox of [-10, 0, 10]){
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(gx + ox, ya); ctx.lineTo(gx + ox, yb); }, 5, "#6e7582", "rgba(220,228,240,.5)");
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(gx + ox - 4, tip); ctx.lineTo(gx + ox, tip + dir*11); ctx.lineTo(gx + ox + 4, tip); ctx.closePath(); }, "#8d939d", { pool:false, line:1.4 });
+  }
+  if(k > 0.2){
+    for(let yy = (g.up ? y1 - 30 : y0 + 30); g.up ? yy > ya + 10 : yy < yb - 10; yy += (g.up ? -74 : 74))
+      inkShape(() => { rrPath(gx - 17, yy - 4, 34, 8, 3); }, "#565c68", { pool:false, line:1.6 });
+    if(k >= 0.6) drawPadlock(gx, (ya + yb)/2 + 8, 24, g.open ? "#9a8a5a" : "#d9a840", !!g.open);
+  }
+  ctx.restore();
+}
+/* v60 간수장 그롬 — 사슬에 매달린 쇠 발판 위의 거구. 온몸에 자물쇠를 갑옷처럼 두르고 허리엔 열쇠 꾸러미(남은 체력만큼).
+   가슴의 큰 자물쇠는 평소엔 잠겨 있다가 숨을 고를 때 덜컥 열린다(약점). 한 손엔 몽둥이만 한 큰 열쇠 */
+function drawMagellan(b, x, hurt){
+  for(const g of b.gates || []) drawJailGate(b, g);
+  if(b.key){                                                    // 떠다니는 열쇠 — 수갑 열쇠는 금빛 후광이 크다
+    const kx = b.key.x - cam.x, ky = b.key.y, gl = 0.5 + Math.sin(time*0.2)*0.25;
+    const kg = ctx.createRadialGradient(kx, ky, 3, kx, ky, MG_KEY_R + 14);
+    kg.addColorStop(0, "rgba(255,226,130," + (gl*0.7).toFixed(2) + ")"); kg.addColorStop(1, "rgba(255,215,106,0)");
+    ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(kx, ky, MG_KEY_R + 14, 0, Math.PI*2); ctx.fill();
+    drawKeyIcon(kx, ky, Math.sin(time*0.06)*0.4 - 0.5, 20, "#ffd76a");
+  }
+  for(let i=0;i<(b.keys || 0);i++) drawKeyIcon(p.x - cam.x - 8 + i*18, p.y - 48 + Math.sin(time*0.15 + i)*2, -0.6, 11, "#ffd76a");   // 가진 칸 열쇠
+  const tired = b.st === "rest", warn = b.st === "warn", slam = b.st === "bars" && b.stT > MG_BARS_T - 20, calm = settings.calm;
+  const sway = calm ? 0 : Math.sin(b.t*0.03) * 0.03;
+  // 발판을 매단 사슬
+  awChain(x - 44, b.y + 60, x - 30, -10, 0); awChain(x + 44, b.y + 60, x + 30, -10, 0);
+  ctx.save();
+  ctx.translate(x, b.y); ctx.rotate(sway);
+  const coat = hurt ? "#f4ecd9" : "#3f4a5e", coat2 = hurt ? "#e6dcc4" : "#2e3646", skin = hurt ? "#fff" : "#d9a888";
+  // 쇠 발판
+  inkShape(() => { ctx.beginPath(); ctx.ellipse(0, 64, 54, 9, 0, 0, Math.PI*2); }, hurt ? "#f4ecd9" : "#565c68", { shade: () => { ctx.beginPath(); ctx.rect(-60, 64, 120, 12); }, shadeCol:"rgba(0,0,0,.3)", pool:false, line:2.2 });
+  // 다리·장화
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-26, 36); ctx.lineTo(26, 36); ctx.lineTo(28, 58); ctx.lineTo(6, 58); ctx.lineTo(0, 44); ctx.lineTo(-6, 58); ctx.lineTo(-28, 58); ctx.closePath(); }, coat2, { line:2.2 });
+  for(const s of [-1, 1]) inkShape(() => { ctx.beginPath(); ctx.moveTo(s*4, 56); ctx.lineTo(s*30, 56); ctx.quadraticCurveTo(s*36, 62, s*30, 65); ctx.lineTo(s*4, 65); ctx.closePath(); }, hurt ? "#f4ecd9" : "#1f1a1e", { pool:false, line:1.8 });
+  // 뒤쪽 팔 — 열쇠 꾸러미 고리를 든다
+  inkTube(() => { ctx.beginPath(); ctx.moveTo(34, -14); ctx.quadraticCurveTo(52, 6, 44, 26); }, 15, coat2);
+  inkShape(() => { ctx.beginPath(); ctx.arc(44, 28, 9, 0, Math.PI*2); }, skin, { pool:false, line:2 });
+  // 몸통 — 어깨가 떡 벌어진 거구
+  const torso = () => { ctx.beginPath(); ctx.moveTo(-30, 42); ctx.quadraticCurveTo(-52, 14, -44, -16); ctx.quadraticCurveTo(-30, -34, 0, -32); ctx.quadraticCurveTo(30, -34, 44, -16); ctx.quadraticCurveTo(52, 14, 30, 42); ctx.closePath(); };
+  inkShape(torso, coat, { shade: () => { ctx.beginPath(); ctx.ellipse(28, 6, 26, 46, 0.1, 0, Math.PI*2); }, shadeCol:"rgba(10,10,30,.28)", pool:"rgba(10,10,30,.35)", poolW:7, line:2.8 });
+  if(!hurt){
+    // 자물쇠 갑옷 — 줄지어 매단 작은 자물쇠들이 걸을 때마다 달그락거린다
+    ctx.save(); torso(); ctx.clip();
+    let n = 0;
+    for(let row=0;row<4;row++) for(let c=-3;c<=3;c++){
+      const lx = c*13 + (row % 2 ? 6.5 : 0), ly = -18 + row*15;
+      if(Math.hypot(lx, ly - 6) < 22) continue;                              // 가슴의 큰 자물쇠 자리는 비운다
+      drawPadlock(lx, ly + (calm ? 0 : Math.sin(time*0.13 + n*1.9)*0.9), 10.5, n % 3 === 0 ? "#c8a24a" : n % 3 === 1 ? "#8d939d" : "#a9753e", false, false); n++;
+    }
+    ctx.restore();
+    // 허리띠와 열쇠 꾸러미 — 남은 체력만큼 열쇠가 달려 있다
+    ctx.strokeStyle = INK; ctx.lineWidth = 8; ctx.lineCap = "butt"; ctx.beginPath(); ctx.moveTo(-34, 36); ctx.quadraticCurveTo(0, 44, 34, 36); ctx.stroke();
+    ctx.strokeStyle = "#6b4426"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-34, 36); ctx.quadraticCurveTo(0, 44, 34, 36); ctx.stroke();
+    for(let i=0;i<b.hp;i++){ const kx2 = -22 + i*(44 / Math.max(1, b.maxHp - 1)); drawKeyIcon(kx2, 50 + (i % 2)*2, Math.PI/2 + (calm ? 0 : Math.sin(time*0.11 - i*0.9)*0.22), 9, i % 2 ? "#e8c060" : "#c8ccd4"); }
+  }
+  // 가슴의 큰 자물쇠(약점 '몸통') — 숨을 고를 때 열린다
+  if(tired && b.keyGot && !hurt){ const cg = ctx.createRadialGradient(0, 6, 4, 0, 6, 46); cg.addColorStop(0, "rgba(255,150,130,.8)"); cg.addColorStop(1, "rgba(255,90,80,0)"); ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 6, 46, 0, Math.PI*2); ctx.fill(); }
+  drawPadlock(0, 10, 32, hurt ? "#f4ecd9" : tired && b.keyGot ? "#ff9a6a" : "#d9a840", tired);
+  // 머리 — 각진 턱, 간수 모자(자물쇠 휘장), 굵은 콧수염
+  const hy = -46 + (tired ? 3 : 0);
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-15, hy - 10); ctx.quadraticCurveTo(-18, hy + 8, -12, hy + 15); ctx.lineTo(10, hy + 16); ctx.quadraticCurveTo(18, hy + 8, 15, hy - 10); ctx.closePath(); }, skin, { shade: () => { ctx.beginPath(); ctx.rect(4, hy - 12, 16, 30); }, shadeCol:"rgba(120,60,40,.22)", line:2.2 });
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-19, hy - 8); ctx.lineTo(-16, hy - 24); ctx.quadraticCurveTo(0, hy - 30, 16, hy - 24); ctx.lineTo(19, hy - 8); ctx.closePath(); }, hurt ? "#f4ecd9" : "#232838", { pool:false, line:2.2 });
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-22, hy - 8); ctx.quadraticCurveTo(-28, hy - 4, -30, hy - 2); ctx.lineTo(-10, hy - 5); ctx.lineTo(19, hy - 8); ctx.closePath(); }, hurt ? "#f4ecd9" : "#14161e", { pool:false, line:1.8 });   // 챙
+  if(!hurt){
+    drawPadlock(0, hy - 15, 9, "#e8c060", false, false);
+    ctx.strokeStyle = INK; ctx.lineCap = "round"; ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(-14, hy - 2); ctx.lineTo(-5, hy + (tired ? -1 : 1)); ctx.stroke();                 // 눈썹
+    ctx.fillStyle = tired ? "#f4ecd9" : "#ffe08a"; ctx.beginPath(); ctx.arc(-8, hy + 3, 2.2, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(-17, hy + 7); ctx.quadraticCurveTo(-8, hy + 4, 2, hy + 8); ctx.quadraticCurveTo(-4, hy + 14, -18, hy + 13); ctx.closePath(); }, "#4a3426", { pool:false, line:1.5 });   // 콧수염
+    if(tired){ ctx.fillStyle = "#9fdcee"; ctx.strokeStyle = INK; ctx.lineWidth = 1; const dk = (time*0.03) % 1; ctx.globalAlpha = 1 - dk; ctx.beginPath(); ctx.ellipse(14, hy - 2 + dk*16, 2.4, 3.4, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 1;
+      const bk = (time*0.02) % 1; ctx.fillStyle = "rgba(240,246,250," + (0.6*(1 - bk)).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(-26 - bk*14, hy + 12 - bk*5, 3 + bk*5, 0, Math.PI*2); ctx.fill(); }
+  }
+  // 앞쪽 팔과 큰 열쇠 — 예고 땐 머리 위로 치켜들고, 쇠창살이 내려올 땐 내리찍는다
+  let ang = -0.5;
+  if(warn){ const u = 1 - Math.max(0, b.stT) / (b.stT0 || MG_WARN); ang = -0.5 - ease.inOutCubic(Math.min(1, u*1.4)) * 1.9; }
+  else if(slam){ const u = 1 - (b.stT - (MG_BARS_T - 20)) / 20; ang = -2.4 + ease.outBack(Math.min(1, u*2), 2) * 3.0; }
+  else if(b.thT > 0) ang = -0.5 + Math.sin((1 - b.thT/16) * Math.PI) * 1.2;
+  else if(tired) ang = 0.5;
+  ctx.save(); ctx.translate(-36, -14); ctx.rotate(Math.PI - ang);
+  inkTube(() => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(26, 0); }, 15, coat);
+  ctx.save(); ctx.translate(28, 0); ctx.rotate(-0.5);
+  drawKeyIcon(26, 0, 0, 34, hurt ? "#f4ecd9" : "#b5bbc5");
+  ctx.restore();
+  inkShape(() => { ctx.beginPath(); ctx.arc(28, 0, 9.5, 0, Math.PI*2); }, skin, { pool:false, line:2 });
+  ctx.restore();
+  // 어깨 견장 대신 큰 자물쇠 한 쌍
+  if(!hurt){ drawPadlock(-38, -16, 15, "#8d939d", false); drawPadlock(38, -16, 15, "#8d939d", false); }
   ctx.restore();
 }
 // 감옥 분위기 — 보랏빛 어둠, 화면 양옆과 위의 쇠창살
@@ -11241,7 +11341,7 @@ function drawBossWarn(){
   if(boss.type === MUSANG && boss.st === "charge"){ text = "패왕의 기세! 기어(E)를 켜고 버텨라"; left = boss.charge; }
   else if(boss.type === FIREBIRD && boss.st === "warn"){ text = "불새가 이 높이를 휩쓴다! 높이를 바꿔라"; left = boss.stT; col = "#ffb060"; }
   else if(boss.type === ANGLER && boss.st === "warn"){ text = "발밑에서 아귀가 솟는다! 원 밖으로·높이"; left = boss.stT; col = "#d6f0a0"; }
-  else if(boss.type === MAGELLAN && boss.st === "warn"){ text = boss.bands.length > 1 ? "독룡 두 마리! 두 줄 사이 틈으로 빠져라" : "독룡이 이 높이를 휩쓴다! 높이를 바꿔라"; left = boss.stT; col = "#c9a0ff"; }
+  else if(boss.type === MAGELLAN && boss.st === "warn"){ text = boss.gates.length > 1 ? "쇠창살 두 칸! 아래 틈 → 위로 넘어라" : "쇠창살이 내려온다! 아래 틈으로 빠져라"; left = boss.stT; col = "#c9a0ff"; }
   else if(boss.type === MAGELLAN && !boss.keyGot){ text = "해루석 수갑 — 떠다니는 열쇠를 낚아채라"; left = 0; col = "#ffd76a"; }
   else if(boss.type === JELLYQ && boss.st === "warn"){ text = boss.p2 ? "촉수 장막! 위 장막은 아래로, 아래 장막은 위로" : "촉수 장막이 내려온다! 바다 쪽으로 낮게 빠져나가라"; left = boss.stT; col = "#9fe8ff"; }
   else if(boss.type === WHALE && boss.st === "wave"){ text = "꼬리 해일! 높이 올라 넘어라"; left = boss.stT; col = "#bfe4ff"; }
@@ -13757,9 +13857,8 @@ function drawFrame(){
       : deathReason === "정체" ? "너무 오래 멈춰 선단에 뒤처졌다"
       : deathReason === "해군" ? "해군에게 붙잡혔다"
       : deathReason === "도황" ? "다시 해저 감옥 — 도황과 친구가 됐다"
-      : deathReason === "독" ? "마젤란의 독에 쓰러졌다 — 해저 감옥에 갇혔다"
       : deathReason === "시간 초과" ? "시간 안에 보스를 꺾지 못했다 — 달아났다"
-      : deathReason === "간수" ? "시간 안에 마젤란을 꺾지 못했다 — 해저 감옥에 갇혔다"
+      : deathReason === "간수" ? "시간 안에 그롬을 꺾지 못했다 — 해저 감옥에 갇혔다"
       : "선단에 뒤처졌다";
     const lx = W/2 - 50;
     let overY = 92;
