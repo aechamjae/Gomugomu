@@ -4137,7 +4137,7 @@ const BOSSES = [
   { name:"돌풍술사",     tag:"돌풍으로 스윙 궤적을 흔든다" },
   { name:"심해의 크라켄", tag:"눈이 드러난 순간에만 통한다", big:true },
   { name:"먹물 장군 문어", tag:"박자에 맞춰 던진 물고기·통을 받아 되던져라 — 격노하면 먹물 조명을 벗어나라", named:true },
-  { name:"망령의 유령선", tag:"유령일 땐 무적·망령 사슬 — 실체일 때 등불·선장을 노려라", big:true },
+  { name:"망령의 유령선", tag:"뒤집히면 선창·귀화, 일어서면 등불·선장 — 유령일 땐 무적", big:true },
   { name:"해군 대장 군함", tag:"포격 표식과 그물을 피해 대장·화약고·망루를 노려라", big:true },
   { name:"심해 상어 톱니턱",   tag:"매달린 돛대를 물어뜯고 앞쪽 돛대로 뛰어오른다 — 이빨이 박혀 버둥댈 때 아가미를 쳐라" },
   { name:"쇠사슬 바이스",     tag:"뒤에서 사슬을 걸어 끌어당긴다 — Q·W로 끊어라. 사슬 반동으로 앞에 끌려 나왔을 때를 쳐라" },
@@ -4483,7 +4483,7 @@ function spawnBoss(big, forceType){
   if(type === JELLYQ){ boss.y = 104; boss.st = "idle"; boss.wait = 90; boss.jellies = []; boss.curtains = []; boss.spawnCd = 120; }
   if(type === WHALE){ boss.y = SEA - 26; boss.st = "rest"; boss.stT = 80; boss.next = "spout"; boss.spouts = []; boss.waves = []; }
   if(type === SERPENT){ boss.y = SEA; boss.st = "idle"; boss.stT = 150; boss.arches = []; boss.archCd = 40; boss.hx = boss.x; boss.hy = SEA + 60; boss.roared = false; }
-  if(type === 7){ boss.y = SEA - 14; boss.sub = 190; boss.phase = 0; boss.fire = 80; boss.summon = 90; boss.walk = 0; }
+  if(type === 7){ boss.y = SEA - 14; boss.sub = 190; boss.phase = 0; boss.fire = 80; boss.summon = 90; boss.walk = 0; boss.rot = GS_CAP; boss.flip = null; boss.lastPhase = 0; }   // v60: 뒤집힌 채(용골이 하늘로) 나온다
   if(type === 4){ boss.gustCd = 180; boss.blowWarn = 0; boss.blowT = 0; boss.tear = 0; }
   if(type === 6){ boss.y = 100; boss.fire = 80; boss.seq = 0; boss.held = null; boss.thrown = []; boss.daze = 0; boss.tug = null; boss.mark = null; boss.markCd = 60; }
   if(type === SHARK){ boss.x = p.x - 420; boss.y = SEA + 34; boss.mode = "hunt"; boss.cd = 60; boss.a = null; }
@@ -4653,9 +4653,9 @@ function weakPoints(b){
 
   } else if(b.type === 7){
     // 유령선 — 실체일 때만 맞는다. 돛대 끝 등불은 흔들리고, 선장은 갑판을 오간다
-    if(b.phase === 0 && b.sink < 12){
-      out.push({ x:b.x + (10 + Math.sin(b.t*0.05)*22) * GHOST_S, y:b.y - 150*GHOST_S + b.sink, r:26, mark:"등불" });
-      out.push({ x:b.x + Math.sin(b.walk)*58*GHOST_S, y:b.y - 48*GHOST_S + b.sink, r:24, mark:"선장" });
+    // v60: 배가 바로 서 있으면 갑판 쪽(돛대 등불·선장), 뒤집혀 있으면 선창 쪽(깨진 선창 구멍·용골을 도는 귀화). 뒤집히는 동안엔 없다
+    if(b.phase === 0 && b.sink < 12 && !b.flip){
+      for(const w of gsWeak(b)){ const [wx, wy] = gsPt(b, w.lx, w.ly); out.push({ x:wx, y:wy, r:w.r, mark:w.mark }); }
     }
 
   } else if(b.type === SHARK){
@@ -5065,69 +5065,7 @@ function updateBoss(dt){
     }
 
   } else if(b.type === 7){
-    // 망령의 유령선 — 뒤처지면 가라앉아 앞으로 흘러간 뒤 다시 떠오른다
-    if(!b.chains) b.chains = [];
-    if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.chains = []; }
-    if(b.dive === 1){
-      b.sink = Math.min(170, (b.sink || 0) + 3*dt);
-      if(b.sink >= 168) b.dive = 2;
-    } else if(b.dive === 2){
-      b.x += (Math.max(21, Math.abs(p.vx) + 7) + Math.max(0, p.x - b.x) * 0.05) * dt;
-      if(b.x > p.x + 420) b.dive = 3;
-    } else if(b.dive === 3){
-      b.sink = Math.max(0, b.sink - 3*dt);
-      if(b.sink <= 0){ b.dive = 0; b.fire = 60; }
-    }
-    {
-      const CAP = 9.8;
-      const want = Math.min(p.vx, CAP*0.9) + ((p.x + 330) - b.x) * 0.030;
-      if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
-    }
-    b.walk += 0.03 * dt;
-    if(b.dive === 0){
-      const rage = b.hp <= 3 ? 0.7 : 1;
-      b.sub -= dt;
-      if(b.phase === 0){                       // 실체 — 포격
-        b.fire -= dt;
-        if(b.fire <= 0){
-          b.fire = 110 * rage;                   // v58: 88 → 110
-          for(let i=-1;i<=1;i++) aimShot({x:b.x - 20, y:b.y - 40}, 6.2, i*0.2, 1, 11);
-        }
-        if(b.sub <= 0){ b.phase = 1; b.sub = 110; }
-      } else {                                 // 유령 — 무적, 유령 갈매기와 망령 사슬
-        // 망령 사슬 — 플레이어가 갈 자리 위에 표식을 띄운 뒤 하늘에서 사슬을 내리꽂는다
-        b.fire -= dt;
-        if(b.fire <= 0){
-          b.fire = 78 * rage;                    // v58: 56 → 78
-          const tx = p.x + p.vx*30 + (Math.random()-0.5)*80;
-          b.chains.push({ x:tx, t:0, warn:40, life:95, drop:0 });
-        }
-        b.summon -= dt;
-        if(b.summon <= 0){
-          b.summon = 100 * rage;
-          for(let i=0;i<2;i++){
-            const gy = 90 + Math.random()*180;
-            gulls.push({ x: p.x + 520 + i*80, base: gy, y: gy, t: Math.random()*60, vx: -(2.6 + Math.random()), gone:false, ghost:true });
-          }
-        }
-        if(b.sub <= 0){ b.phase = 0; b.sub = 190 * rage; b.fire = 40; }
-      }
-    }
-    for(let i=b.chains.length-1;i>=0;i--){
-      const c = b.chains[i];
-      c.t += dt;
-      if(c.t < c.warn){ if(c.t < c.warn - 15) c.x += (p.x + p.vx*8 - c.x) * 0.02 * dt; continue; }   // 표식 동안엔 살짝 따라오다 마지막 15프레임은 멈춘다
-      if(c.drop === 0) for(const a of anchors) if(Math.abs(a.x - c.x) < 62) a.cut = 80;   // 내리꽂히며 근처 고리를 끊는다
-      c.drop = Math.min(1, c.drop + 0.16 * dt);
-      c.life -= dt;
-      if(c.life <= 0){ b.chains.splice(i,1); continue; }
-      if(stun <= 0 && c.drop > 0.3){
-        const bot = SEA * c.drop;
-        const near = (px,py)=> Math.hypot(px - c.x, py - Math.max(0, Math.min(bot, py)));
-        const mx = (pPrevX + p.x)/2, my = (pPrevY + p.y)/2;
-        if(Math.min(near(p.x,p.y), near(pPrevX,pPrevY), near(mx,my)) < 10 + 12) knock("chain");
-      }
-    }
+    updateGhostShip(b, dt);
 
   } else if(b.type === SHARK){
     updateShark(b, dt);
@@ -5498,6 +5436,119 @@ function updateSleepKraken(b, dt){
     }
   }
   awSlamSweep(b, dt);
+}
+/* ---------- 망령의 유령선(7) — '뒤집혀 올라오는 배' (v60) ----------
+   거꾸로 선 채(용골이 하늘로) 수면에 반쯤 박힌 배. 유령이 될 때마다(맞거나 실체 시간이 다 되면) 크게 뒤집힌다 —
+   예고 GS_FLIP_WARN(돛대가 휩쓸 자리 붉은 부채꼴) 뒤 GS_FLIP_T 동안 이징 회전. 회전하는 돛대의 물 위 부분에 닿으면 휘청.
+   바로 서면 갑판 쪽(돛대 등불·선장), 뒤집히면 선창 쪽(깨진 선창 구멍·용골을 도는 귀화)이 약점. 유령/실체 무적 구조는 그대로.
+   b.rot: 0 바로 섬 / π 뒤집힘. 뒤집기는 늘 플레이어 반대쪽(오른쪽)으로 돌아 바로 서고, 바로 선 배는 플레이어 쪽(왼쪽)으로 넘어간다 */
+const GS_FLIP_WARN = 52, GS_FLIP_T = 46, GS_MAST = 150, GS_MAST_R = 20, GS_CAP = Math.PI - 0.3, GS_LIFT = 24;   // 뒤집힌 배는 비스듬히 박혀(GS_CAP) 조금 솟아 있다
+const gsUp = (b) => Math.cos(b.rot || 0) > 0;                 // 바로 서 있나(rot 0 근처)
+// 배 그림 좌표(바로 선 배 기준, GHOST_S 배율 전) → 세상 좌표. 회전 중심은 흘수선 가운데(b.x, b.y + sink)
+function gsPt(b, lx, ly){
+  const r = b.rot || 0, c = Math.cos(r), sn = Math.sin(r);
+  return [b.x + (c*lx - sn*ly) * GHOST_S, b.y + (b.sink || 0) - GS_LIFT * (1 - c) / 2 + (sn*lx + c*ly) * GHOST_S];
+}
+function gsWeak(b){
+  if(gsUp(b)) return [{ lx: 10 + Math.sin(b.t*0.05)*22, ly: -150, r:26, mark:"등불" }, { lx: Math.sin(b.walk)*58, ly: -48, r:24, mark:"선장" }];
+  // 뒤집힌 배: 깨진 선창 구멍(용골 근처) · 용골 위를 천천히 도는 귀화
+  const a = b.t * 0.035;
+  return [{ lx: -24, ly: 22, r:30, mark:"선창" }, { lx: -Math.cos(a)*64, ly: 66 + Math.sin(a*2)*8, r:22, mark:"귀화" }];
+}
+function updateGhostShip(b, dt){
+  // 뒤처지면 가라앉아 앞으로 흘러간 뒤 다시 떠오른다
+  if(!b.chains) b.chains = [];
+  if(b.dive === 0 && b.x < p.x - 240){ b.dive = 1; b.chains = []; }
+  if(b.dive === 1){
+    b.sink = Math.min(170, (b.sink || 0) + 3*dt);
+    if(b.sink >= 168) b.dive = 2;
+  } else if(b.dive === 2){
+    b.x += (Math.max(21, Math.abs(p.vx) + 7) + Math.max(0, p.x - b.x) * 0.05) * dt;
+    if(b.x > p.x + 420) b.dive = 3;
+  } else if(b.dive === 3){
+    b.sink = Math.max(0, b.sink - 3*dt);
+    if(b.sink <= 0){ b.dive = 0; b.fire = 60; }
+  }
+  {
+    const CAP = 9.8;
+    const want = Math.min(p.vx, CAP*0.9) + ((p.x + 330) - b.x) * 0.030;
+    if(b.dive !== 2) b.x += Math.max(-4, Math.min(CAP, want)) * dt;
+  }
+  b.walk += 0.03 * dt;
+  if(b.dive === 0){
+    const rage = b.hp <= 3 ? 0.7 : 1;
+    b.sub -= dt;
+    if(b.phase === 0){                       // 실체 — 포격(바로 서면 갑판 대포, 뒤집히면 깨진 선창에서)
+      b.fire -= dt;
+      if(b.fire <= 0){
+        b.fire = 110 * rage;                   // v58: 88 → 110
+        const [sx, sy] = gsUp(b) ? [b.x - 20, b.y - 40] : gsPt(b, -24, 22);
+        for(let i=-1;i<=1;i++) aimShot({x:sx, y:sy}, 6.2, i*0.2, 1, 11);
+      }
+      if(b.sub <= 0){ b.phase = 1; b.sub = 110; }
+    } else {                                 // 유령 — 무적, 유령 갈매기와 망령 사슬
+      // 망령 사슬 — 플레이어가 갈 자리 위에 표식을 띄운 뒤 하늘에서 사슬을 내리꽂는다
+      b.fire -= dt;
+      if(b.fire <= 0){
+        b.fire = 78 * rage;                    // v58: 56 → 78
+        const tx = p.x + p.vx*30 + (Math.random()-0.5)*80;
+        b.chains.push({ x:tx, t:0, warn:40, life:95, drop:0 });
+      }
+      b.summon -= dt;
+      if(b.summon <= 0){
+        b.summon = 100 * rage;
+        for(let i=0;i<2;i++){
+          const gy = 90 + Math.random()*180;
+          gulls.push({ x: p.x + 520 + i*80, base: gy, y: gy, t: Math.random()*60, vx: -(2.6 + Math.random()), gone:false, ghost:true });
+        }
+      }
+      if(b.sub <= 0){ b.phase = 0; b.sub = 190 * rage; b.fire = 40; }
+    }
+  }
+  for(let i=b.chains.length-1;i>=0;i--){
+    const c = b.chains[i];
+    c.t += dt;
+    if(c.t < c.warn){ if(c.t < c.warn - 15) c.x += (p.x + p.vx*8 - c.x) * 0.02 * dt; continue; }   // 표식 동안엔 살짝 따라오다 마지막 15프레임은 멈춘다
+    if(c.drop === 0) for(const a of anchors) if(Math.abs(a.x - c.x) < 62) a.cut = 80;   // 내리꽂히며 근처 고리를 끊는다
+    c.drop = Math.min(1, c.drop + 0.16 * dt);
+    c.life -= dt;
+    if(c.life <= 0){ b.chains.splice(i,1); continue; }
+    if(stun <= 0 && c.drop > 0.3){
+      const bot = SEA * c.drop;
+      const near = (px,py)=> Math.hypot(px - c.x, py - Math.max(0, Math.min(bot, py)));
+      const mx = (pPrevX + p.x)/2, my = (pPrevY + p.y)/2;
+      if(Math.min(near(p.x,p.y), near(pPrevX,pPrevY), near(mx,my)) < 10 + 12) knock("chain");
+    }
+  }
+  // 유령이 되는 순간 뒤집기를 건다(맞아서든 시간이 다 돼서든)
+  if(b.lastPhase === undefined) b.lastPhase = b.phase;
+  if(b.phase === 1 && b.lastPhase === 0 && !b.flip && b.dive === 0){
+    const up = gsUp(b);
+    b.flip = { t: 0, from: up ? 0 : GS_CAP, to: up ? GS_CAP - Math.PI*2 : 0, hit: false };
+    b.sub = Math.max(b.sub, GS_FLIP_WARN + GS_FLIP_T + 30);       // 다 뒤집힌 뒤에야 실체로 돌아온다
+    b.fire = Math.max(b.fire, GS_FLIP_WARN + GS_FLIP_T);          // 사슬은 뒤집기가 끝난 뒤부터
+    pops.push({ x:b.x, y:SEA - 250, t:80, text: up ? "배가 뒤집힌다 — 돛대가 이쪽으로 넘어온다!" : "배가 일어선다 — 돛대가 솟구친다!", color:"#a8ffd8" });
+  }
+  b.lastPhase = b.phase;
+  if(b.flip){
+    const f = b.flip;
+    f.t += dt;
+    if(b.dive) f.t = GS_FLIP_WARN + GS_FLIP_T;                  // 잠수하면 바로 끝낸다
+    const k = (f.t - GS_FLIP_WARN) / GS_FLIP_T;
+    if(k >= 1){
+      b.rot = f.to < 0 ? GS_CAP : 0; b.flip = null;
+      addShake(7, 16);
+      for(let i=0;i<22;i++) spark(b.x + (Math.random() - 0.5)*260, SEA - 4, i % 2 ? "#a8ffd8" : "#e8f4ee");
+    } else if(k > 0){
+      b.rot = f.from + (f.to - f.from) * ease.outBack(ease.inOutCubic(k) * 0.96 + k * 0.04, 0.9);
+      // 회전하는 돛대(물 위 부분)에 닿으면 휘청
+      if(!f.hit && stun <= 0 && p.y < SEA){
+        const [x0, y0] = gsPt(b, 8, -20), [x1, y1] = gsPt(b, 8, -GS_MAST);
+        const d = distOriginToSeg(x0 - p.x, y0 - p.y, x1 - p.x, y1 - p.y);
+        if(d < GS_MAST_R + 13){ f.hit = true; knock(false); }
+      }
+    } else b.rot = f.from + (settings.calm ? 0 : Math.sin(f.t * 0.9) * 0.03 * (f.t / GS_FLIP_WARN));   // 예고 — 부르르 떤다
+  }
 }
 function updateAwaken(b, dt){
   const st = awStage(b);
@@ -11494,6 +11545,188 @@ function drawAdmiralShip(b, x, hurt){
   ctx.restore();
 }
 
+// v60: 반투명으로 그릴 덩어리를 따로 한 장에 그려 한 번에 붙인다 — 겹친 부분이 더 진해지는 얼룩(띠)이 생기지 않게.
+//   레이어를 못 쓰는 환경(검사 하네스)에선 globalAlpha로 대신한다
+let fadeLayer = null, fadeLayerCtx = null;
+function drawFaded(alpha, fn){
+  if(alpha >= 0.995){ fn(); return; }
+  if(alpha <= 0.005) return;
+  const prev = ctx;
+  if(!inkLayer || typeof prev.getTransform !== "function"){ prev.save(); prev.globalAlpha *= alpha; fn(); prev.restore(); return; }
+  if(!fadeLayer){ fadeLayer = document.createElement("canvas"); fadeLayerCtx = fadeLayer.getContext("2d"); }
+  if(fadeLayer.width !== inkLayer.width || fadeLayer.height !== inkLayer.height){ fadeLayer.width = inkLayer.width; fadeLayer.height = inkLayer.height; }
+  const fc = fadeLayerCtx;
+  fc.setTransform(1, 0, 0, 1, 0, 0); fc.clearRect(0, 0, fadeLayer.width, fadeLayer.height); fc.setTransform(prev.getTransform());
+  ctx = fc;
+  try{ fn(); } finally { ctx = prev; }
+  prev.save(); prev.setTransform(1, 0, 0, 1, 0, 0); prev.globalAlpha = alpha; prev.drawImage(fadeLayer, 0, 0); prev.restore();
+}
+// v60: 보스가 물에 잠기는 자리 — 칼로 자른 듯한 수평선 대신 출렁이는 물마루와 물거품으로 덮는다(바다는 SEA 아래를 덮으니 그 위 몇 px만)
+function bossWaterLip(x0, x1, seed, foam){
+  const top = skyCur ? skyCur.sea[0] : "#17505d", step = 14, n = Math.max(2, Math.ceil((x1 - x0) / step));
+  const yAt = (i) => SEA - 4 - Math.sin(time*0.07 + i*0.8 + (seed || 0))*2.6 - Math.sin(time*0.045 - i*0.37 + (seed || 0)*2)*1.8 - Math.sin(Math.PI * i / n) * 2;
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(x0 - 6, SEA + 12);
+  for(let i=0;i<=n;i++) ctx.lineTo(x0 + i*(x1 - x0)/n, yAt(i));
+  ctx.lineTo(x1 + 6, SEA + 12); ctx.closePath();
+  ctx.fillStyle = top; ctx.fill();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(225,245,240," + (foam === undefined ? 0.75 : foam).toFixed(2) + ")"; ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  for(let i=0;i<=n;i++){ const xx = x0 + i*(x1 - x0)/n, yy = yAt(i); if(i) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); }
+  ctx.stroke();
+  ctx.fillStyle = "rgba(235,250,246,.65)";
+  for(let i=1;i<n;i+=2){ const xx = x0 + i*(x1 - x0)/n + Math.sin(time*0.05 + i)*4; ctx.beginPath(); ctx.ellipse(xx, yAt(i) + 3, 4 + (i % 3), 1.6, 0, 0, Math.PI*2); ctx.fill(); }
+  ctx.restore();
+}
+// 망령의 유령선(7) 그림 — 바로 선 배를 기준으로 그린 뒤 b.rot만큼 돌린다. 불꽃·해초·선장·귀화는 늘 위를 향하게 따로
+function drawGhostShip(b, x, hurt){
+  const S = GHOST_S, sink = b.sink || 0, ghost = b.phase === 1, calm = settings.calm;
+  const flicker = ghost && b.sub < 30 && Math.floor(b.sub / 4) % 2 === 0;
+  const up = gsUp(b), rot = b.rot || 0, px0 = x, py0 = b.y + sink - GS_LIFT * (1 - Math.cos(rot)) / 2;
+  const L = (lx, ly) => { const q = gsPt(b, lx, ly); return [q[0] - cam.x, q[1]]; };
+  // 뒤집기 예고 — 돛대가 휩쓸 자리(물 위 부채꼴)
+  if(b.flip && b.flip.t < GS_FLIP_WARN + GS_FLIP_T){
+    const f = b.flip, k = Math.min(1, f.t / GS_FLIP_WARN), R = GS_MAST * S, right = f.to === 0;
+    const a0 = right ? -Math.PI/2 : -Math.PI, a1 = right ? 0 : -Math.PI/2;
+    ctx.save();
+    ctx.fillStyle = "rgba(255,90,110," + ((f.t < GS_FLIP_WARN ? 0.08 + k*0.14 : 0.1)).toFixed(2) + ")";
+    ctx.beginPath(); ctx.moveTo(px0, py0); ctx.arc(px0, py0, R + GS_MAST_R, a0, a1); ctx.closePath(); ctx.fill();
+    ctx.setLineDash([12, 9]); ctx.lineDashOffset = (right ? -1 : 1) * time * 3;
+    ctx.strokeStyle = "rgba(255,190,190," + (0.35 + k*0.5).toFixed(2) + ")"; ctx.lineWidth = 3 + k*2;
+    ctx.beginPath(); ctx.arc(px0, py0, R, a0, a1); ctx.stroke(); ctx.setLineDash([]);
+    if(f.t < GS_FLIP_WARN){                                   // 도는 방향 화살표
+      const am = right ? -Math.PI/4 + (1 - k)*0.4 : -Math.PI*3/4 - (1 - k)*0.4, ax = px0 + Math.cos(am)*R, ay = py0 + Math.sin(am)*R, dir = right ? 1 : -1;
+      ctx.translate(ax, ay); ctx.rotate(am + Math.PI/2 * dir);
+      ctx.fillStyle = "rgba(255,150,150," + (0.5 + k*0.5).toFixed(2) + ")";
+      ctx.beginPath(); ctx.moveTo(14*dir, 0); ctx.lineTo(-6*dir, -10); ctx.lineTo(-6*dir, 10); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  const body = () => {
+    ctx.save();
+    ctx.translate(px0, py0); ctx.rotate(rot); ctx.scale(S, S);
+    const wood = hurt ? "#f4ecd9" : "#203c3b", wood2 = hurt ? "#e8dcc0" : "#2b4f4c", fire = "rgba(120,255,190,";
+    // 돛대 둘(뒤) — 앞돛대·주돛대, 활대, 찢긴 돛
+    for(const [mx, top, yard] of [[62, -118, 46], [8, -158, 62]]){
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(mx - 3.5, -24); ctx.lineTo(mx - 2.5, top); ctx.lineTo(mx + 2.5, top); ctx.lineTo(mx + 3.5, -24); ctx.closePath(); }, wood2, { pool:false, line:1.6 });
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(mx - yard*0.55, top + 16); ctx.lineTo(mx + yard*0.55, top + 14); }, 3, wood2);
+      const sw = Math.sin(time*0.03 + mx)*4;
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(mx - yard*0.5, top + 18); ctx.lineTo(mx + yard*0.5, top + 16); ctx.quadraticCurveTo(mx + yard*0.46 + sw, top + 50, mx + yard*0.38, top + 70);
+        ctx.lineTo(mx + yard*0.2, top + 58); ctx.lineTo(mx + 4, top + 74); ctx.lineTo(mx - yard*0.14, top + 56); ctx.lineTo(mx - yard*0.36, top + 66); ctx.quadraticCurveTo(mx - yard*0.48 + sw, top + 40, mx - yard*0.5, top + 18); ctx.closePath(); },
+        hurt ? "#ffffff" : "#b9d6cb", { pool:"rgba(40,80,70,.35)", poolW:5, line:1.4, shade:() => { ctx.beginPath(); ctx.rect(mx, top, yard, 80); }, shadeCol:"rgba(30,70,60,.18)" });
+      ctx.strokeStyle = "rgba(30,60,55,.55)"; ctx.lineWidth = 1;          // 찢긴 구멍
+      ctx.beginPath(); ctx.ellipse(mx - yard*0.18, top + 38, 5, 7, 0.3, 0, Math.PI*2); ctx.stroke();
+    }
+    // 밧줄(삭구) — 뱃머리·고물에서 돛대 끝으로
+    ctx.strokeStyle = "rgba(20,30,28,.7)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-96, -40); ctx.lineTo(8, -156); ctx.lineTo(112, -40); ctx.moveTo(8, -156); ctx.lineTo(62, -118); ctx.moveTo(62, -116); ctx.lineTo(150, -60); ctx.stroke();
+    // 뱃머리 기움 돛대
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(100, -36); ctx.lineTo(152, -60); }, 3.4, wood2);
+    // 선체 — 고물(뒤) 망루가 솟고 뱃머리가 치켜 올라간 배
+    const hull = () => { ctx.beginPath(); ctx.moveTo(-104, -48); ctx.lineTo(-70, -48); ctx.lineTo(-66, -26); ctx.lineTo(80, -26); ctx.quadraticCurveTo(100, -30, 112, -44);
+      ctx.quadraticCurveTo(108, 6, 64, 36); ctx.quadraticCurveTo(0, 46, -62, 40); ctx.quadraticCurveTo(-98, 30, -106, -6); ctx.closePath(); };
+    inkShape(hull, wood, { shade:() => { ctx.beginPath(); ctx.ellipse(10, 40, 130, 26, 0, 0, Math.PI*2); }, shadeCol:"rgba(6,20,20,.35)", pool:"rgba(6,24,22,.45)", poolW:8, line:2.6 });
+    ctx.save(); hull(); ctx.clip();
+    ctx.strokeStyle = "rgba(8,24,22,.5)"; ctx.lineWidth = 1.2;                 // 널빤지
+    for(const yy of [-14, -2, 10, 22]){ ctx.beginPath(); ctx.moveTo(-110, yy); ctx.quadraticCurveTo(0, yy + 6 + yy*0.2, 112, yy - 8 - yy*0.1); ctx.stroke(); }
+    ctx.strokeStyle = "rgba(160,230,205,.16)"; ctx.lineWidth = 1;
+    for(const yy of [-12, 0, 12]){ ctx.beginPath(); ctx.moveTo(-110, yy + 1.5); ctx.quadraticCurveTo(0, yy + 7.5 + yy*0.2, 112, yy - 6.5 - yy*0.1); ctx.stroke(); }
+    // 따개비·이끼 — 바닥 쪽(뒤집히면 하늘을 본다)
+    ctx.fillStyle = "rgba(90,140,110,.45)";
+    for(const [mx2, my2, mr] of [[-70,30,10],[-30,38,8],[30,36,12],[72,22,8],[-92,12,7]]){ ctx.beginPath(); ctx.ellipse(mx2, my2, mr*1.4, mr*0.6, 0, 0, Math.PI*2); ctx.fill(); }
+    ctx.restore();
+    for(const [bx2, by2, br] of [[-80,32,4.5],[-50,38,3.5],[10,41,4],[44,36,5],[66,28,3.5],[-14,40,3]]){
+      ctx.fillStyle = "#cfd8c8"; ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(bx2 - br, by2 - br*0.2); ctx.lineTo(bx2 - br*0.5, by2 + br*0.9); ctx.lineTo(bx2 + br*0.5, by2 + br*0.9); ctx.lineTo(bx2 + br, by2 - br*0.2); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // 용골(굵은 등뼈)과 키
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(-64, 42); ctx.quadraticCurveTo(0, 49, 66, 37); }, 5, wood2);
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(-104, -4); ctx.lineTo(-120, 2); ctx.lineTo(-118, 30); ctx.lineTo(-98, 28); ctx.closePath(); }, wood2, { pool:false, line:2 });
+    // 난간과 고물 창
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(-66, -34); ctx.lineTo(82, -34); ctx.stroke();
+    for(let xx = -60; xx <= 80; xx += 14){ ctx.beginPath(); ctx.moveTo(xx, -34); ctx.lineTo(xx, -26); ctx.stroke(); }
+    // 창문 도깨비불(포문) — 깜빡이는 초록 불빛
+    for(let i=-2;i<=2;i++){
+      const fl = 0.55 + smoothNoise(time*0.05, i*3.1) * 0.3;
+      ctx.fillStyle = fire + (fl*0.35).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(i*30, -10, 9, 0, Math.PI*2); ctx.fill();
+      inkShape(() => { ctx.beginPath(); ctx.arc(i*30, -10, 4.6, 0, Math.PI*2); }, "rgba(200,255,225," + fl.toFixed(2) + ")", { pool:false, line:1.4 });
+    }
+    for(const yy of [-42, -34]){ ctx.fillStyle = fire + ".55)"; ctx.fillRect(-98, yy, 8, 5); ctx.fillRect(-84, yy, 8, 5); }
+    // 깨진 선창 구멍(뒤집히면 약점) — 안에서 귀화가 끓는다
+    const hg = ctx.createRadialGradient(-24, 22, 2, -24, 22, 30);
+    hg.addColorStop(0, fire + (0.85 + Math.sin(time*0.2)*0.15).toFixed(2) + ")"); hg.addColorStop(1, "rgba(80,255,170,0)");
+    ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(-24, 22, 30, 0, Math.PI*2); ctx.fill();
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(-42, 16); ctx.lineTo(-34, 8); ctx.lineTo(-26, 14); ctx.lineTo(-16, 6); ctx.lineTo(-8, 18); ctx.lineTo(-12, 30); ctx.lineTo(-22, 26); ctx.lineTo(-30, 34); ctx.lineTo(-40, 28); ctx.closePath(); },
+      "#0c1f1a", { pool:false, line:2 });
+    ctx.fillStyle = fire + (0.7 + Math.sin(time*0.25)*0.25).toFixed(2) + ")"; ctx.beginPath(); ctx.ellipse(-24, 21, 9, 7, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "rgba(235,255,245,.9)"; ctx.beginPath(); ctx.ellipse(-24, 21, 3.5, 3, 0, 0, Math.PI*2); ctx.fill();
+    // 부러진 널빤지 가시
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-34, 8); ctx.lineTo(-36, 0); ctx.moveTo(-16, 6); ctx.lineTo(-12, -2); ctx.moveTo(-30, 34); ctx.lineTo(-31, 42); ctx.stroke();
+    // 돛대 끝 등불(바로 서면 약점)
+    const lx = 10 + Math.sin(b.t*0.05)*22, ly = -150;
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(8, -158); ctx.lineTo(lx, ly - 9); ctx.stroke();
+    const lg = ctx.createRadialGradient(lx, ly, 2, lx, ly, 24);
+    lg.addColorStop(0, fire + (0.7 + Math.sin(b.t*0.2)*0.25).toFixed(2) + ")"); lg.addColorStop(1, "rgba(80,255,170,0)");
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(lx, ly, 24, 0, Math.PI*2); ctx.fill();
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(lx - 7, ly - 8); ctx.lineTo(lx + 7, ly - 8); ctx.lineTo(lx + 9, ly + 6); ctx.lineTo(lx - 9, ly + 6); ctx.closePath(); }, "rgba(200,255,225,.85)", { pool:false, line:1.6 });
+    ctx.fillStyle = "#e6fff2"; ctx.beginPath(); ctx.arc(lx, ly, 3.4, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    // ─ 여기부터는 늘 위를 향한다 ─
+    // 위를 보는 쪽 가장자리를 따라 타오르는 귀화(바로 서면 난간, 뒤집히면 용골)
+    const ridge = up ? [[-96,-50],[-60,-36],[-20,-36],[20,-36],[60,-36],[104,-46]] : [[-58,43],[-26,47],[6,48],[38,44],[64,38],[-112,32]];
+    ridge.forEach(([rx, ry], i) => {
+      const [fx2, fy2] = L(rx, ry);
+      if(fy2 > SEA - 6) return;
+      const h = 14 + smoothNoise(time*0.06, i*2.3) * 6, sway = smoothNoise(time*0.05, i*4.7) * 4;
+      ctx.fillStyle = fire + ".35)"; ctx.beginPath(); ctx.ellipse(fx2, fy2 - h*0.4, 9, h*0.75, 0, 0, Math.PI*2); ctx.fill();
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(fx2 - 6, fy2); ctx.quadraticCurveTo(fx2 - 7, fy2 - h*0.6, fx2 + sway, fy2 - h); ctx.quadraticCurveTo(fx2 + 7, fy2 - h*0.55, fx2 + 6, fy2); ctx.closePath(); }, "rgba(140,255,200,.9)", { pool:false, line:1.2 });
+      ctx.fillStyle = "rgba(235,255,245,.9)"; ctx.beginPath(); ctx.ellipse(fx2, fy2 - h*0.25, 2.4, h*0.22, 0, 0, Math.PI*2); ctx.fill();
+    });
+    // 물 위로 드러난 선체에서 늘어진 해초(아래로)
+    [[-80,32],[-40,42],[20,42],[60,30],[-100,0],[100,-30]].forEach(([sx2, sy2], i) => {
+      const [wx, wy] = L(sx2, sy2);
+      if(wy > SEA - 10) return;
+      const len = Math.min(SEA - wy - 2, 18 + (i % 3) * 8), sw = Math.sin(time*0.04 + i*1.7) * 5;
+      if(len < 6) return;
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(wx, wy); ctx.quadraticCurveTo(wx + sw, wy + len*0.5, wx - sw*0.4, wy + len); }, 2.6, "#4f7a52");
+    });
+    // 선장 — 바로 서면 갑판을 오가고, 뒤집히면 용골 위에 거꾸로 선 배를 타고 앉아 있다(약점 아님)
+    const [cx3, cy3] = up ? L(Math.sin(b.walk)*58, -26) : L(-Math.sin(b.walk*0.5)*30, 46);
+    if(cy3 < SEA - 10){
+      const cy4 = cy3 - (up ? 0 : 2);
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(cx3 - 9, cy4); ctx.lineTo(cx3 - 7, cy4 - 22); ctx.lineTo(cx3 + 7, cy4 - 22); ctx.lineTo(cx3 + 11, cy4); ctx.closePath(); }, "#2c1f2e", { pool:false, line:1.4 });   // 낡은 코트
+      inkShape(() => { ctx.beginPath(); ctx.arc(cx3, cy4 - 30, 8.5, 0, Math.PI*2); }, hurt ? "#ffffff" : "#e8e2d0", { pool:false, line:1.4 });
+      ctx.fillStyle = "#123326"; ctx.beginPath(); ctx.arc(cx3 - 3, cy4 - 31, 2.2, 0, Math.PI*2); ctx.arc(cx3 + 3, cy4 - 31, 2.2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = fire + ".9)"; ctx.beginPath(); ctx.arc(cx3 - 3, cy4 - 31, 1, 0, Math.PI*2); ctx.arc(cx3 + 3, cy4 - 31, 1, 0, Math.PI*2); ctx.fill();
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(cx3 - 14, cy4 - 35); ctx.quadraticCurveTo(cx3, cy4 - 40, cx3 + 14, cy4 - 35); ctx.lineTo(cx3, cy4 - 50); ctx.closePath(); }, "#1b1218", { pool:false, line:1.2 });
+    }
+    // 귀화(뒤집히면 약점) — 용골 위를 천천히 돈다
+    if(!up && !b.flip){
+      const wk = gsWeak(b)[1], [gx, gy] = L(wk.lx, wk.ly), r = 13 + Math.sin(time*0.2)*2;
+      const g2 = ctx.createRadialGradient(gx, gy, 2, gx, gy, 34);
+      g2.addColorStop(0, "rgba(160,255,210,.75)"); g2.addColorStop(1, "rgba(80,255,170,0)");
+      ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(gx, gy, 34, 0, Math.PI*2); ctx.fill();
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(gx - r, gy + 2); ctx.quadraticCurveTo(gx - r, gy - r*1.2, gx + Math.sin(time*0.13)*4, gy - r*2.1); ctx.quadraticCurveTo(gx + r, gy - r*1.1, gx + r, gy + 2); ctx.arc(gx, gy + 2, r, 0, Math.PI); ctx.closePath(); }, "rgba(150,255,205,.95)", { pool:false, line:1.6 });
+      ctx.fillStyle = "#0e2a20"; ctx.beginPath(); ctx.ellipse(gx - 4.5, gy - 2, 2.4, 3.4, 0, 0, Math.PI*2); ctx.ellipse(gx + 4.5, gy - 2, 2.4, 3.4, 0, 0, Math.PI*2); ctx.fill();
+    }
+  };
+  if(ghost && !flicker) drawFaded(0.36, body); else body();
+  // 물 밑으로 잠긴 돛대 끝 — 수면에 비치는 초록 불빛(뒤집혔을 때)
+  if(!up && !calm){
+    const [mx3] = L(8, -150);
+    ctx.fillStyle = "rgba(120,255,190," + (0.22 + Math.sin(time*0.08)*0.08).toFixed(2) + ")";
+    ctx.beginPath(); ctx.ellipse(mx3, SEA + 3, 34, 4, 0, 0, Math.PI*2); ctx.fill();
+  }
+  if(sink < 160) bossWaterLip(px0 - 165*S*0.85, px0 + 165*S*0.85, b.x*0.01);
+  if(ghost){
+    ctx.fillStyle = "rgba(200,255,230,.85)";
+    ctx.font = "700 12px 'Gowun Batang', 'Pretendard', serif"; ctx.textAlign = "center";
+    ctx.fillText("유령 상태 — 무적", x, SEA - 236);
+  }
+}
+
 function drawBoss(){
   const b = boss, x = b.x - cam.x;
   const hurt = b.flash > 0 && Math.floor(b.flash/3)%2 === 0;
@@ -11710,50 +11943,7 @@ function drawBoss(){
       }
       ctx.restore();
     }
-    const sink = b.sink || 0;
-    const ghost = b.phase === 1;
-    const flicker = ghost && b.sub < 30 && Math.floor(b.sub / 4) % 2 === 0;
-    ctx.save();
-    ctx.globalAlpha = ghost && !flicker ? 0.32 : 1;
-    ctx.translate(x, b.y + sink);
-    ctx.scale(GHOST_S, GHOST_S);
-    const hull = hurt ? "#f4ecd9" : "#1d3a3a";
-    ctx.fillStyle = hull;
-    ctx.beginPath(); ctx.moveTo(-90, -20); ctx.lineTo(90, -24); ctx.lineTo(70, 16); ctx.lineTo(-74, 16); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = "rgba(140,255,200," + (0.35 + Math.sin(b.t*0.1)*0.2).toFixed(2) + ")"; ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "#2c5454";
-    ctx.fillRect(-90, -26, 180, 7);
-    ctx.fillStyle = "rgba(140,255,200,.5)";                // 창문 도깨비불
-    for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.arc(i*28, -4, 4, 0, Math.PI*2); ctx.fill(); }
-    ctx.fillStyle = hull;
-    ctx.fillRect(6, -160, 7, 136);                          // 돛대
-    ctx.fillStyle = "rgba(200,230,220,.55)";               // 찢어진 돛
-    ctx.beginPath(); ctx.moveTo(-40, -140); ctx.lineTo(56, -136); ctx.lineTo(50, -80); ctx.lineTo(28, -92); ctx.lineTo(12, -74);
-    ctx.lineTo(-10, -90); ctx.lineTo(-34, -78); ctx.closePath(); ctx.fill();
-    // 등불(약점)
-    const lx = 10 + Math.sin(b.t*0.05)*22, ly = -150;
-    ctx.strokeStyle = hull; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(10, -160); ctx.lineTo(lx, ly - 8); ctx.stroke();
-    ctx.fillStyle = "rgba(120,255,190," + (0.6 + Math.sin(b.t*0.2)*0.3).toFixed(2) + ")";
-    ctx.beginPath(); ctx.arc(lx, ly, 13, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#e6fff2";
-    ctx.beginPath(); ctx.arc(lx, ly, 5, 0, Math.PI*2); ctx.fill();
-    // 선장(약점) — 해골 선장
-    const cx2 = Math.sin(b.walk)*58;
-    ctx.fillStyle = "#2c1f2e";
-    ctx.fillRect(cx2 - 9, -44, 18, 20);
-    ctx.fillStyle = "#e8e2d0";
-    ctx.beginPath(); ctx.arc(cx2, -52, 9, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#1b1218";
-    ctx.beginPath(); ctx.arc(cx2 - 3, -53, 2, 0, Math.PI*2); ctx.arc(cx2 + 3, -53, 2, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx2 - 13, -58); ctx.lineTo(cx2 + 13, -58); ctx.lineTo(cx2, -70); ctx.closePath(); ctx.fill();
-    ctx.restore();
-    if(ghost){
-      ctx.fillStyle = "rgba(200,255,230,.8)";
-      ctx.font = "700 12px 'Gowun Batang', 'Pretendard', serif"; ctx.textAlign = "center";
-      ctx.fillText("유령 상태 — 무적", x, b.y + sink - 180*GHOST_S);
-    }
+    drawGhostShip(b, x, hurt);
 
   } else if(b.type === 6){
     drawOcto(b, x, hurt);

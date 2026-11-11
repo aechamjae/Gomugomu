@@ -3744,6 +3744,28 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     let err = null; try{ E("drawBoss()"); }catch(e){ err = e.message; }
     ok("v60 bosses: 크라켄 — 잠든 몸을 그려도 오류가 없다(사슬 셋 그대로, 균열 맥동 없음)", !err && !(K.chains < 3), err);
   }
+
+  /* --- 망령의 유령선(7): 뒤집혀 올라오는 배 · 뒤집기 · 갑판↔선창 약점 --- */
+  {
+    let K = fresh(7); calm(); H.step();
+    const marks = () => a.weak().map(w => w.mark).join(",");
+    ok("v60 bosses: 유령선 — 뒤집힌 채(용골이 하늘로) 나오고, 약점은 선창 쪽(선창·귀화)", Math.cos(K.rot) < -0.8 && marks() === "선창,귀화", marks());
+    ok("v60 bosses: 유령선 — 뒤집기 예고는 45프레임 이상", E("GS_FLIP_WARN") >= 45);
+    K.invul = 0; K.hp = 6; T().dmg(true, "선창"); calm(); pin(K.x - 300, 200); H.step();
+    ok("v60 bosses: 유령선 — 맞으면 유령이 되며 뒤집기가 걸린다(그동안 약점 없음)", K.phase === 1 && !!K.flip && a.weak().length === 0);
+    const f = K.flip; let early = false;
+    for(let i=0;i<E("GS_FLIP_WARN") - 2;i++){ calm(); const q = T().ev("gsPt(boss, 8, -100)"); pin(q[0], q[1]); H.step(); if(a.peek().stun > 0) early = true; }
+    ok("v60 bosses: 유령선 — 예고 동안엔 돛대 자리에 있어도 안 맞는다", !early);
+    let hit = false;
+    for(let i=0;i<E("GS_FLIP_T") + 4 && K.flip;i++){ calm(); const q = T().ev("gsPt(boss, 8, -100)"); pin(q[0], Math.min(q[1], E("SEA") - 20)); H.step(); if(a.peek().stun > 0) hit = true; }
+    ok("v60 bosses: 유령선 — 넘어오는 돛대(물 위)에 닿으면 휘청", hit);
+    for(let i=0;i<200 && (K.flip || K.phase === 1);i++){ calm(); pin(K.x - 400, 150); H.step(); }
+    ok("v60 bosses: 유령선 — 다 뒤집히면 바로 서고, 실체로 돌아오면 약점이 갑판 쪽(등불·선장)", Math.abs(K.rot) < 0.01 && K.phase === 0 && marks() === "등불,선장", K.rot + " " + marks());
+    K.sub = 0; calm(); pin(K.x - 400, 150); H.step(); H.step();
+    ok("v60 bosses: 유령선 — 다시 유령이 되면 반대로(플레이어 쪽으로) 넘어간다", !!K.flip && K.flip.to < -Math.PI);
+    let err = null; try{ for(const r of [0, 1, 2, E("GS_CAP")]){ K.rot = r; E("drawBoss()"); } K.phase = 1; E("drawBoss()"); }catch(e){ err = e.message; }
+    ok("v60 bosses: 유령선 — 어느 각도로 그려도 오류가 없다", !err, err);
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 
