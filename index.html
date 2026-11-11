@@ -326,7 +326,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v59";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v60";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -4135,7 +4135,7 @@ const BOSSES = [
   { name:"밧줄 끊는 자",  tag:"앞쪽 고리를 끊어 놓는다" },
   { name:"돌풍술사",     tag:"돌풍으로 스윙 궤적을 흔든다" },
   { name:"심해의 크라켄", tag:"눈이 드러난 순간에만 통한다", big:true },
-  { name:"먹물 장군 문어", tag:"던진 물고기·통을 팔로 받아 되던져라 — 격노하면 촉수로 팔을 낚아챈다", named:true },
+  { name:"먹물 장군 문어", tag:"박자에 맞춰 던진 물고기·통을 받아 되던져라 — 격노하면 먹물 조명을 벗어나라", named:true },
   { name:"망령의 유령선", tag:"유령일 땐 무적·망령 사슬 — 실체일 때 등불·선장을 노려라", big:true },
   { name:"해군 대장 군함", tag:"포격 표식과 그물을 피해 대장·화약고·망루를 노려라", big:true },
   { name:"심해 상어 톱니턱",   tag:"매달린 돛대를 물어뜯고 앞쪽 돛대로 뛰어오른다 — 이빨이 박혀 버둥댈 때 아가미를 쳐라" },
@@ -5566,7 +5566,8 @@ function awakenWeak(b, out){
 /* 각성한 크라켄 그림 — 촉수 하나(awTentacle)를 몸·패턴이 모두 같이 쓴다.
    가운데 선을 따라 굵기가 줄어드는 한 덩어리 경로라 잉크 선과 채색이 어긋나지 않는다(inkShape).
    o: w0·w1 굵기 · amp 출렁임 · seed · col · scars[u…] 엇갈린 칼자국 · stitch u 꿰맨 자국 · regrow u 잘렸다 다시 자란 끝
-      shackle u 족쇄(chain: 0 끊긴 토막 / [x,y] 그 점까지 이어진 사슬) · glow { u, a } 빛나는 칼자국 */
+      shackle u 족쇄(chain: 0 끊긴 토막 / [x,y] 그 점까지 이어진 사슬) · glow { u, a } 빛나는 칼자국
+      belly·suck·pool·line — 배 쪽 줄·빨판·그늘 색과 잉크 굵기(v60: 문어 장군·잠든 크라켄도 같이 쓴다) */
 function awTentacle(x0, y0, x1, y1, bend, o){
   o = o || {};
   const N = 14, w0 = o.w0 || 30, w1 = o.w1 || 5, seed = o.seed || 0, amp = o.amp === undefined ? 12 : o.amp;
@@ -5589,14 +5590,14 @@ function awTentacle(x0, y0, x1, y1, bend, o){
     ctx.closePath();
   };
   const body = o.col || "#5a2f6b";
-  inkShape(seg(0, N), body, { pool:"rgba(24,6,34,.4)", poolW: 6, line: 2.4 });
+  inkShape(seg(0, N), body, { pool: o.pool || "rgba(24,6,34,.4)", poolW: 6, line: o.line || 2.4 });
   if(o.plain) return P;
   // 배 쪽 밝은 줄과 빨판
   ctx.save(); seg(0, N)(); ctx.clip();
-  ctx.strokeStyle = "rgba(143,79,208,.75)"; ctx.lineCap = "round"; ctx.lineWidth = Math.max(2, w0 * 0.22);
+  ctx.strokeStyle = o.belly || "rgba(143,79,208,.75)"; ctx.lineCap = "round"; ctx.lineWidth = Math.max(2, w0 * 0.22);
   ctx.beginPath(); for(let i=0;i<=N;i++){ const x = (P[i][0] + Rp[i][0]*1.4)/2.4, y = (P[i][1] + Rp[i][1]*1.4)/2.4; if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); } ctx.stroke();
   ctx.restore();
-  ctx.fillStyle = "#d9a8f0";
+  ctx.fillStyle = o.suck || "#d9a8f0";
   for(let i=2;i<N;i+=2){ ctx.beginPath(); ctx.arc((P[i][0] + Rp[i][0]*2)/3, (P[i][1] + Rp[i][1]*2)/3, Math.max(0.6, Wd[i]*0.24), 0, Math.PI*2); ctx.fill(); }
   const at = (u) => { const i = Math.max(1, Math.min(N - 1, Math.round(u * N))); return { i, x: P[i][0], y: P[i][1], tx: Lp[i][2], ty: Lp[i][3], w: Wd[i] }; };
   // 잘려 나갔다 다시 자란 끝 — 색이 옅고 가늘다, 이음매에 굳은살
@@ -8742,7 +8743,14 @@ function drawShots(){
 //   되던진 게 머리에 맞으면 피해 1 + 어질어질(OC_DAZE) — 그동안만 머리가 약점이라 몸으로·기술로 한 번 더 칠 수 있다.
 // 2페이즈(격노): 앞쪽 고리 하나에 먹물 물결을 띄운다(b.mark). 그 고리를 잡으면 촉수에 팔이 낚여 줄다리기 —
 //   ← 를 누르고 버티면 문어를 끌어당겨 피해 1 + 어질어질, 버티지 못하면 팔 부상. 표시된 고리를 피해 가도 된다
+// v60 '바다의 무희 장군' — 바다를 무대로 여기는 허영쟁이. 빼앗은 견장·훈장을 촉수에 주렁주렁 달고 박자에 맞춰 춤춘다.
+//   던지기는 박자(OC_BEAT, 격노 OC_BEAT2)에 맞춘다: 던질 촉수가 물건을 치켜들고 머리 위 박자 점이 하나씩 켜진다(금빛 = 받을 수 있음, 먹빛 = 먹물).
+//   격노: 먹물 '스포트라이트'(b.spot)가 플레이어를 쫓는다 — 예고 OC_SPOT_WARN 뒤 OC_SPOT_T 동안, 빛 안에 OC_SPOT_HEAT만큼 머물면 먹물 세례(휘청).
+//   빛은 플레이어 속도의 OC_SPOT_LAG배로만 따라와서 스윙을 이어 가면 벗어난다 — 멈칫거리면 잡힌다
 const OC_CATCH = 150, OC_DAZE = 100, OC_THROW_SPD = 19, OC_TUG_T = 200, OC_MARK_T = 150;
+const OC_BEAT = 30, OC_BEAT2 = 24, OC_WIND = 48;
+const OC_SPOT_CD = 210, OC_SPOT_WARN = 50, OC_SPOT_T = 230, OC_SPOT_R = 68, OC_SPOT_HEAT = 46, OC_SPOT_LAG = 0.74;
+const ocBeat = (b) => b.p2 ? OC_BEAT2 : OC_BEAT;
 const ocHead = (b) => ({ x: b.x + Math.sin(b.t*0.04)*18, y: b.y });
 function updateOcto(b, dt){
   // 뒤처지면 먹물 구름을 타고 떠올라 앞쪽으로 흘러간다(줄다리기 중엔 그 자리에 붙어 있다)
@@ -8768,26 +8776,28 @@ function updateOcto(b, dt){
   if(b.tug){ updateOctoTug(b, dt); return; }
   if(b.dive !== 0) return;
   if(b.daze > 0){
-    b.daze -= dt;
+    b.daze -= dt; b.spot = null;
     b.y += ((150 + Math.sin(b.t*0.2)*6) - b.y) * 0.08 * dt;   // 어질어질 — 조금 내려와 비틀거린다
     return;
   }
   b.y = 100 + Math.sin((b.t - (b.bob || 0))*0.03)*24;   // 내려앉은 높이(100)에서 이어서 출렁인다
-  const rage = b.p2 ? 0.75 : 1;
-  // 던지기 — 물고기, 먹물, 통, 먹물 … 차례로
+  // 던지기 — 물고기, 먹물, 통, 먹물 … 차례로. 박자에 맞춘다(먹물 뒤엔 세 박자, 물건 뒤엔 두 박자)
   b.fire -= dt;
   if(b.fire <= 0){
     const h = ocHead(b), seq = b.seq++ % 4;
     if(seq === 1 || seq === 3){
       for(let i=-1;i<=1;i+=2) aimShot({ x:h.x, y:h.y + 20 }, 6.4, i*0.12, 1, 11);
-      b.fire = 70 * rage;
+      b.fire = ocBeat(b) * 3;
     } else {
       aimShot({ x:h.x, y:h.y + 20 }, 4.6, 0, 8, seq === 0 ? 14 : 17);
       shots[shots.length - 1].item = seq === 0 ? "fish" : "barrel";
       pops.push({ x:h.x, y:h.y - 40, t:44, text: seq === 0 ? "물고기 투척!" : "통 투척!", color:"#c9a0d8" });
-      b.fire = 90 * rage;
+      b.fire = ocBeat(b) * 2;                 // 다음은 먹물 — 두 박자 뒤(예고 OC_WIND 48프레임)
     }
+    b.thT = 14;                               // 던진 촉수가 앞으로 뻗는 시간(그림)
   }
+  if(b.thT > 0) b.thT -= dt;
+  updateOctoSpot(b, dt);
   // 격노 — 앞쪽 고리 하나를 촉수로 노린다
   if(b.p2){
     if(b.mark){
@@ -8804,6 +8814,32 @@ function updateOcto(b, dt){
       }
     }
   }
+}
+// 격노 — 먹물 스포트라이트. 예고 동안은 옅게 따라오기만 하고, 켜진 뒤 빛 안에 머문 시간(heat)이 차면 먹물 세례
+function updateOctoSpot(b, dt){
+  if(!b.p2){ b.spot = null; return; }
+  const s = b.spot;
+  if(!s){
+    b.spotCd = (b.spotCd === undefined ? 100 : b.spotCd) - dt;
+    if(b.spotCd <= 0 && state === STATE.PLAY){
+      b.spot = { x: p.x - 150, y: p.y, t: 0, heat: 0 };
+      pops.push({ x:p.x, y:p.y - 70, t:70, text:"먹물 조명이 쫓아온다 — 멈추지 마라!", color:"#c9a0d8" });
+    }
+    return;
+  }
+  s.t += dt;
+  s.x += (Math.max(0, p.vx) * OC_SPOT_LAG + (p.x - s.x) * 0.04) * dt;
+  s.y += (p.y - s.y) * 0.07 * dt;
+  if(s.t < OC_SPOT_WARN) return;
+  const inside = Math.hypot(p.x - s.x, (p.y - s.y) * 0.8) < OC_SPOT_R;
+  s.heat = Math.max(0, s.heat + (inside ? dt : -0.6 * dt));
+  if(s.heat >= OC_SPOT_HEAT && state === STATE.PLAY){
+    const st0 = stun; knock(false);
+    if(stun > st0) pops.push({ x:p.x, y:p.y - 46, t:60, text:"먹물 세례!", color:"#c9a0d8" });
+    for(let i=0;i<22;i++) spark(p.x + (Math.random() - 0.5)*80, p.y - Math.random()*60, i % 2 ? "#3a2148" : "#6a3f7a");
+    s.burst = 1; s.t = Math.max(s.t, OC_SPOT_WARN + OC_SPOT_T - 16); s.heat = 0;
+  }
+  if(s.t > OC_SPOT_WARN + OC_SPOT_T){ b.spot = null; b.spotCd = OC_SPOT_CD; }
 }
 // 팔을 뻗었을 때 — 가까이 날아오는 물고기·통이 있으면 고리 대신 받는다
 function octoCatch(){
@@ -8895,7 +8931,136 @@ function octoTugStart(a){
   pops.push({ x:p.x, y:p.y - 50, t:80, text:"촉수에 팔이 낚였다! ← 를 눌러 버텨라", color:"#c9a0d8" });
   return true;
 }
+/* v60 먹물 장군 문어 — 촉수 여덟(awTentacle)이 박자에 맞춰 번갈아 들썩이고, 바깥 촉수엔 빼앗은 견장, 안쪽엔 훈장.
+   낡은 이각모 · 먹물로 그린 콧수염 · 반쯤 내리깐 눈. 던질 촉수(1번)는 물건을 치켜들었다가 박자에 맞춰 앞으로 뻗는다 */
+function drawOcto(b, x, hurt){
+  const hx = x + Math.sin(b.t*0.04)*18, hy = b.y, daze = b.daze > 0, calm = settings.calm;
+  const beat = ocBeat(b), ph = b.t / beat;
+  const body = hurt ? "#f4ecd9" : "#8a3f6e", dark = hurt ? "#e0d2b4" : "#6b2f58";
+  const active = !daze && !b.tug && b.dive === 0;
+  const wind = active ? clamp01(1 - b.fire / OC_WIND) : 0;              // 던지기 예고 0→1
+  const thrown = b.thT > 0 ? b.thT / 14 : 0;
+  const seq = (b.seq || 0) % 4, item = seq === 0 ? "fish" : seq === 2 ? "barrel" : null;
+  const sway = calm ? 0 : Math.sin(ph * Math.PI) * 3;                    // 박자에 맞춘 몸 흔들기
+  ctx.save();
+  // 촉수 — 뒤(가운데)부터 그려 바깥 것이 위에 온다
+  const order = [3, 4, 2, 5, 1, 6, 0, 7];
+  for(const i of order){
+    const side = i/3.5 - 1, as = Math.abs(side);
+    const bx = hx + side*24, by = hy + 14 + (1 - as)*8;
+    let lift = daze || calm ? 0 : Math.pow(Math.max(0, Math.sin(Math.PI * (ph + (i % 2)))), 2);   // 짝·홀이 한 박자씩 번갈아
+    let tx = hx + side*(86 + lift*16), ty = hy + 58 + (1 - as)*26 - lift*34, bend = side*(16 - lift*30);
+    if(daze){ tx = hx + side*46 + Math.sin(b.t*0.2 + i)*4; ty = hy + 76 + (1 - as)*10; bend = side*6; }
+    if(i === 1 && active){
+      if(thrown > 0){ const k = ease.outCubic(1 - thrown); tx = hx - 60 - k*34; ty = hy - 44 + k*62; bend = -26 + k*40; }
+      else if(wind > 0){ const k = ease.outBack(wind, 1.2); tx += (hx - 58 - tx) * k; ty += (hy - 50 - ty) * k; bend += (-30 - bend) * k; }
+    }
+    const P = awTentacle(bx, by, tx, ty, bend, { w0: 19 - as*4, w1: 3.6, amp: daze ? 2 : 6, seed: i*1.7, col: i === 3 || i === 4 ? dark : body,
+                                                 belly: hurt ? "rgba(255,255,255,.5)" : "rgba(236,170,206,.75)", suck: hurt ? "#fff" : "#f6d3e2", pool:"rgba(60,14,44,.35)", line: 2 });
+    if(hurt) continue;
+    const q = P[4], q2 = P[5], ang = Math.atan2(q2[1] - q[1], q2[0] - q[0]);
+    if(i === 0 || i === 7 || i === 1 || i === 6){                          // 빼앗은 견장 — 금실 술이 늘어진다
+      ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate(ang);
+      ctx.strokeStyle = "#b8862a"; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+      for(let k=-2;k<=2;k++){ ctx.beginPath(); ctx.moveTo(k*2.6, 5); ctx.lineTo(k*2.6 + Math.sin(time*0.12 + k + i)*1.5, 13); ctx.stroke(); }
+      inkShape(() => { ctx.beginPath(); ctx.ellipse(0, 0, 8.5, 6.5, 0, 0, Math.PI*2); }, i === 1 || i === 6 ? "#c94a3e" : "#2f4f8a", { pool:false, line:1.6 });
+      inkShape(() => { ctx.beginPath(); ctx.ellipse(0, 0, 8.5, 3, 0, 0, Math.PI*2); }, "#e8c060", { pool:false, line:1.3 });
+      ctx.restore();
+    } else if(i === 2 || i === 5){                                         // 훈장 — 리본에 달린 금딱지
+      const mx = q[0], my = q[1] + 5, sw = Math.sin(time*0.1 + i)*2.5;
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(mx - 3.5, my); ctx.lineTo(mx + 3.5, my); ctx.lineTo(mx + 2.5 + sw, my + 9); ctx.lineTo(mx - 2.5 + sw, my + 9); ctx.closePath(); }, i === 2 ? "#b03a34" : "#3f7a5a", { pool:false, line:1.2 });
+      inkShape(() => { ctx.beginPath(); ctx.arc(mx + sw, my + 13, 4.6, 0, Math.PI*2); }, "#f0c860", { pool:false, line:1.4 });
+    }
+    if(i === 1 && active && item && thrown <= 0 && wind > 0.25){ const tip = P[P.length - 2]; drawOctoItem(item, tip[0], tip[1] - 8, Math.sin(ph*Math.PI)*0.3, wind); }
+    else if(i === 1 && active && !item && thrown <= 0 && wind > 0.25){      // 먹물 — 촉수 끝에 먹 방울이 맺힌다
+      const tip = P[P.length - 1];
+      ctx.fillStyle = "rgba(27,18,24," + (0.5 + wind*0.4).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(tip[0], tip[1] - 4, 4 + wind*7, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  // 머리(외투막) — 뒤로 살짝 누운 둥근 돔
+  ctx.translate(hx, hy + sway); ctx.rotate(daze ? Math.sin(b.t*0.2)*0.12 : Math.sin(ph*Math.PI)*0.04);
+  const dome = () => { ctx.beginPath(); ctx.moveTo(-32, 16); ctx.bezierCurveTo(-44, -6, -34, -40, 2, -40); ctx.bezierCurveTo(38, -40, 44, -8, 32, 16); ctx.quadraticCurveTo(0, 28, -32, 16); ctx.closePath(); };
+  inkShape(dome, body, { shade: () => { ctx.beginPath(); ctx.ellipse(22, -6, 24, 38, 0.25, 0, Math.PI*2); }, shadeCol:"rgba(60,10,50,.26)", pool:"rgba(60,14,44,.4)", poolW:7, line:2.6 });
+  if(!hurt){
+    ctx.save(); dome(); ctx.clip();
+    ctx.fillStyle = "rgba(255,220,236,.2)"; ctx.beginPath(); ctx.ellipse(-14, -22, 13, 8, -0.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "rgba(60,14,44,.28)"; for(const [sx, sy, sr] of [[20,-26,4],[27,-12,3],[-26,-4,3],[12,-33,2.5]]){ ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI*2); ctx.fill(); }
+    // 가슴띠(붉은 수)와 훈장 줄
+    ctx.fillStyle = "#b03a34"; ctx.beginPath(); ctx.moveTo(-40, 2); ctx.lineTo(40, 14); ctx.lineTo(40, 22); ctx.lineTo(-40, 10); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-40, 2); ctx.lineTo(40, 14); ctx.moveTo(-40, 10); ctx.lineTo(40, 22); ctx.stroke();
+    ctx.restore();
+    for(const [mx, c] of [[-13, "#f0c860"], [-3, "#dfe6ee"], [7, "#f0c860"]]){ inkShape(() => { ctx.beginPath(); ctx.arc(mx, 10 + (mx + 13)*0.15, 3.4, 0, Math.PI*2); }, c, { pool:false, line:1.2 }); }
+  }
+  // 눈 — 반쯤 내리깐 허영 가득한 눈, 어질어질하면 빙글
+  const look = Math.max(-2.5, Math.min(2.5, (p.x - b.x) * 0.01));
+  for(const ex of [-12, 12]){
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(ex, -8, 7.5, 8, 0, 0, Math.PI*2); }, "#f8f1e0", { pool:false, line:1.8 });
+    if(daze){
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.beginPath();
+      for(let k=0;k<=14;k++){ const a = k*0.7 + time*0.25, r = k*0.42; if(k) ctx.lineTo(ex + Math.cos(a)*r, -8 + Math.sin(a)*r); else ctx.moveTo(ex, -8); }
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(ex + look, -6, 3.2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(ex, -14, 9, 6.5 + wind*2, 0, 0, Math.PI*2); ctx.fill();        // 눈꺼풀
+      ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(ex - 8, -9 + wind*2); ctx.quadraticCurveTo(ex, -12 + wind*2, ex + 8, -9 + wind*2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ex - 8*Math.sign(ex), -22); ctx.quadraticCurveTo(ex, -27 - wind*3, ex + 9*Math.sign(ex), -21); ctx.stroke();   // 치켜뜬 눈썹
+    }
+  }
+  // 먹물로 그린 콧수염 — 양 끝이 돌돌 말린다
+  ctx.strokeStyle = hurt ? "#8a7a5a" : INK; ctx.lineCap = "round"; ctx.lineWidth = 3.2;
+  for(const s of [-1, 1]){ ctx.beginPath(); ctx.moveTo(0, 3); ctx.quadraticCurveTo(s*10, 9, s*19, 1); ctx.quadraticCurveTo(s*24, -5, s*18, -5); ctx.stroke(); }
+  if(daze){ ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 12, 4, 3, 0, 0, Math.PI*2); ctx.stroke(); }
+  // 낡은 이각모 — 금테, 해진 귀퉁이, 깃털
+  ctx.save(); ctx.translate(0, -34); ctx.rotate(daze ? 0.35 : -0.06 + (calm ? 0 : Math.sin(ph*Math.PI*2)*0.02));
+  const hat = () => { ctx.beginPath(); ctx.moveTo(-46, 4); ctx.quadraticCurveTo(-30, -6, -20, -22); ctx.quadraticCurveTo(0, -36, 20, -22); ctx.quadraticCurveTo(30, -6, 46, 4); ctx.lineTo(40, 6); ctx.lineTo(37, 2); ctx.quadraticCurveTo(0, 14, -46, 4); ctx.closePath(); };
+  inkTube(() => { ctx.beginPath(); ctx.moveTo(12, -22); ctx.quadraticCurveTo(30, -44, 22 + Math.sin(time*0.07)*3, -54); }, 4, hurt ? "#f4ecd9" : "#e8e0d0", "rgba(255,255,255,.6)");   // 깃털
+  inkShape(hat, hurt ? "#f4ecd9" : "#27222e", { shade: () => { ctx.beginPath(); ctx.rect(8, -40, 44, 60); }, shadeCol:"rgba(0,0,0,.25)", pool:false, line:2.4 });
+  if(!hurt){
+    ctx.strokeStyle = "#d9a62c"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(-42, 2); ctx.quadraticCurveTo(-27, -8, -18, -21); ctx.quadraticCurveTo(0, -33, 18, -21); ctx.quadraticCurveTo(27, -8, 36, 0); ctx.stroke();
+    inkShape(() => { ctx.beginPath(); ctx.arc(0, -10, 6, 0, Math.PI*2); }, "#c94a3e", { pool:false, line:1.4 });
+    ctx.fillStyle = "#f0c860"; ctx.beginPath(); ctx.arc(0, -10, 2.4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#5a4a3a"; ctx.fillRect(-30, -4, 7, 5); ctx.strokeStyle = "#e8dcc4"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-30, -2); ctx.lineTo(-23, -1); ctx.stroke();   // 기운 자국
+  }
+  ctx.restore();
+  ctx.restore();
+  // 박자 점 — 던지기까지 남은 박자. 금빛이면 받을 수 있는 것, 먹빛이면 먹물
+  if(active && b.fire < beat*3){
+    const left = Math.ceil(Math.max(0, b.fire) / beat), by2 = hy - 92;
+    for(let k=0;k<3;k++){
+      const on = k < 3 - left, dx2 = hx + (k - 1)*17, pulse = on && k === 2 - left ? 1 - (b.fire % beat) / beat : 0;
+      ctx.fillStyle = on ? (item ? "#ffd76a" : "#3a2148") : "rgba(244,236,217,.35)";
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(dx2, by2, 5 + (calm ? 0 : pulse*3), 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+  }
+  if(daze){
+    ctx.fillStyle = "#ffd76a";
+    for(let i=0;i<3;i++){ const a = time*0.12 + i*2.09; ctx.beginPath(); ctx.arc(hx + Math.cos(a)*34, hy - 66 + Math.sin(a)*8, 3.5, 0, Math.PI*2); ctx.fill(); }
+  }
+}
+// 격노 — 먹물 스포트라이트: 위에서 내려오는 먹빛 기둥과 바닥의 빛 고리. 고리 둘레가 차오르면 먹물 세례
+function drawOctoSpot(b){
+  const s = b.spot; if(!s) return;
+  const sx = s.x - cam.x, on = s.t >= OC_SPOT_WARN, k = on ? 1 : s.t / OC_SPOT_WARN, R = OC_SPOT_R;
+  const fade = Math.min(1, Math.max(0, (OC_SPOT_WARN + OC_SPOT_T - s.t) / 16));
+  ctx.save(); ctx.globalAlpha = fade;
+  const g = ctx.createLinearGradient(0, 0, 0, s.y + 40);
+  g.addColorStop(0, "rgba(40,16,54,0)"); g.addColorStop(1, "rgba(40,16,54," + (on ? 0.46 : 0.18 * k).toFixed(2) + ")");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(sx - 14, -10); ctx.lineTo(sx + 14, -10); ctx.lineTo(sx + R, s.y); ctx.lineTo(sx - R, s.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "rgba(40,16,54," + (on ? 0.26 : 0.1 * k).toFixed(2) + ")"; ctx.beginPath(); ctx.ellipse(sx, s.y, R, R/0.8*0.62, 0, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = on ? "rgba(236,170,206,.9)" : "rgba(236,170,206," + (0.3 + k*0.4).toFixed(2) + ")"; ctx.lineWidth = on ? 3 : 2;
+  if(!on) ctx.setLineDash([9, 7]);
+  ctx.beginPath(); ctx.ellipse(sx, s.y, R, R/0.8*0.62, 0, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+  if(on && s.heat > 0){                                   // 머문 시간 — 붉은 호가 고리를 따라 차오른다
+    ctx.strokeStyle = "#ff8f80"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.ellipse(sx, s.y, R, R/0.8*0.62, 0, -Math.PI/2, -Math.PI/2 + Math.PI*2*Math.min(1, s.heat / OC_SPOT_HEAT)); ctx.stroke();
+  }
+  if(s.burst && !settings.calm) inkSplat(sx, s.y, 1 - fade, 7.3, 14, "40,16,54", 120);
+  ctx.restore();
+}
 function drawOctoExtras(b){
+  drawOctoSpot(b);
   // 먹물 물결 — 촉수가 노리는 고리
   if(b.mark){
     const mx = b.mark.x - cam.x, my = b.mark.y, k = (time*0.05) % 1;
@@ -8910,27 +9075,25 @@ function drawOctoExtras(b){
   // 줄다리기 — 촉수가 팔을 휘감았다. 게이지는 플레이어 머리 위
   if(b.tug){
     const h = ocHead(b), px = p.x - cam.x, hx = h.x - cam.x;
-    ctx.strokeStyle = "#8a3f6e"; ctx.lineWidth = 8; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(hx - 16, h.y + 16); ctx.quadraticCurveTo((hx + px)/2, Math.max(h.y, p.y) + 50, px + 8, p.y - 8); ctx.stroke();
+    awTentacle(hx - 16, h.y + 16, px + 8, p.y - 8, -40 - b.tug.k*20, { w0: 15, w1: 6, amp: 3 + (1 - b.tug.k)*5, seed: 1.7, col:"#8a3f6e", belly:"rgba(236,170,206,.75)", suck:"#f6d3e2", pool:"rgba(60,14,44,.35)", line:2 });
     ctx.fillStyle = "rgba(13,20,30,.75)"; ctx.fillRect(px - 50, p.y - 64, 100, 12);
     ctx.fillStyle = b.tug.k > 0.3 ? "#ffd76a" : "#ff8f80"; ctx.fillRect(px - 48, p.y - 62, 96 * Math.max(0, Math.min(1, b.tug.k)), 8);
     ctx.fillStyle = "#f4ecd9"; ctx.font = "700 12px 'Gowun Batang', 'Pretendard', serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("← 를 눌러 버텨라", px, p.y - 76);
   }
 }
-function drawOctoItem(item, x, y, rot){
+function drawOctoItem(item, x, y, rot, sc){
   ctx.save();
-  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.translate(x, y); ctx.rotate(rot); if(sc !== undefined) ctx.scale(sc, sc);
   if(item === "fish"){
-    ctx.fillStyle = "#6fa8b8";
-    ctx.beginPath(); ctx.ellipse(0, 0, 14, 8, 0, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(-22, -8); ctx.lineTo(-22, 8); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#f4f6f8"; ctx.beginPath(); ctx.arc(7, -2, 2.6, 0, Math.PI*2); ctx.fill();
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(-23, -9); ctx.lineTo(-20, 0); ctx.lineTo(-23, 9); ctx.closePath(); }, "#5a93a6", { pool:false, line:1.6 });
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(0, 0, 15, 8.5, 0, 0, Math.PI*2); }, "#6fa8b8", { shade: () => { ctx.beginPath(); ctx.rect(-16, 2, 32, 10); }, shadeCol:"rgba(240,250,250,.45)", pool:false, line:1.8 });
+    ctx.fillStyle = "#f4f6f8"; ctx.beginPath(); ctx.arc(8, -2, 2.8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(8.6, -2, 1.2, 0, Math.PI*2); ctx.fill();
   } else {
-    ctx.fillStyle = "#8a5a2c";
-    ctx.beginPath(); ctx.ellipse(0, 0, 13, 16, 0, 0, Math.PI*2); ctx.fill();
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(0, 0, 13, 16, 0, 0, Math.PI*2); }, "#8a5a2c", { shade: () => { ctx.beginPath(); ctx.rect(3, -18, 14, 36); }, shadeCol:"rgba(40,20,5,.28)", pool:false, line:1.8 });
     ctx.strokeStyle = "#d9b877"; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(-12, -5); ctx.lineTo(12, -5); ctx.moveTo(-12, 5); ctx.lineTo(12, 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-12, -6); ctx.quadraticCurveTo(0, -3, 12, -6); ctx.moveTo(-12, 6); ctx.quadraticCurveTo(0, 9, 12, 6); ctx.stroke();
   }
   ctx.restore();
 }
@@ -11027,34 +11190,7 @@ function drawBoss(){
     }
 
   } else if(b.type === 6){
-    // 먹물 장군 문어 — 둥근 머리, 늘어진 다리, 해적 두건. 어질어질하면 눈이 빙글
-    const hx = x + Math.sin(b.t*0.04)*18, hy = b.y;
-    const body = hurt ? "#f4ecd9" : "#8a3f6e";
-    ctx.save();
-    ctx.strokeStyle = body; ctx.lineCap = "round";
-    ctx.lineWidth = 7;
-    for(let i=0;i<5;i++){
-      const ox = -20 + i*10, wob = Math.sin(b.t*0.09 + i)*8;
-      ctx.beginPath(); ctx.moveTo(hx + ox, hy + 18);
-      ctx.quadraticCurveTo(hx + ox + wob, hy + 40, hx + ox - wob*0.6, hy + 58); ctx.stroke();
-    }
-    ctx.fillStyle = body;
-    ctx.beginPath(); ctx.ellipse(hx, hy, 30, 26, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,.18)";
-    ctx.beginPath(); ctx.ellipse(hx - 9, hy - 10, 10, 7, -0.4, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#f4ecd9";
-    ctx.beginPath(); ctx.arc(hx - 10, hy + 2, 6.5, 0, Math.PI*2); ctx.arc(hx + 10, hy + 2, 6.5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = ink;
-    const look = Math.max(-2.5, Math.min(2.5, (p.x - b.x) * 0.01));
-    ctx.beginPath(); ctx.arc(hx - 10 + look, hy + 3, 3, 0, Math.PI*2); ctx.arc(hx + 10 + look, hy + 3, 3, 0, Math.PI*2); ctx.fill();
-    // 해적 두건
-    ctx.fillStyle = "#1b1218";
-    ctx.beginPath(); ctx.ellipse(hx, hy - 20, 22, 8, 0, Math.PI, 0); ctx.fill();
-    if(b.daze > 0){
-      ctx.fillStyle = "#ffd76a";
-      for(let i=0;i<3;i++){ const a = time*0.12 + i*2.09; ctx.beginPath(); ctx.arc(hx + Math.cos(a)*30, hy - 34 + Math.sin(a)*8, 3.5, 0, Math.PI*2); ctx.fill(); }
-    }
-    ctx.restore();
+    drawOcto(b, x, hurt);
     drawOctoExtras(b);
 
   } else if(b.type === 4){
@@ -12205,7 +12341,7 @@ function drawBossBar(){
   ctx.fillText((b.big ? "▲ " : b.named ? "★ " : "") + BOSSES[b.type].name + ((b.big && b.hp <= 3) || b.p2 ? "  — 격노" : ""), W/2, by - 7);
   ctx.font = "400 11px 'Gowun Batang', 'Pretendard', serif";
   ctx.fillStyle = "rgba(244,236,217,.6)";
-  ctx.fillText(BOSSES[b.type].tag, W/2, by + 20);
+  ctx.fillText(BOSSES[b.type].tag, W/2, by + 20, bw + 16);   // 긴 설명은 띠 너비에 맞춰 좁힌다
   // 제한 시간 — 체력바 오른쪽. 10초 아래면 붉게 고동친다
   if(b.tMax){
     const sec = Math.max(0, Math.ceil(b.tLeft / 60)), low = sec <= 10;

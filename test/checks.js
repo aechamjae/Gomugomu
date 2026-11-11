@@ -3589,5 +3589,45 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("화면 버전(GAME_VER)과 sw.js 캐시 버전이 같다", ver && ver === cache, "GAME_VER=v" + ver + " 캐시=v" + cache);
 }
 
+/* ====================================================================================
+   v60 bosses: 보스 10종 리메이크 — 보스마다 새 패턴 1~2개
+   ==================================================================================== */
+{
+  const a = A(), E = (s) => T().ev(s), P = () => T().P();
+  const BIGS = [5, 7, 8, 18, 19];
+  const fresh = (type) => {
+    a.startMain(); H.step(); a.hold(true); H.step();
+    const K = a.spawnBoss(BIGS.indexOf(type) >= 0, type);
+    E("bossIntro = null; mobs.length = 0; gulls.length = 0; iframes = 0; stun = 0; shots.length = 0");
+    K.tLeft = 1e6;
+    return K;
+  };
+  const calm = () => { T().setFusen(9); T().setIframes(0); E("mobs.length = 0; gulls.length = 0; shots.length = 0"); };
+  // 그 자리에 가만히 떠 있게 — 패턴 판정만 본다
+  const pin = (x, y) => { const p = P(); p.x = x; p.y = y; p.vx = 0; p.vy = 0; E("rope = null; pPrevX = p.x; pPrevY = p.y"); };
+
+  /* --- 먹물 장군 문어(6): 박자 던지기 · 먹물 스포트라이트 --- */
+  {
+    let K = fresh(6);
+    ok("v60 bosses: 문어 — 던지기 예고·스포트라이트 예고는 45프레임 이상", E("OC_WIND") >= 45 && E("OC_SPOT_WARN") >= 45 && E("OC_BEAT2") * 2 >= 45);
+    K.fire = 1; K.seq = 0; H.step(); H.step();
+    ok("v60 bosses: 문어 — 물건을 던진 뒤 먹물은 두 박자, 먹물 뒤 물건은 세 박자", Math.abs(K.fire - E("OC_BEAT") * 2) < 4, "fire " + K.fire);
+    ok("v60 bosses: 문어 — 격노 전엔 스포트라이트가 없다", !K.spot);
+    K.p2 = true; K.spotCd = 0; K.fire = 1e6; K.markCd = 1e6; H.step();
+    const s = K.spot;
+    let early = false;
+    for(let i=0;i<E("OC_SPOT_WARN") - 4;i++){ calm(); pin(s.x, s.y); H.step(); if(a.peek().stun > 0 || s.heat > 0) early = true; }
+    ok("v60 bosses: 문어 — 격노하면 스포트라이트가 뜨고, 예고 동안엔 안 맞는다", !!s && !early);
+    let hit = false;
+    for(let i=0;i<E("OC_SPOT_HEAT") + 12 && !hit;i++){ calm(); pin(s.x, s.y); H.step(); if(a.peek().stun > 0) hit = true; }
+    ok("v60 bosses: 문어 — 빛 안에 오래 머물면 먹물 세례(휘청)", hit);
+    K = fresh(6); K.p2 = true; K.spotCd = 0; K.fire = 1e6; K.markCd = 1e6; H.step();
+    let hit2 = false; const s2 = K.spot;
+    for(let i=0;i<E("OC_SPOT_WARN") + 120;i++){ calm(); pin(s2.x + 260, s2.y); P().vx = 14; H.step(); if(a.peek().stun > 0) hit2 = true; }
+    ok("v60 bosses: 문어 — 속도를 내 빛 밖에 있으면 안 맞는다", !hit2 && s2.heat === 0, "heat " + s2.heat);
+  }
+  E("boss = null"); T().setBoss(null); a.toMenu();
+}
+
 console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");
 process.exit(failed === 0 ? 0 : 1);
