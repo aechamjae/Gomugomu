@@ -856,7 +856,7 @@ function fit(){
 fit();
 window.addEventListener("resize", fit);
 
-const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8, REVIVE:9, PICK:10, PORT:11, MINI_SELECT:12, MINI:13, STORY_MAP:14, STORY_TALK:15, CHALLENGE:16 };
+const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHOP:6, LOG:7, SETTINGS:8, REVIVE:9, PICK:10, PORT:11, MINI_SELECT:12, MINI:13, STORY_MAP:14, STORY_TALK:15, CHALLENGE:16, STORY_END:17 };
 const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG || state === STATE.SETTINGS || state === STATE.MINI_SELECT || state === STATE.STORY_MAP || state === STATE.CHALLENGE;
 
 /* 설정 — 멀미·광과민을 위한 연출 끄기. 기기에 저장 */
@@ -865,6 +865,94 @@ try{ if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)
 function loadSettings(){
   try{ const v = window.localStorage && localStorage.getItem("swing:settings"); if(v) Object.assign(settings, JSON.parse(v)); }catch(e){}
 }
+/* ---------- 연출 도구 (v59) ----------
+   그리기 전용 — 물리·판정은 건드리지 않는다. 이징·스프링·부드러운 노이즈와, 그것으로 굴리는 상태(fx).
+   fx는 loop()에서 fxStep(실제 dt, 게임 dt)으로만 움직인다(update를 직접 부르는 검사에는 영향 없음). */
+const clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+const ease = {
+  outCubic: (t) => 1 - Math.pow(1 - clamp01(t), 3),
+  inOutCubic: (t) => { t = clamp01(t); return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; },
+  outBack: (t, k) => { t = clamp01(t); k = k === undefined ? 1.70158 : k; return 1 + (k + 1) * Math.pow(t - 1, 3) + k * Math.pow(t - 1, 2); },
+  outElastic: (t) => { t = clamp01(t); return t === 0 || t === 1 ? t : Math.pow(2, -10*t) * Math.sin((t*10 - 0.75) * (2*Math.PI/3)) + 1; }
+};
+// 스프링 — o = { x, v }가 target을 따라간다. k 당기는 힘, damp 감쇠(작을수록 출렁). 긴 프레임은 잘게 나눠 적분한다
+function spring(o, target, k, damp, dt){
+  let n = Math.max(1, Math.ceil(dt)); const h = dt / n;
+  while(n-- > 0){ o.v += ((target - o.x) * k - o.v * damp) * h; o.x += o.v * h; }
+  return o.x;
+}
+// 부드러운 노이즈(-1~1) — 사인 셋을 겹친다. 화면 흔들림이 프레임마다 튀지 않게
+const smoothNoise = (t, seed) => (Math.sin(t*0.77 + seed*12.9) + Math.sin(t*1.31 + seed*4.1) * 0.6 + Math.sin(t*2.09 + seed*7.7) * 0.3) / 1.9;
+const sv = () => ({ x: 0, v: 0 });
+const fx = { clock: 0, dt: 1, lean: sv(), sq: sv(), coatX: sv(), coatY: sv(), knot: sv(), zoom: sv(), blink: 200, blinkT: 0,
+             prevRope: null, armT: 99, snap: null, hitstop: 0, rings: [], prevStun: 0, wipe: 0, resT: 0, mapT: 0 };
+const WIPE_T = 27, HITSTOP_HIT = 3.5, HITSTOP_SINK = 6;
+function fxReset(){
+  for(const k of ["lean","sq","coatX","coatY","knot","zoom"]){ fx[k].x = 0; fx[k].v = 0; }
+  fx.prevRope = null; fx.armT = 99; fx.snap = null; fx.hitstop = 0; fx.rings.length = 0; fx.prevStun = 0;
+}
+// real: 실제 흐른 프레임 수(UI·화면 연출), g: 게임 속 프레임 수(슬로모션·멈칫이면 줄어든다 — 주인공 몸짓)
+function fxStep(real, g){
+  fx.dt = real; fx.clock += real;
+  if(fx.wipe > 0) fx.wipe -= real;
+  spring(fx.zoom, 0, 0.16, 0.3, real);
+  if(!p || g <= 0 || state === STATE.PAUSE) return;
+  spring(fx.lean, Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012)), 0.22, 0.5, g);
+  spring(fx.sq, 0, 0.3, 0.26, g);
+  spring(fx.coatX, p.vx, 0.14, 0.34, g); spring(fx.coatY, p.vy, 0.14, 0.34, g);
+  spring(fx.knot, Math.min(9, Math.hypot(p.vx, p.vy) * 0.34), 0.12, 0.3, g);
+  // 고리를 잡는 순간 찌그러지고, 놓는 순간 늘어난다. 놓은 팔은 잠깐 몸 쪽으로 튕겨 돌아온다
+  if(rope && (!fx.prevRope || fx.prevRope.a !== rope.a)){ fx.sq.v -= 0.085; fx.armT = 0; fx.snap = null; }
+  else if(!rope && fx.prevRope && state === STATE.PLAY){ fx.sq.v += 0.07; fx.snap = { x: fx.prevRope.a.x, y: fx.prevRope.a.drawY || fx.prevRope.a.y, t: 0 }; }
+  fx.prevRope = rope;
+  fx.armT += g;
+  if(fx.snap){ fx.snap.t += g; if(fx.snap.t > 9) fx.snap = null; }
+  fx.blink -= g;
+  if(fx.blink <= 0){ fx.blinkT = 7; fx.blink = 180 + Math.random()*120; }      // 3~5초마다 깜빡
+  if(fx.blinkT > 0) fx.blinkT -= g;
+  // 맞는 순간 — 잉크가 번지는 고리 + 맞은 반대쪽으로 화면이 한 번 밀린다
+  if(stun > 0 && fx.prevStun <= 0 && state === STATE.PLAY){
+    if(fx.rings.length < 6) fx.rings.push({ x: p.x, y: p.y, t: 0 });
+    addKick(p.vx >= 0 ? -7 : 7, -3);
+  }
+  fx.prevStun = stun;
+  for(let i=fx.rings.length-1;i>=0;i--){ fx.rings[i].t += g; if(fx.rings[i].t > 26) fx.rings.splice(i, 1); }
+}
+// 먹 튀김 — k(0→1)에 따라 방울이 튀어 나가며 옅어진다. 씨앗으로 모양이 정해져 프레임마다 흔들리지 않는다
+function inkSplat(x, y, k, seed, n, rgb, R){
+  if(k <= 0 || k >= 1) return;
+  const e = ease.outCubic(k);
+  for(let i=0;i<n;i++){
+    const a = hash(seed + i*3.1) * Math.PI*2, d = R * (0.3 + hash(seed + i*7.7) * 0.7) * e, r = (2 + hash(seed + i*1.3) * 6) * (1 - k*0.5);
+    ctx.fillStyle = "rgba(" + rgb + "," + ((1 - k) * 0.85).toFixed(2) + ")";
+    ctx.beginPath(); ctx.ellipse(x + Math.cos(a)*d, y + Math.sin(a)*d*0.6, Math.max(0, r*1.4), Math.max(0, r), a, 0, Math.PI*2); ctx.fill();
+  }
+}
+// 붓 자국 띠 — 위아래 가장자리가 고르지 않고, 붓이 닿는 끝(x1 쪽)이 갈라진다
+function brushBand(x0, x1, y, h, seed){
+  const dir = x1 >= x0 ? 1 : -1, n = Math.max(2, Math.ceil(Math.abs(x1 - x0) / 36));
+  const wob = (i, q) => (hash(seed + i*1.7 + q*31) - 0.5) * 7 + Math.sin(i*0.9 + seed + q) * 2.5;
+  ctx.beginPath();
+  for(let i=0;i<=n;i++){ const x = x0 + (x1 - x0) * i/n; if(i) ctx.lineTo(x, y + wob(i, 0)); else ctx.moveTo(x, y + wob(i, 0)); }
+  for(let j=1;j<=5;j++){ const yy = y + h * j/5; ctx.lineTo(x1 + dir * (j % 2 ? 22 + hash(seed + j)*26 : -6), yy - h/10); ctx.lineTo(x1 + dir * (j % 2 ? -4 : 8), yy); }
+  for(let i=n;i>=0;i--){ const x = x0 + (x1 - x0) * i/n; ctx.lineTo(x, y + h + wob(i, 1)); }
+  ctx.closePath();
+}
+// 화면 전환 — 잉크가 번지며 덮었다 걷힌다(상태는 이미 바뀌어 있고 그림만 덮는다)
+function drawWipe(){
+  if(fx.wipe <= 0) return;
+  const k = 1 - fx.wipe / WIPE_T, a = k < 0.3 ? ease.outCubic(k / 0.3) : 1 - ease.inOutCubic((k - 0.3) / 0.7);
+  const pu = paperUI; paperUI = false;
+  ctx.save();
+  ctx.fillStyle = "rgba(34,24,16," + (a * 0.9).toFixed(2) + ")"; ctx.fillRect(0, 0, W, H);
+  if(!settings.calm){
+    ctx.fillStyle = "rgba(24,16,10," + (a * 0.6).toFixed(2) + ")";
+    for(let i=0;i<7;i++){ ctx.beginPath(); ctx.arc(hash(i*3 + 1) * W, hash(i*5 + 2) * H, Math.max(0, (90 + hash(i) * 170) * (0.5 + a * 0.6)), 0, Math.PI*2); ctx.fill(); }
+  }
+  ctx.restore();
+  paperUI = pu;
+}
+
 function saveSettings(){
   try{ if(window.localStorage) localStorage.setItem("swing:settings", JSON.stringify(settings)); }catch(e){}
 }
@@ -1930,7 +2018,7 @@ function reset(){
   rushIdx = 0; rushT = 0; rushDone = false; newRushRecord = false; bigSpawns = 0;
   arcs = {}; arcSeq = 0; arcsDone = 0;
   bossIntro = null; sinkBanner = null; slowT = 0;
-  kickX = 0; kickY = 0;
+  kickX = 0; kickY = 0; fxReset();
   shakeT = 0; shakeMag = 0;    // 재시작하면 앞 판의 흔들림이 남지 않게
   bonusOn = false; bonusVisits = 0;
   parrot = { x:150 - 30, y:110, vx:0, vy:0, target:null, cd:60, t:0 };
@@ -3824,52 +3912,79 @@ function drawBossIntro(){
   const inK = Math.min(1, t / 14), outK = Math.min(1, (INTRO_T - t) / 16);
   const k = Math.min(inK, outK);
   if(k <= 0) return;
-  const ease = 1 - Math.pow(1 - k, 3);
+  const e = 1 - Math.pow(1 - k, 3);
   const col = bossIntro.big ? "143,79,208" : bossIntro.named ? "217,168,64" : "176,58,52";
+  const seed = bossIntro.type * 3.7 + 1;
   ctx.save();
   // 게임은 계속 돌아가니 화면을 다 가리지 않게 — 띠는 반투명, 전체 어둡게는 아주 살짝만
-  ctx.fillStyle = "rgba(8,12,20," + (0.15 * ease).toFixed(2) + ")";
+  ctx.fillStyle = "rgba(8,12,20," + (0.15 * e).toFixed(2) + ")";
   ctx.fillRect(0, 0, W, H);
   const bandY = H/2 - 60, bandH = 120;
-  ctx.fillStyle = "rgba(13,20,30,.58)";
-  ctx.fillRect(W * (1 - ease), bandY, W, bandH);
+  // 띠 — 오른쪽에서 붓으로 한 번에 그은 양피지색 자국(가장자리가 고르지 않다). 안의 글씨는 잉크색으로 읽히게 영역을 적어 둔다
+  ctx.fillStyle = "rgba(236,222,190,.62)";
+  brushBand(W + 40, W * (1 - e) - 40, bandY, bandH, seed); ctx.fill();
+  notePaperRect(W * (1 - e), bandY, W, bandH);
   ctx.fillStyle = "rgba(" + col + ",.95)";
-  ctx.fillRect(-W * (1 - ease), bandY - 6, W, 6);
-  ctx.fillRect(W * (1 - ease), bandY + bandH, W, 6);
+  brushBand(-40, W * e + 20, bandY - 7, 6, seed + 5); ctx.fill();
+  brushBand(W + 40, W * (1 - e) - 20, bandY + bandH + 1, 6, seed + 9); ctx.fill();
   // 흐르는 경고 문구
-  ctx.globalAlpha = ease * 0.5;
+  ctx.globalAlpha = e * 0.5;
   ctx.fillStyle = "rgba(" + col + ",1)";
   ctx.font = "900 12px 'Gowun Batang', serif";
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
   const tape = (bossIntro.big ? "▲ DANGER ▲ 대형 해수 ▲ " : bossIntro.named ? "★ NAMED ★ 네임드 현상수배 " : "WANTED · 현상수배 · ").repeat(8);
-  ctx.fillText(tape, -((t * 3) % 300), bandY - 16);
-  ctx.fillText(tape, -300 + ((t * 3) % 300), bandY + bandH + 16);
-  ctx.globalAlpha = ease;
+  ctx.fillText(tape, -((t * 3) % 300), bandY - 20);
+  ctx.fillText(tape, -300 + ((t * 3) % 300), bandY + bandH + 20);
+  ctx.globalAlpha = e;
   const B = BOSSES[bossIntro.type];
-  const slide = (1 - ease) * 120;
+  const slide = (1 - e) * 120;
   ctx.textAlign = "center";
   ctx.fillStyle = "rgba(" + col + ",1)";
   ctx.font = "700 13px 'Gowun Batang', 'Pretendard', serif";
   ctx.fillText(bossIntro.big ? "대형 보스 출현" : bossIntro.named ? "★ 네임드 현상수배범 출현" : "현상수배범 출현", W/2 - slide, bandY + 22);
-  ctx.fillStyle = "#f4ecd9";
-  ctx.font = "900 36px 'Gowun Batang', 'Pretendard', serif";
-  ctx.fillText(B.name, W/2 + slide, bandY + 60);
+  // 이름 — 도장처럼 크게 찍혔다 제 크기로 줄어든다. 찍히는 순간 먹이 튄다
+  const sk = (t - 8) / 13;
+  if(sk > 0){
+    const sc = settings.calm ? 1 : 2.3 - 1.3 * ease.outBack(sk, 2.4);
+    ctx.save();
+    ctx.globalAlpha = e * clamp01(sk * 3);
+    ctx.translate(W/2, bandY + 60); ctx.scale(sc, sc);
+    ctx.fillStyle = "#f4ecd9";
+    ctx.font = "900 36px 'Gowun Batang', 'Pretendard', serif";
+    ctx.fillText(B.name, 0, 0);
+    ctx.restore();
+    if(!settings.calm){
+      const half = Math.min(300, B.name.length * 19);
+      inkSplat(W/2 - half, bandY + 62, (t - 15) / 30, seed, 6, "59,42,30", 70);
+      inkSplat(W/2 + half, bandY + 58, (t - 15) / 30, seed + 40, 6, "59,42,30", 70);
+      inkSplat(W/2, bandY + 60, (t - 15) / 34, seed + 80, 8, col, 230);
+    }
+  }
   ctx.fillStyle = "rgba(244,236,217,.75)";
   ctx.font = "400 14px 'Gowun Batang', 'Pretendard', serif";
   ctx.fillText(B.tag + "  ·  격침 현상금 " + commas(bossIntro.bounty), W/2 - slide, bandY + 96);
   ctx.restore();
 }
 
-// 격침 배너 — 슬로모션과 함께 크게 찍힌다
+// 격침 배너 — 슬로모션과 함께 크게 찍힌다(도장처럼 넘쳤다 돌아오고, 먹이 튄다)
 function drawSinkBanner(){
   if(!sinkBanner) return;
   const t = sinkBanner.t;
-  const a = Math.min(1, t / 10, (90 - t) / 20);
+  const a = Math.min(1, t / 6, (90 - t) / 20);
   if(a <= 0) return;
-  const sc = 1 + Math.max(0, 1 - t / 10) * 0.8;
+  const sc = settings.calm ? 1 : 2.0 - ease.outBack(t / 13, 2.6);
+  const tint = sinkBanner.fled ? "150,144,132" : sinkBanner.big ? "143,79,208" : "217,168,64";
   ctx.save();
-  ctx.globalAlpha = a;
   ctx.translate(W/2, H/2 - 40);
+  if(!settings.calm && !sinkBanner.fled){
+    // 글자 뒤 먹 번짐과 튀는 방울
+    const bk = clamp01(t / 16);
+    ctx.fillStyle = "rgba(34,24,16," + (0.3 * a * bk).toFixed(2) + ")";
+    ctx.beginPath(); ctx.ellipse(0, 4, 150 * ease.outCubic(bk), 46 * ease.outCubic(bk), -0.04, 0, Math.PI*2); ctx.fill();
+    inkSplat(0, 0, (t - 5) / 34, 7, 12, "34,24,16", 250);
+    inkSplat(0, 0, (t - 5) / 30, 51, 9, tint, 210);
+  }
+  ctx.globalAlpha = a;
   ctx.scale(sc, sc);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = "900 54px 'Gowun Batang', 'Pretendard', serif";
@@ -6297,7 +6412,7 @@ function update(dt){
   updateSkim(dt, sp);
   updateRot(dt);
   // 잔상 — 빠를 때만 몇 프레임마다 위치를 남긴다
-  if(Math.hypot(p.vx, p.vy) > 19 && Math.floor(time) % 3 === 0) trail.push({ x:p.x, y:p.y, face:p.face, life:1 });
+  if((Math.hypot(p.vx, p.vy) > 19 || fire > 0) && Math.floor(time) % 3 === 0 && trail.length < 6) trail.push({ x:p.x, y:p.y, face:p.face, life:1, lean: Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012)) });
   for(let i=trail.length-1;i>=0;i--){ trail[i].life -= 0.07*dt; if(trail[i].life <= 0) trail.splice(i,1); }
   for(let i=rings.length-1;i>=0;i--){ rings[i].t += dt; if(rings[i].t > 22) rings.splice(i,1); }
   if(giant){ giant.t += dt; if(giant.t > 40) giant = null; }
@@ -7643,14 +7758,18 @@ function drawBarrel(b){
 }
 
 function drawTrail(){
-  if(!settings.lines) return;
+  if(!settings.lines || settings.calm) return;
   const hex = gearCol(), rgb = parseInt(hex.slice(1,3),16) + "," + parseInt(hex.slice(3,5),16) + "," + parseInt(hex.slice(5,7),16);
   const col = buff() ? rgb : fire > 0 ? "240,140,70" : curSkin().band === "#b03a34" ? "232,180,140" : "244,236,217";
+  // 잔상(최대 6개) — 그때의 기울기 그대로, 오래될수록 옅고 작게
   for(const q of trail){
-    const x = q.x - cam.x;
-    ctx.fillStyle = "rgba(" + col + "," + (q.life * 0.28).toFixed(2) + ")";
-    ctx.beginPath(); ctx.ellipse(x, q.y + 4, 11, 14, 0, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x, q.y - 11, 8.5, 0, Math.PI*2); ctx.fill();
+    const k = ease.outCubic(q.life), sc = 0.72 + 0.28 * k;
+    ctx.save();
+    ctx.translate(q.x - cam.x, q.y); ctx.rotate(q.lean || 0); ctx.scale(sc, sc);
+    ctx.fillStyle = "rgba(" + col + "," + (k * 0.3).toFixed(2) + ")";
+    ctx.beginPath(); ctx.ellipse(0, 4, 11, 14, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, -11, 8.5, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -7777,14 +7896,35 @@ function drawFusenGauge(){
   ctx.restore();
 }
 
-function drawArm(sx, sy, tx, ty, taut){
+function drawArm(sx, sy, tx, ty, taut, o){
   const mx = (sx+tx)/2, my = (sy+ty)/2;
   const dx = tx-sx, dy = ty-sy;
   const len = Math.hypot(dx,dy) || 1;
   const sag = Math.max(0, 30 - len*0.09) * (taut ? 0.35 : 1);
-  const cx = mx - dy/len*sag*0.4, cy = my + sag;
+  const wob = o && o.wob ? o.wob * Math.min(1, len / 120) : 0;          // 잡은 직후·스냅백의 출렁임(가로로 흔들린다)
+  const cx = mx - dy/len*(sag*0.4 + wob), cy = my + sag + dx/len*wob;
   const w = Math.max(2.4, 7.4 - len*0.015);
   inkTube(() => { ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(cx, cy, tx, ty); }, w, "#f0bf94", "rgba(255,236,214,.85)");
+  // 많이 늘어날수록 표면에 잔주름이 선다
+  const stretch = clamp01((len - 170) / 220);
+  if(stretch > 0.05){
+    ctx.lineCap = "round";
+    for(let i=1;i<=5;i++){
+      const u = i/6, bx = (1-u)*(1-u)*sx + 2*u*(1-u)*cx + u*u*tx, by = (1-u)*(1-u)*sy + 2*u*(1-u)*cy + u*u*ty;
+      const gx = 2*(1-u)*(cx - sx) + 2*u*(tx - cx), gy = 2*(1-u)*(cy - sy) + 2*u*(ty - cy), gl = Math.hypot(gx, gy) || 1;
+      const nx = -gy/gl * w*0.42, ny = gx/gl * w*0.42, sl = gx/gl * 1.6, sm = gy/gl * 1.6;
+      ctx.strokeStyle = "rgba(150,90,60," + (0.45 * stretch).toFixed(2) + ")"; ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.moveTo(bx - nx - sl, by - ny - sm); ctx.quadraticCurveTo(bx + sl, by + sm, bx + nx - sl, by + ny - sm); ctx.stroke();
+    }
+  }
+  // 뻗어 나가는 주먹 뒤로 짧은 속도선
+  if(o && o.lines && settings.lines){
+    ctx.strokeStyle = "rgba(255,244,226,.75)"; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+    for(const off of [-6, 0, 6]){
+      const px = tx - dy/len*off, py = ty + dx/len*off, l = 14 + Math.abs(off)*1.2;
+      ctx.beginPath(); ctx.moveTo(px - dx/len*9, py - dy/len*9); ctx.lineTo(px - dx/len*(9 + l), py - dy/len*(9 + l)); ctx.stroke();
+    }
+  }
   inkShape(() => { ctx.beginPath(); ctx.arc(tx, ty, 6.5, 0, Math.PI*2); }, "#f0bf94", { pool:false, line:1.8 });
 }
 
@@ -7814,6 +7954,9 @@ function drawFace(){
     ctx.fillStyle = buff() ? "#f4ecd9" : "#7a2f2b";
     ctx.beginPath(); ctx.arc(3*f, -6.5, 3, 0, Math.PI); ctx.closePath(); ctx.fill();
     ctx.lineWidth = 1; ctx.stroke();
+  } else if(fx.blinkT > 0){
+    ctx.lineWidth = 1.5;                         // 깜빡 — 감은 눈
+    ctx.beginPath(); ctx.moveTo(ex - 2, ey + 0.4); ctx.lineTo(ex + 2, ey + 0.4); ctx.stroke();
   } else {
     ctx.beginPath(); ctx.arc(ex, ey, 1.9, 0, Math.PI*2); ctx.fill();
   }
@@ -7823,17 +7966,27 @@ function drawPlayer(){
   // 로켓 충전이 끝나면 몸이 부르르 떨린다
   const shiver = rope && rocketCharge >= ROCKET_MIN ? (Math.random() - 0.5) * 2.4 : 0;
   const x = p.x - cam.x + shiver, y = p.y;
-  const lean = Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012));
+  // 기울기는 스프링으로 — 조금 늦게 따라오고 살짝 넘친다. 코트 자락·두건 매듭도 속도를 한 박자 늦게 따라온다
+  const calm = settings.calm;
+  const lean = calm ? Math.max(-0.75, Math.min(0.75, p.vx*0.035 + p.vy*0.012)) : Math.max(-0.95, Math.min(0.95, fx.lean.x));
+  const cvx = calm ? p.vx : fx.coatX.x, cvy = calm ? p.vy : fx.coatY.x;
   const diving = keys.down && !rope;
 
   // 코트 자락
   const sk = curSkin();
   inkShape(() => { ctx.beginPath(); ctx.moveTo(x-2, y-2);
-    ctx.quadraticCurveTo(x - p.vx*2.4, y + 2 - p.vy*0.8, x - p.vx*3.8, y + 12 - p.vy*1.2);
-    ctx.quadraticCurveTo(x - p.vx*2.0, y + 12 - p.vy*0.6, x+4, y+8); ctx.closePath(); }, sk.coat, { pool:false, line:1.6 });
+    ctx.quadraticCurveTo(x - cvx*2.4, y + 2 - cvy*0.8, x - cvx*3.8, y + 12 - cvy*1.2);
+    ctx.quadraticCurveTo(x - cvx*2.0, y + 12 - cvy*0.6, x+4, y+8); ctx.closePath(); }, sk.coat, { pool:false, line:1.6 });
 
   ctx.save();
   ctx.translate(x, y);
+  if(!calm){
+    // 늘이고 줄이기 — 날아가는 쪽으로 늘어나고 그만큼 가늘어진다(넓이 보존, ±18%). 잡는 순간 찌그러졌다 펴진다
+    const sp = Math.hypot(p.vx, p.vy);
+    const st = Math.max(0.82, Math.min(1.18, 1 + Math.min(0.1, sp / MAXV * 0.1) + fx.sq.x));
+    const va = sp > 1.5 ? Math.atan2(p.vy, p.vx) : -Math.PI/2;
+    ctx.rotate(va); ctx.scale(st, 1/st); ctx.rotate(-va);
+  }
   ctx.rotate(lean);
   // 다리 — 몸 뒤에서 나온다(잉크와 바지 색이 같은 선이라 어긋나지 않는다)
   const kick = Math.sin(time*0.13)*3;
@@ -7859,7 +8012,8 @@ function drawPlayer(){
   ctx.fillStyle = "rgba(230,120,100,.35)"; ctx.beginPath(); ctx.arc(1.5*p.face + 3*p.face, -7.5, 2.4, 0, Math.PI*2); ctx.fill();
   // 두건 — 머리 윗부분(머리 원 안쪽만) + 뒤로 날리는 매듭
   inkShape(() => { ctx.beginPath(); ctx.moveTo(-8, -12);
-    ctx.quadraticCurveTo(-15 - Math.sin(time*0.14)*3, -10, -17, -3);
+    const kn = calm ? 0 : Math.max(0, Math.min(9, fx.knot.x));
+    ctx.quadraticCurveTo(-15 - Math.sin(time*0.14)*3 - kn*0.6, -10 - kn*0.3, -17 - kn, -3 - kn*0.25);
     ctx.lineTo(-9, -8); ctx.closePath(); }, sk.band, { pool:false, line:1.5 });
   const cap = () => { ctx.beginPath(); ctx.arc(0, -11, 9.2, Math.PI*1.02, Math.PI*1.98); ctx.quadraticCurveTo(0, -14.5, -9.2, -12.6); ctx.closePath(); };
   inkShape(cap, sk.band, { shade:() => { ctx.beginPath(); ctx.rect(2, -22, 10, 12); }, shadeCol:"rgba(60,10,10,.25)", pool:false, line:1.7 });
@@ -12127,7 +12281,24 @@ function drawShop(){
 }
 
 let uiState = -1;
+// 상태가 바뀐 프레임 — 스토리 흐름의 화면 전환(잉크 덮개)과 화면별 등장 타이머를 건다. 상태는 이미 바뀌어 있고 그림만 따라간다
+function fxStateChange(from, to){
+  const S = STATE;
+  if(to === S.OVER) fx.resT = 0;
+  if(to === S.STORY_MAP && from !== S.STORY_TALK) fx.mapT = 0;
+  if(from < 0) return;
+  if((to === S.STORY_MAP && (from === S.MENU || from === S.OVER || from === S.READY || from === S.STORY_END)) ||
+     (from === S.STORY_MAP && (to === S.STORY_TALK || to === S.READY || to === S.MENU)) ||
+     (from === S.STORY_TALK && (to === S.READY || to === S.STORY_END)) ||
+     (storyMode && from === S.OVER && (to === S.READY || to === S.STORY_TALK)) ||
+     (from === S.STORY_END)) fx.wipe = WIPE_T;
+}
 function draw(){
+  if(state !== uiState) fxStateChange(uiState, state);
+  drawFrame();
+  if(state !== STATE.MINI) drawWipe();
+}
+function drawFrame(){
   if(state !== uiState){
     uiState = state;
     const tc = document.querySelector(".touch");
@@ -12143,11 +12314,13 @@ function draw(){
   ctx.save();
   if(kickX || kickY) ctx.translate(kickX, kickY);
   if(shakeT > 0){
-    const m = shakeMag * Math.min(1, shakeT / 12);
-    ctx.translate((Math.random()*2 - 1) * m, (Math.random()*2 - 1) * m);
+    // 프레임마다 튀는 난수 대신 부드러운 노이즈 — 같은 세기라도 덜 어지럽다
+    const m = shakeMag * Math.min(1, shakeT / 12) * 1.25;
+    ctx.translate(smoothNoise(fx.clock, 1) * m, smoothNoise(fx.clock, 2) * m);
   }
   ctx.translate(W*0.32, H*0.5);
-  ctx.scale(cam.z, cam.z);
+  const zf = cam.z * (1 + Math.max(-0.03, Math.min(0.08, fx.zoom.x)));     // 격침 순간 줌 펀치(그리기 전용 — cam.z는 그대로)
+  ctx.scale(zf, zf);
   ctx.translate(-W*0.32, -H*0.5);
 
   let target = null;
@@ -12163,11 +12336,26 @@ function draw(){
   const shx = p.x - cam.x + 4*p.face, shy = p.y - 2;
   if(rope){
     const d = Math.hypot(rope.a.x-p.x, rope.a.y-p.y);
-    drawArm(shx, shy, rope.a.x - cam.x, rope.a.drawY || rope.a.y, d > rope.len);
+    // 잡는 순간 팔이 뻗어 나가는 몇 프레임(그림만 — 줄은 이미 걸려 있다)과 그 뒤의 출렁임
+    let ax = rope.a.x - cam.x, ay = rope.a.drawY || rope.a.y;
+    const rk = settings.calm ? 1 : ease.outCubic(fx.armT / 4);
+    if(rk < 1){ ax = shx + (ax - shx) * rk; ay = shy + (ay - shy) * rk; }
+    drawArm(shx, shy, ax, ay, d > rope.len, { wob: settings.calm || fx.armT > 26 ? 0 : 15 * Math.exp(-fx.armT / 7) * Math.cos(fx.armT * 0.9), lines: rk < 1 });
     if(sling) drawArm(shx - 6*p.face, shy + 2, sling.a2.x - cam.x, sling.a2.drawY || sling.a2.y, true);
   } else if(missAnim){
     const t2 = missAnim.t;
     drawArm(shx, shy, shx + (missAnim.x-p.x)*t2, shy + (missAnim.y-p.y)*t2, false);
+  } else if(fx.snap && !settings.calm && state === STATE.PLAY){
+    // 스냅백 — 놓은 팔이 몸 쪽으로 튕겨 돌아온다(판정과 무관)
+    const k = clamp01(fx.snap.t / 9), e = 1 - k*k;
+    drawArm(shx, shy, shx + (fx.snap.x - cam.x - shx) * e, shy + (fx.snap.y - shy) * e, false, { wob: 12 * Math.sin(k * Math.PI * 2.4) * (1 - k) });
+  }
+  // 맞은 자리에 번지는 잉크 고리
+  for(const q of fx.rings){
+    const k = q.t / 26, rx = q.x - cam.x;
+    ctx.strokeStyle = "rgba(59,42,30," + ((1 - k) * 0.6).toFixed(2) + ")"; ctx.lineWidth = 9 * (1 - k) + 1;
+    ctx.beginPath(); ctx.arc(rx, q.y, 12 + ease.outCubic(k) * 34, 0, Math.PI*2); ctx.stroke();
+    inkSplat(rx, q.y, k, q.x * 0.01, 7, "59,42,30", 52);
   }
   drawGrabRings();
   drawTrail();
@@ -12563,6 +12751,15 @@ function loop(now){
   let dt = (now - last) / (1000/60);
   last = now;
   if(dt > 3) dt = 3;
+  const real = dt;
+  // 타격 멈칫(hitstop) — 보스에 기술이 맞은 순간 몇 프레임 세상이 선다. 실제 시간 기준, 그림만 계속 그린다
+  if(fx.hitstop > 0 && state === STATE.PLAY){
+    fx.hitstop -= real;
+    requestAnimationFrame(loop);
+    try{ fxStep(real, 0); draw(); }catch(e){ if(!loopErr){ loopErr = true; try{ console.error(e); }catch(_){} } fit(); }
+    return;
+  }
+  fx.hitstop = 0;
   // 보스 격침 순간의 슬로모션 — 실제 시간 기준으로 줄어든다
   if(slowT > 0 && state === STATE.PLAY){ slowT -= dt; dt *= 0.3; }
   else if(artOn("sense")) dt *= SENSE_K;
@@ -12570,7 +12767,14 @@ function loop(now){
   // (v39에서 음수 반지름 원 하나 때문에 루프가 끊겨 화면이 굳었다)
   requestAnimationFrame(loop);
   try{
+    const b0 = boss, hp0 = boss ? boss.hp : 0, k0 = bossKills;
     update(dt);
+    // 이번 프레임에 보스가 맞았으면 멈칫, 격침이면 더 길게 + 카메라가 살짝 당겨진다(그리기 전용)
+    if(state === STATE.PLAY && !settings.calm){
+      if(bossKills > k0){ fx.hitstop = HITSTOP_SINK; fx.zoom.v += 0.03; }
+      else if(boss && boss === b0 && boss.hp < hp0) fx.hitstop = HITSTOP_HIT;
+    }
+    fxStep(real, dt);
     draw();
   }catch(e){
     if(!loopErr){ loopErr = true; try{ console.error(e); }catch(_){} }
