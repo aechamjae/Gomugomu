@@ -6045,6 +6045,7 @@ function drawAwakenExtras(b, x){
       const stuck = t >= AW_SLAM_STRIKE && back <= 0;
       awTentacle(sx + 60, -90, sx, tip, stuck ? 6 : 0, { ...krSkin(b), w0: 48, w1: 16, amp: stuck ? 4 : 2, seed: q.seed, scars:[0.5], stitch:0.36,
                  glow: stuck && !q.scar ? { u: 0.74, a: Math.min(1, (t - AW_SLAM_STRIKE) / 8, (AW_SLAM_STRIKE + AW_SLAM_STUCK - t) / 14) } : null });
+      if(tip > SEA - 20) bossWaterLip(sx - 34, sx + 34, q.seed, 0.6);   // v60: 꽂힌 촉수가 잠기는 자리
       if(stuck && t < AW_SLAM_STRIKE + 14){                      // 꽂힌 자리 물보라
         const k = (t - AW_SLAM_STRIKE) / 14;
         ctx.strokeStyle = "rgba(244,236,217," + (1 - k).toFixed(2) + ")"; ctx.lineWidth = 4*(1 - k) + 1;
@@ -6110,6 +6111,7 @@ function drawAwakenExtras(b, x){
         ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, c.top); ctx.moveTo(cx, SEA); ctx.lineTo(cx, SEA - c.low); ctx.stroke(); ctx.setLineDash([]);
       } else if(k > 0.02){
         awTentacle(cx, SEA + 20, cx + Math.sin(time*0.05 + c.seed)*8, SEA - c.low*k, 8, { w0: 40, w1: 8, amp: 8, seed: c.seed, scars:[0.4], stitch: 0.64 });
+        bossWaterLip(cx - 30, cx + 30, c.seed, 0.6);
         awTentacle(cx + 14, -40, cx + Math.sin(time*0.05 + c.seed + 2)*6, c.top*k, -6, { w0: 40, w1: 8, amp: 6, seed: c.seed + 2, scars:[0.5], regrow: 0.76 });
       }
     }
@@ -9473,6 +9475,7 @@ function drawSmith(b, x, hurt){
       ctx.strokeStyle = "rgba(90,20,10,.8)"; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
       ctx.fillStyle = "rgba(255,244,190,.55)"; ctx.beginPath(); ctx.ellipse(cx, top + h*0.5, SM_COL_W*0.28, h*0.42, 0, 0, Math.PI*2); ctx.fill();
       if(Math.random() < 0.5) spark(c.x + (Math.random()-0.5)*20, top, "#ffb060");
+      bossWaterLip(cx - SM_COL_W - 8, cx + SM_COL_W + 8, c.x * 0.01, 0.5);   // v60: 기둥 밑동을 끓는 물마루로
     }
   }
   // 날아가는 용암 덩어리
@@ -9501,6 +9504,7 @@ function drawSmith(b, x, hurt){
     }
   }
   drawSmithBody(b, x, hurt);
+  if(!b.dive) bossWaterLip(x - 98, x + 102, b.x * 0.01);                  // v60: 뗏목 밑 흘수선
 }
 /* v60 풀무 — 거인 대장장이. 등을 플레이어 쪽으로 돌린 채 모루를 두드린다(등의 풀무가 약점).
    상반신은 식은 용암 갑옷(금 간 틈으로 빛) — 1단계 온전 · 2단계 어깨·가슴 한쪽이 떨어져 속살이 드러남 · 3단계 다 벗겨져 달아오른 몸.
@@ -10120,6 +10124,7 @@ function drawHarpoon(b, x, hurt){
   for(let i=0;i<3;i++){ ctx.beginPath(); ctx.moveTo(-40 + i*6, -16); ctx.lineTo(-46 + i*6, -54); ctx.stroke(); }
   ctx.fillStyle = "#4a3020"; ctx.fillRect(-48, -26, 22, 12);
   ctx.restore();
+  bossWaterLip(x - 66, x + 70, b.x * 0.01);                               // v60: 보트 밑 흘수선을 물마루로
 }
 
 /* ---------- v50 심연 보스 — 아귀 등불(일반) · 해파리 여왕 루미나(네임드) · 폭풍고래 뇌경 · 해룡 군주 요르문(대형) ---------- */
@@ -10231,6 +10236,7 @@ function drawAngler(b, x, hurt){
   ctx.fillStyle = "#d6f0a0"; ctx.beginPath(); ctx.arc(22, -18, 6, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.arc(23, -18, 2.6, 0, Math.PI*2); ctx.fill();
   ctx.restore();
+  if(b.y > SEA - 50) bossWaterLip(x - 104, x + 82, b.x * 0.01);          // v60: 수면에 걸친 몸 — 물마루로 덮는다
 }
 // 심해의 어둠 — 아귀와 싸우는 동안 플레이어 둘레만 보이고, 등불은 어둠 위에 다시 빛난다
 function drawAnglerDark(){
@@ -10825,10 +10831,19 @@ function drawWhale(b, x, hurt){
       ctx.beginPath(); ctx.moveTo(sx - WH_SP_W, SEA); ctx.lineTo(sx - WH_SP_W, 0); ctx.moveTo(sx + WH_SP_W, SEA); ctx.lineTo(sx + WH_SP_W, 0); ctx.stroke();
       ctx.setLineDash([]);
     } else {
-      const u = s.t / WH_SP_T, top = SEA * (1 - Math.min(1, u * 5)) ;
-      ctx.fillStyle = "rgba(191,228,255," + (0.8 * Math.min(1, (1 - u) * 4)).toFixed(2) + ")";
-      ctx.fillRect(sx - WH_SP_W, top, WH_SP_W*2, SEA - top);
-      ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.fillRect(sx - 8, top, 16, SEA - top);
+      // v60: 칼로 자른 사각 기둥 대신 — 가장자리가 출렁이고 옅어지는 물기둥 + 꼭대기 물보라 + 밑동 물마루
+      const u = s.t / WH_SP_T, top = SEA * (1 - Math.min(1, u * 5)), al = 0.8 * Math.min(1, (1 - u) * 4);
+      const g = ctx.createLinearGradient(sx - WH_SP_W - 6, 0, sx + WH_SP_W + 6, 0);
+      g.addColorStop(0, "rgba(191,228,255,0)"); g.addColorStop(0.18, "rgba(191,228,255," + al.toFixed(2) + ")"); g.addColorStop(0.5, "rgba(236,248,255," + al.toFixed(2) + ")");
+      g.addColorStop(0.82, "rgba(191,228,255," + al.toFixed(2) + ")"); g.addColorStop(1, "rgba(191,228,255,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(sx - WH_SP_W - 6, SEA + 4);
+      for(let yy = SEA; yy >= top; yy -= 24) ctx.lineTo(sx - WH_SP_W - 4 + Math.sin(yy*0.05 + time*0.4)*4, yy);
+      ctx.lineTo(sx - WH_SP_W*0.7, top); ctx.quadraticCurveTo(sx, top - 26, sx + WH_SP_W*0.7, top);
+      for(let yy = top; yy <= SEA; yy += 24) ctx.lineTo(sx + WH_SP_W + 4 + Math.sin(yy*0.05 + time*0.4 + 2)*4, yy);
+      ctx.lineTo(sx + WH_SP_W + 6, SEA + 4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(244,250,255," + (al*0.9).toFixed(2) + ")";
+      for(let i=0;i<5;i++){ const a2 = -Math.PI/2 + (i - 2)*0.5; ctx.beginPath(); ctx.arc(sx + Math.cos(a2)*WH_SP_W*0.9, top - 6 + Math.sin(a2)*16, 5 - Math.abs(i - 2), 0, Math.PI*2); ctx.fill(); }
+      bossWaterLip(sx - WH_SP_W - 14, sx + WH_SP_W + 14, s.x * 0.01, 0.8);
     }
   }
   for(const w of b.waves){                                           // 꼬리 해일 — 말려 오는 물마루와 거품
@@ -11525,8 +11540,11 @@ function drawShark(b, x, hurt){
     ctx.fillStyle = deep ? "rgba(11,32,42,0.35)" : "rgba(11,32,42,0.7)";
     ctx.beginPath(); ctx.ellipse(x, SEA + 20, 70, 15, 0, 0, Math.PI*2); ctx.fill();
     if(!deep){
-      ctx.fillStyle = "#3a4a56";
-      ctx.beginPath(); ctx.moveTo(x - 16, SEA + 4); ctx.lineTo(x + 4, SEA - 26); ctx.lineTo(x + 14, SEA + 4); ctx.closePath(); ctx.fill();
+      // v60: 칼로 자른 듯 수면에 박힌 삼각형 대신 — 휘어진 지느러미가 물을 가르고 뒤로 물살이 남는다
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(x - 18, SEA + 4); ctx.quadraticCurveTo(x - 4, SEA - 12, x + 8, SEA - 30); ctx.quadraticCurveTo(x + 8, SEA - 10, x + 16, SEA + 4); ctx.closePath(); }, hurt ? "#f4ecd9" : "#3a4a56", { pool:false, line:1.8 });
+      ctx.strokeStyle = "rgba(230,245,245,.7)"; ctx.lineWidth = 2; ctx.lineCap = "round";
+      for(let i=1;i<=3;i++){ ctx.beginPath(); ctx.moveTo(x - 20 - i*16, SEA - 1 + i); ctx.quadraticCurveTo(x - 28 - i*16, SEA - 4, x - 40 - i*18, SEA - 1); ctx.stroke(); }
+      bossWaterLip(x - 30, x + 26, b.x * 0.01, 0.8);
     }
     return;
   }
@@ -12035,11 +12053,12 @@ function drawFaded(alpha, fn){
 // v60: 보스가 물에 잠기는 자리 — 칼로 자른 듯한 수평선 대신 출렁이는 물마루와 물거품으로 덮는다(바다는 SEA 아래를 덮으니 그 위 몇 px만)
 function bossWaterLip(x0, x1, seed, foam){
   const top = skyCur ? skyCur.sea[0] : "#17505d", step = 14, n = Math.max(2, Math.ceil((x1 - x0) / step));
-  const yAt = (i) => SEA - 4 - Math.sin(time*0.07 + i*0.8 + (seed || 0))*2.6 - Math.sin(time*0.045 - i*0.37 + (seed || 0)*2)*1.8 - Math.sin(Math.PI * i / n) * 2;
+  // 양끝은 수면(SEA) 아래로 잦아든다 — 끝에 세로 잉크 자국이 남지 않게
+  const yAt = (i) => { const e = Math.min(1, i / 1.5, (n - i) / 1.5); return SEA + 2 - e * (6 + Math.sin(time*0.07 + i*0.8 + (seed || 0))*2.6 + Math.sin(time*0.045 - i*0.37 + (seed || 0)*2)*1.8 + Math.sin(Math.PI * i / n) * 2); };
   ctx.save();
-  ctx.beginPath(); ctx.moveTo(x0 - 6, SEA + 12);
+  ctx.beginPath(); ctx.moveTo(x0, SEA + 12);
   for(let i=0;i<=n;i++) ctx.lineTo(x0 + i*(x1 - x0)/n, yAt(i));
-  ctx.lineTo(x1 + 6, SEA + 12); ctx.closePath();
+  ctx.lineTo(x1, SEA + 12); ctx.closePath();
   ctx.fillStyle = top; ctx.fill();
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.strokeStyle = "rgba(225,245,240," + (foam === undefined ? 0.75 : foam).toFixed(2) + ")"; ctx.lineWidth = 2.4;
@@ -12216,13 +12235,15 @@ function drawBoss(){
     }
     ctx.save();
     ctx.translate(x + bx, b.y);
-    ctx.fillStyle = hurt ? "#f4ecd9" : "#b03a34";
-    ctx.beginPath(); ctx.ellipse(0, -58, 34, 42, 0, 0, Math.PI*2); ctx.fill();
+    // v60: 줄무늬가 기구 밖으로 삐져나와 끝이 잘려 보이던 것 — 기구 모양 안에서만 칠한다(줄무늬는 기구 곡면을 따라 휜다)
+    const balloon = () => { ctx.beginPath(); ctx.ellipse(0, -58, 34, 42, 0, 0, Math.PI*2); };
+    inkShape(balloon, hurt ? "#f4ecd9" : "#b03a34", { pool:"rgba(90,20,15,.3)", line:2 });
+    ctx.save(); balloon(); ctx.clip();
     ctx.fillStyle = hurt ? "#d9b877" : "#efe2c4";
-    for(let i=-1;i<=1;i++){
-      ctx.beginPath();
-      ctx.ellipse(i*20, -58, 6, 41, 0, 0, Math.PI*2); ctx.fill();
-    }
+    for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.ellipse(i*20, -58, 6 - Math.abs(i), 44, 0, 0, Math.PI*2); ctx.fill(); }
+    ctx.fillStyle = "rgba(60,10,10,.18)"; ctx.beginPath(); ctx.ellipse(14, -54, 22, 40, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    inkShape(balloon, "rgba(0,0,0,0)", { pool:false, line:2 });
     ctx.restore();
     const fl = b.flip, ap = acroPos(b);
     if(fl && fl.st === "warn"){                    // 떨어질 자리 표적 — 굳으면 붉게
@@ -12331,6 +12352,7 @@ function drawBoss(){
       ctx.fillStyle = "rgba(42,26,20,.9)"; ctx.fillRect(x + 46, SEA - 52, 28, 8);
     }
     ctx.restore();
+    if((b.sink || 0) < 150) bossWaterLip(x - 112, x + 110, b.x * 0.01);     // v60: 칼로 자른 듯한 흘수선 대신 물마루
     drawBolas(b);
 
   } else if(b.type === ADMIRAL){
@@ -12480,9 +12502,11 @@ function drawBoss(){
       const top = SEA - tt.h;
       const wob = Math.sin(time*0.08 + tt.x*0.02)*10;
       awTentacle(tx2, SEA + 16, tx2 + wob*1.6, top, wob*0.6, { ...krSkin(b), w0: 30, w1: 6, amp: 7, seed: tt.x*0.02, scars:[0.45], stitch: 0.7 });   // v60: 잠든 크라켄도 같은 촉수
+      bossWaterLip(tx2 - 26, tx2 + 26, tt.x * 0.01, 0.6);
     }
 
     drawAwakenBody(b, x, hurt, sub);                       // v60: 잠든 크라켄(5)도 각성편과 같은 몸(drawAwakenBody 안에서 sleep 분기)
+    if(b.y < SEA + 110) bossWaterLip(x - 236, x + 252, b.x * 0.01);   // v60: 몸·뒤 촉수가 잠기는 자리 — 칼로 자른 수평선 대신 물마루
     if(sub && (b.t % 150) < 62){
       // 잠수 중에도 숨구멍이 열린다 — 이때만 반격할 틈이 있다
       const hx = x + 40, hy = SEA - 26, ok = Math.min(1, (b.t % 150) / 8, (62 - (b.t % 150)) / 8);   // 열리고 닫히는 걸 부드럽게
