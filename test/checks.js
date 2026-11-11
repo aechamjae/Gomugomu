@@ -3878,6 +3878,13 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     let err = null; try{ for(const st of ["hover", "warn", "dash", "rest"]){ K.st = st; K.stT = 30; K.by = 300; K.bands = [{ x0: K.x - 400, x1: K.x, y: 300, t: 60 }]; E("drawBoss()"); } }catch(e){ err = e.message; }
     ok("v60 bosses: 불새 — 띠·날개·꼬리깃을 그려도 오류가 없다", !err, err);
   }
+
+  /* --- 경계 손질: 물마루·반투명 한 장 그리기 --- */
+  {
+    let err = null; try{ E("bossWaterLip(100, 400, 1); bossWaterLip(0, 10, 2, 0.5); drawFaded(0.4, () => { ctx.fillRect(0, 0, 10, 10); }); drawFaded(1, () => {}); drawFaded(0, () => { throw new Error('안 그려야 한다'); })"); }catch(e){ err = e.message; }
+    ok("v60 bosses: 경계 — 물마루(bossWaterLip)·반투명 한 장(drawFaded)이 오류 없이 그려지고, 투명도 0이면 아예 안 그린다", !err, err);
+    ok("v60: 버전 — GAME_VER v60", E("GAME_VER") === "v60");
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 
