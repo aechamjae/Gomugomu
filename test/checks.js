@@ -3766,6 +3766,30 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     let err = null; try{ for(const r of [0, 1, 2, E("GS_CAP")]){ K.rot = r; E("drawBoss()"); } K.phase = 1; E("drawBoss()"); }catch(e){ err = e.message; }
     ok("v60 bosses: 유령선 — 어느 각도로 그려도 오류가 없다", !err, err);
   }
+
+  /* --- 폭풍고래 뇌경(18): 등에 진 섬 · 잡을 수 있는 돛대 · 잠수 예고 --- */
+  {
+    let K = fresh(18); calm(); H.step();
+    const m = K.mast;
+    ok("v60 bosses: 고래 — 등 돛대는 진짜 고리(anchors 안)이고 고래를 따라 움직인다", !!m && a.peek().anchors.some(an => an.x === m.x && an.y === m.y) &&
+       Math.abs(m.x - (K.x + E("WH_MAST_X"))) < 0.01 && Math.abs(m.y - (K.y - E("WH_MAST_H"))) < 0.01);
+    K.st = "rest"; K.stT = 1e4; for(let i=0;i<30;i++){ calm(); H.step(); }
+    const hole = a.weak().find(w => w.mark === "숨구멍");
+    ok("v60 bosses: 고래 — 돛대에 매달리면 숨구멍 바로 위(가로 60px 안, 숨구멍이 고리 아래)", !!hole && Math.abs(hole.x - m.x) < 60 && hole.y > m.y + 60 && hole.y - m.y < 200);
+    E("rope = { a: boss.mast, len: 120 }"); const x0 = K.x;
+    for(let i=0;i<30;i++){ T().setFusen(9); H.step(); }
+    ok("v60 bosses: 고래 — 매달려 있는 동안엔 앞질러 달아나지 않는다(천천히 흘러간다)", K.x - x0 < 30 * 5 + 1 && E("rope && rope.a === boss.mast"), "dx " + (K.x - x0));
+    ok("v60 bosses: 고래 — 잠수 예고는 45프레임 이상", E("WH_DIVE_WARN") >= 45);
+    K.st = "rest"; K.stT = 1; K.next = "under"; E("stun = 0");
+    let held = 0;
+    for(let i=0;i<E("WH_DIVE_WARN") - 2;i++){ T().setFusen(9); E("if(!rope) rope = { a: boss.mast, len: 120 }"); H.step(); if(E("rope && rope.a === boss.mast")) held++; }
+    ok("v60 bosses: 고래 — 예고 동안엔 돛대가 그대로(매달려 있을 수 있다)", held >= E("WH_DIVE_WARN") - 4 && !m.cut, "held " + held);
+    let off = false;
+    for(let i=0;i<20 && !off;i++){ T().setFusen(9); H.step(); if(!E("rope && rope.a === boss.mast")) off = true; }
+    ok("v60 bosses: 고래 — 가라앉기 시작하면 돛대에서 손이 풀리고, 잠긴 돛대는 못 잡는다", off && m.cut > 0 && a.peek().state === 1);
+    T().setBoss(null); E("boss = null"); H.step();
+    ok("v60 bosses: 고래 — 보스가 사라지면 등 돛대 고리도 걷힌다", !a.peek().anchors.some(an => an.x === m.x && an.y === m.y));
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 
