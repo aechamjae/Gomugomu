@@ -3665,6 +3665,25 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     for(let i=0;i<E("SM_EMBER_T") + 6 && !hit;i++){ calm(); K.cols.length = 0; pin(e.tx, e.ty); H.step(); if(a.peek().stun > 0){ if(e.t < E("SM_EMBER_T") - 1) early = true; hit = true; } }
     ok("v60 bosses: 풀무 — 불똥은 떨어질 자리에서만, 떨어진 뒤에만 터진다", hit && !early, "hit " + hit + " early " + early);
   }
+
+  /* --- 해파리 여왕 루미나(17): 어둠과 여왕의 빛 · 격노 깜빡임 --- */
+  {
+    let K = fresh(17);
+    ok("v60 bosses: 루미나 — 처음엔 밝고, 싸우는 동안 서서히 어두워진다", !(K.dark > 0) && (() => { for(let i=0;i<80;i++){ calm(); H.step(); } return K.dark >= 0.99; })(), "dark " + K.dark);
+    ok("v60 bosses: 루미나 — 여왕의 빛은 주인공 둘레보다 훨씬 넓고, 어둠은 완전히 가리지 않는다", E("JQ_LIGHT") >= E("JQ_SELF") * 2 && E("JQ_DARK") < 0.75 && E("JQ_DARK") > 0.4);
+    ok("v60 bosses: 루미나 — 여왕은 늘 앞에 떠서 갈 길을 비춘다(빛 안에 앞쪽 고리가 든다)", K.x > P().x + 150 && a.peek().anchors.some(an => an.x > P().x && Math.hypot(an.x - K.x, an.y - K.y) < E("JQ_LIGHT")));
+    K.st = "dim"; K.stT = 100; for(let i=0;i<40;i++){ calm(); H.step(); }
+    ok("v60 bosses: 루미나 — 빛이 꺼지면(dim) 빛이 사그라들고 핵이 약점", !E("jqLit(boss)") && K.lightK < 0.1 && a.weak().some(w => w.mark === "핵"), "lightK " + K.lightK);
+    K.st = "idle"; K.wait = 1e6; K.spawnCd = 1e6; K.flickCd = 0; K.flick = 0; calm(); H.step();
+    ok("v60 bosses: 루미나 — 격노 전엔 빛이 깜빡이지 않는다", !(K.flick > 0));
+    K.p2 = true; K.flickCd = 0; calm(); H.step();
+    ok("v60 bosses: 루미나 — 격노하면 빛이 잠깐 깜빡 꺼진다(약점은 안 열린다)", K.flick > 0 && !E("jqLit(boss)") && a.weak().length === 0, "flick " + K.flick);
+    for(let i=0;i<E("JQ_FLICK") + 3;i++){ calm(); H.step(); }
+    E("settings.calm = true"); K.flickCd = 0; K.flick = 0; calm(); H.step(); const fc = K.flick; E("settings.calm = false");
+    ok("v60 bosses: 루미나 — 깜빡임은 곧 돌아오고, 연출 줄이기면 깜빡이지 않는다", E("jqLit(boss)") && !(fc > 0));
+    let err = null; try{ E("drawLuminaDark()"); }catch(e){ err = e.message; }
+    ok("v60 bosses: 루미나 — 어둠을 그려도 오류가 없다", !err, err);
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 
