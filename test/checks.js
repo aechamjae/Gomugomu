@@ -3626,6 +3626,26 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     for(let i=0;i<E("OC_SPOT_WARN") + 120;i++){ calm(); pin(s2.x + 260, s2.y); P().vx = 14; H.step(); if(a.peek().stun > 0) hit2 = true; }
     ok("v60 bosses: 문어 — 속도를 내 빛 밖에 있으면 안 맞는다", !hit2 && s2.heat === 0, "heat " + s2.heat);
   }
+
+  /* --- 패기의 검호 무상(11): 예고 45프레임 · 얼어붙는 바다 · 흑백 발도 · 갈라지는 바다 --- */
+  {
+    let K = fresh(11);
+    ok("v60 bosses: 무상 — 일섬 예고는 격노·이연 일섬에서도 45프레임 이상", E("MU_AIM_MIN") >= 45 && E("MU_AIM2") >= 45 && E("MU_AIM") >= 45);
+    K.wait = 0; K.cuts = 0; K.p2 = true; calm(); H.step();
+    ok("v60 bosses: 무상 — 격노해도 겨누는 시간이 45프레임 아래로 줄지 않는다", K.st === "aim" && K.stT >= 44, K.st + " " + K.stT);
+    let gray = 0, grayEarly = E("musangGray(boss)");
+    for(let i=0;i<80 && K.st === "aim";i++){ calm(); H.step(); gray = Math.max(gray, E("musangGray(boss)")); }
+    ok("v60 bosses: 무상 — 굳기 전엔 흑백이 아니고, 굳는 순간(발도 직전)에만 흑백", grayEarly === 0 && gray > 0.4, "early " + grayEarly + " max " + gray);
+    E("settings.calm = true"); const gCalm = (() => { K.st = "aim"; K.stT = 3; K.lock = 14; return E("musangGray(boss)"); })(); E("settings.calm = false");
+    ok("v60 bosses: 무상 — 연출 줄이기면 흑백 연출을 생략한다", gCalm === 0);
+    K.st = "dash"; K.stT = 1; K.lx0 = K.x; K.ly0 = K.y; K.lx1 = K.x - 300; K.ly1 = K.y + 40; K.hitDone = true; K.combo = true; calm(); H.step(); H.step();
+    ok("v60 bosses: 무상 — 베고 지나간 궤적이 남는다(바다가 갈라지는 연출)", !!K.slash && K.slash.x1 === K.lx1);
+    for(let i=0;i<E("MU_SLASH") + 4;i++){ calm(); H.step(); }
+    ok("v60 bosses: 무상 — 궤적은 곧 사라진다", !K.slash);
+    K.st = "charge"; K.charge = E("MU_CHARGE"); K.frost = 0; let f0 = 0;
+    for(let i=0;i<70;i++){ calm(); H.step(); f0 = Math.max(f0, K.frost); }
+    ok("v60 bosses: 무상 — 기세를 모으면 발밑 바다가 얼어붙는다", f0 > 0.4, "frost " + f0);
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 

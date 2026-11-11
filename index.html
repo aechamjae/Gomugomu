@@ -1294,6 +1294,7 @@ const STORY_CH = [
            ["고무팔", "기어(E)를 켜고 버티면 되는 거지?"],
            ["패기의 검호 무상", "말로는 누구나 버티오."]],
       post:[["패기의 검호 무상", "삼십 년 전, 그 붉은 두건도 내 기세를 버티고 웃었소."],
+            ["패기의 검호 무상", "칼집에 묶은 이 두건 조각이 그자가 남기고 간 것이오."],
             ["패기의 검호 무상", "가져가시오. 그리고 이 눈을 가르쳐 주겠소. 기척 읽기요."],
             ["검객", "스승님, 저도 이분을 따라가겠습니다."],
             ["패기의 검호 무상", "세 번째 조각은 풀무란 자가 녹이려 하오. 서두르시오."]] }
@@ -10501,9 +10502,17 @@ function cutViceHook(){
 // 무상 — 발도 일섬으로 플레이어를 꿰뚫고 지나간다(조준선 예고 → 돌진). 돌진 뒤 칼을 거두는 동안이 빈틈.
 // 두 번 벤 뒤엔 패왕의 기세(기어로만 버팀) → 지친 몸. 예전엔 기세를 기다리는 시간밖에 없어 길기만 했다
 // 네임드 2페이즈(격노)엔 '이연 일섬' — 첫 일섬이 끝나자마자 짧게(MU_AIM2) 다시 겨눠 한 번 더 벤다. 빈틈은 두 번째 뒤에만
-const MU_AIM = 42, MU_AIM2 = 26, MU_DASH = 13, MU_RECOVER = 52, MU_CHARGE = 84, MU_TIRED = 110;
+// v60 '얼음 위의 늙은 검객' — 예고를 45프레임 이상으로(MU_AIM 42 → 50, 격노해도 MU_AIM_MIN 45 아래로 안 줄고, 이연 일섬 MU_AIM2 26 → 45).
+//   기세를 모으면 발밑 바다가 얼어붙는다(b.frost 0→1, 그림), 발도 직전 굳는 순간 화면이 잠깐 흑백(musangGray — 연출 줄이기면 0),
+//   베고 지나간 궤적(b.slash, MU_SLASH 프레임)을 따라 바다가 갈라진다. 셋 다 판정은 없다
+const MU_AIM = 50, MU_AIM_MIN = 45, MU_AIM2 = 45, MU_DASH = 13, MU_RECOVER = 52, MU_CHARGE = 84, MU_TIRED = 110, MU_SLASH = 46;
+const musangGray = (b) => settings.calm || !b || b.type !== MUSANG ? 0
+  : b.st === "aim" && b.stT <= (b.lock || 14) ? 0.85 * (1 - b.stT / (b.lock || 14) * 0.5)
+  : b.st === "dash" ? 0.85 * Math.max(0, b.stT / MU_DASH) : 0;
 function updateMusang(b, dt){
   const rage = b.p2 ? 0.75 : 1;
+  b.frost = (b.frost || 0) + ((b.st === "charge" ? 1 - b.charge / MU_CHARGE : b.st === "tired" ? 1 : 0) - (b.frost || 0)) * 0.06 * dt;
+  if(b.slash){ b.slash.t += dt; if(b.slash.t > MU_SLASH) b.slash = null; }
   if(b.st === "idle" || b.st === "charge" || b.st === "tired"){
     keepFront(b, 300, dt);                        // v58: 늘 앞 하늘에 선다(예전엔 절반 가까이 뒤처져 월보로 앞질러 가기만 했다)
     b.y += ((140 + Math.sin(b.t*0.03)*34) - b.y) * 0.12 * dt;
@@ -10512,13 +10521,14 @@ function updateMusang(b, dt){
     b.wait -= dt;
     if(b.wait <= 0){
       if(b.cuts >= 2){ b.st = "charge"; b.charge = MU_CHARGE; b.cuts = 0; return; }
-      b.st = "aim"; b.stT = MU_AIM * rage; b.lock = 14;
+      b.st = "aim"; b.stT = Math.max(MU_AIM_MIN, MU_AIM * rage); b.lock = 14;
       b.ax = p.x + p.vx*16; b.ay = Math.max(40, Math.min(SEA - 40, p.y + p.vy*8));
     }
   } else if(b.st === "aim"){
     b.stT -= dt;
     // 처음엔 플레이어를 따라 겨누다가 마지막 14프레임(이연 일섬은 10프레임)은 고정 — 그때 비켜야 한다
     if(b.stT > (b.lock || 14)){
+      keepFront(b, 300, dt);                      // v60: 겨누는 시간이 길어져서, 굳기 전까진 앞자리를 지키며 겨눈다
       b.ax += ((p.x + p.vx*16) - b.ax) * 0.2 * dt;
       b.ay += (Math.max(40, Math.min(SEA - 40, p.y + p.vy*8)) - b.ay) * 0.2 * dt;
     }
@@ -10544,6 +10554,7 @@ function updateMusang(b, dt){
     }
     if(b.stT <= 0){
       b.cuts++;
+      b.slash = { x0: b.lx0, y0: b.ly0, x1: b.lx1, y1: b.ly1, t: 0, seed: Math.random()*9 };
       if(b.p2 && !b.combo){
         b.combo = true;
         b.st = "aim"; b.stT = MU_AIM2; b.lock = 10;
@@ -10751,43 +10762,177 @@ function drawVice(b, x, hurt){
     ctx.beginPath(); ctx.moveTo(x + 12, y); ctx.lineTo(p.x - cam.x, p.y); ctx.stroke(); ctx.setLineDash([]);
   }
 }
+/* v60 무상 — 백발의 늙은 검객. 낡은 도롱이(짚 망토), 칼집엔 할아버지에게 받은 붉은 두건 조각.
+   자세: 서 있기(팔짱) · 겨누기(낮게 웅크려 칼자루에 손) · 일섬(베는 방향으로 뻗음 + 잔상) · 칼 거두기 · 기세(망토·머리칼이 솟음) · 지침(칼을 짚고 숨을 몰아쉼) */
 function drawMusang(b, x, hurt){
-  const y = b.y;
-  if(b.st === "aim"){
-    // 일섬 조준선 — 굳으면(마지막 14프레임) 붉게
-    const lock = b.stT <= (b.lock || 14);
-    ctx.strokeStyle = lock ? "rgba(240,90,80,.85)" : "rgba(223,230,238,.45)"; ctx.lineWidth = lock ? 3 : 2;
-    ctx.setLineDash(lock ? [] : [10, 8]);
-    const dx = b.ax - b.x, dy = b.ay - b.y, d = Math.hypot(dx, dy) || 1;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx + dx/d*140, y + dy + dy/d*140); ctx.stroke();
-    ctx.setLineDash([]);
-  } else if(b.st === "dash"){
-    ctx.strokeStyle = "rgba(223,230,238,.7)"; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(b.lx0 - cam.x, b.ly0); ctx.lineTo(x, y); ctx.stroke();
+  const y = b.y, calm = settings.calm, fr = b.frost || 0;
+  // 얼어붙는 바다와 서리 낀 돛대 — 기세가 차오를수록 넓어진다
+  if(fr > 0.03){
+    const R = 70 + fr * 250, a = Math.min(1, fr * 1.4);
+    ctx.save(); ctx.globalAlpha = a;
+    const ice = () => {
+      ctx.beginPath(); ctx.moveTo(x - R, SEA + 3);
+      const n = 12; for(let i=0;i<=n;i++){ const u = i/n, xx = x - R + u*2*R; ctx.lineTo(xx, SEA - 3 - Math.sin(u*Math.PI) * (9 + hash(i*2.3 + 1)*12) * fr); }
+      ctx.lineTo(x + R, SEA + 3); ctx.lineTo(x + R*0.8, SEA + 16); ctx.lineTo(x - R*0.8, SEA + 16); ctx.closePath();
+    };
+    inkShape(ice, "#dff1f6", { shade: () => { ctx.beginPath(); ctx.rect(x - R, SEA + 6, R*2, 14); }, shadeCol:"rgba(120,170,200,.4)", pool:"rgba(120,170,200,.3)", line:1.6, ink:"rgba(60,90,120,.7)" });
+    ctx.strokeStyle = "rgba(90,130,160,.6)"; ctx.lineWidth = 1.2;
+    for(let i=0;i<7;i++){ const cx2 = x + (hash(i*5.1) - 0.5) * R * 1.5; ctx.beginPath(); ctx.moveTo(cx2, SEA); ctx.lineTo(cx2 + (hash(i) - 0.5)*18, SEA + 7); ctx.lineTo(cx2 + (hash(i + 3) - 0.5)*26, SEA + 13); ctx.stroke(); }
+    for(const an of anchors){                                                  // 서리 — 고리 둘레가 하얗게 얼고 고드름이 맺힌다
+      const ax = an.x - cam.x, d = Math.abs(ax - x);
+      if(d > R || an.broken || an.sky) continue;
+      const k = (1 - d/R) * fr;
+      ctx.strokeStyle = "rgba(235,248,252," + Math.min(0.9, k*1.6).toFixed(2) + ")"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(ax, an.y, 17, Math.PI*0.1, Math.PI*0.9); ctx.stroke();
+      ctx.fillStyle = "rgba(225,244,250," + Math.min(0.95, k*1.8).toFixed(2) + ")";
+      for(let j=-1;j<=1;j++){ const h2 = (7 + hash(an.x + j)*9) * Math.min(1, k*2); ctx.beginPath(); ctx.moveTo(ax + j*8 - 2.5, an.y + 15); ctx.lineTo(ax + j*8 + 2.5, an.y + 15); ctx.lineTo(ax + j*8, an.y + 15 + h2); ctx.closePath(); ctx.fill(); }
+    }
+    ctx.restore();
   }
+  // 베고 지나간 궤적 — 흰 먹선이 남고, 그 아래 바다가 갈라져 물보라가 선다
+  if(b.slash){
+    const s = b.slash, k = s.t / MU_SLASH, sx0 = s.x0 - cam.x, sx1 = s.x1 - cam.x, a = 1 - ease.outCubic(k);
+    ctx.save(); ctx.lineCap = "round";
+    const dx = sx1 - sx0, dy = s.y1 - s.y0, d = Math.hypot(dx, dy) || 1, nx = -dy/d, ny = dx/d, w = 9 * (1 - k);
+    ctx.fillStyle = "rgba(27,18,24," + (a*0.55).toFixed(2) + ")";
+    ctx.beginPath(); ctx.moveTo(sx0, s.y0); ctx.quadraticCurveTo((sx0 + sx1)/2 + nx*(w + 3), (s.y0 + s.y1)/2 + ny*(w + 3), sx1, s.y1); ctx.quadraticCurveTo((sx0 + sx1)/2 - nx*(w + 3), (s.y0 + s.y1)/2 - ny*(w + 3), sx0, s.y0); ctx.fill();
+    ctx.fillStyle = "rgba(244,250,255," + a.toFixed(2) + ")";
+    ctx.beginPath(); ctx.moveTo(sx0, s.y0); ctx.quadraticCurveTo((sx0 + sx1)/2 + nx*w, (s.y0 + s.y1)/2 + ny*w, sx1, s.y1); ctx.quadraticCurveTo((sx0 + sx1)/2 - nx*w, (s.y0 + s.y1)/2 - ny*w, sx0, s.y0); ctx.fill();
+    const L = Math.min(sx0, sx1), Rr = Math.max(sx0, sx1), up = Math.sin(Math.PI * Math.min(1, k*1.3)), gap = 3 + 9*up;
+    ctx.fillStyle = "rgba(14,30,44," + (0.6*a + 0.2*up).toFixed(2) + ")";                       // 갈라진 틈
+    ctx.beginPath(); ctx.moveTo(L - 20, SEA + 2); ctx.quadraticCurveTo((L + Rr)/2, SEA + 2 + gap*2, Rr + 20, SEA + 2); ctx.quadraticCurveTo((L + Rr)/2, SEA + 2 - gap*0.3, L - 20, SEA + 2); ctx.fill();
+    const n = Math.max(4, Math.round((Rr - L) / 34));
+    for(let i=0;i<=n;i++){                                                                       // 양옆으로 밀려 솟는 물보라
+      const u = i/n, wx = L + (Rr - L)*u, h2 = (16 + hash(s.seed + i)*26) * up * Math.sin(Math.max(0.15, u)*Math.PI*0.9 + 0.2);
+      for(const sg of [-1, 1]){
+        inkShape(() => { ctx.beginPath(); ctx.moveTo(wx - 7, SEA + 2); ctx.quadraticCurveTo(wx + sg*5, SEA - h2*0.7, wx + sg*(8 + k*10), SEA - h2); ctx.quadraticCurveTo(wx + sg*3, SEA - h2*0.4, wx + 7, SEA + 2); ctx.closePath(); },
+                 "rgba(232,246,250," + (0.85*a + 0.1).toFixed(2) + ")", { pool:false, line:1.2, ink:"rgba(60,100,130," + (a*0.8).toFixed(2) + ")" });
+      }
+    }
+    ctx.restore();
+  }
+  if(b.st === "aim"){
+    // 일섬 조준선 — 굳으면(마지막 14프레임) 붉은 먹선
+    const lock = b.stT <= (b.lock || 14);
+    const dx = b.ax - b.x, dy = b.ay - b.y, d = Math.hypot(dx, dy) || 1, ex = x + dx + dx/d*140, ey = y + dy + dy/d*140;
+    ctx.save(); ctx.lineCap = "round";
+    if(lock){ ctx.strokeStyle = "rgba(27,18,24,.5)"; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); }
+    ctx.strokeStyle = lock ? "rgba(255,96,84,.95)" : "rgba(235,242,248,.6)"; ctx.lineWidth = lock ? 3.4 : 2;
+    ctx.setLineDash(lock ? [] : [10, 8]); ctx.lineDashOffset = -time*1.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(ex, ey, lock ? 9 : 6, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+  // 패왕의 기세 — 먹빛 기운이 불꽃처럼 솟고, 고리가 부풀어 오른다
   if(b.charge > 0){
-    // 패왕의 기세 — 검붉은 기운이 부풀어 오른다
     const k = 1 - b.charge / MU_CHARGE;
+    ctx.save();
     ctx.strokeStyle = "rgba(143,79,208," + (0.35 + k*0.5).toFixed(2) + ")"; ctx.lineWidth = 4 + k*6;
     ctx.beginPath(); ctx.arc(x, y, 40 + k*150, 0, Math.PI*2); ctx.stroke();
-    ctx.strokeStyle = "rgba(27,18,24,.6)"; ctx.lineWidth = 2;
-    for(let i=0;i<8;i++){ const a = i*0.785 + time*0.05; ctx.beginPath(); ctx.moveTo(x + Math.cos(a)*30, y + Math.sin(a)*30); ctx.lineTo(x + Math.cos(a)*(50 + k*90), y + Math.sin(a)*(50 + k*90)); ctx.stroke(); }
+    ctx.strokeStyle = "rgba(27,18,24," + (0.3 + k*0.4).toFixed(2) + ")"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(0, 34 + k*150), 0, Math.PI*2); ctx.stroke();
+    for(let i=0;i<(calm ? 6 : 12);i++){
+      const fx0 = x + (hash(i*1.9) - 0.5) * (60 + k*60), up = ((time*0.9 + i*37) % 60) / 60, h2 = (40 + k*70) * up;
+      ctx.fillStyle = "rgba(" + (i % 3 ? "27,18,24" : "110,60,160") + "," + ((1 - up) * (0.35 + k*0.35)).toFixed(2) + ")";
+      ctx.beginPath(); ctx.moveTo(fx0 - 7, y + 40 - h2*0.2); ctx.quadraticCurveTo(fx0 + Math.sin(time*0.2 + i)*8, y + 40 - h2*0.7, fx0 + Math.sin(time*0.13 + i)*5, y + 40 - h2 - 16); ctx.quadraticCurveTo(fx0 + 9, y + 40 - h2*0.6, fx0 + 7, y + 40 - h2*0.2); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
   }
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = hurt ? "#f4ecd9" : "#2a2a3a";                        // 검은 도포
-  ctx.beginPath(); ctx.moveTo(-14, -8); ctx.lineTo(14, -8); ctx.lineTo(20, 26); ctx.lineTo(-20, 26); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(0, -18, 10, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#1b1218"; ctx.fillRect(-10, -30, 20, 6);              // 상투
-  ctx.beginPath(); ctx.arc(0, -32, 4, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = b.tired > 0 ? "#f7a8a0" : "#1b1218";
-  ctx.fillRect(-6, -19, 4, 2); ctx.fillRect(2, -19, 4, 2);
-  if(b.tired > 0){ ctx.fillStyle = "#8fd6d8"; ctx.beginPath(); ctx.arc(13, -24, 3, 0, Math.PI*2); ctx.fill(); }   // 땀
+  // 몸 — 오른쪽을 보는 그림을 플레이어(또는 베는 방향) 쪽으로 뒤집는다
+  const dashing = b.st === "dash", aiming = b.st === "aim", tired = b.st === "tired", charging = b.st === "charge", rec = b.st === "recover";
+  const tgx = aiming ? b.ax : dashing ? b.lx1 : p.x, face = tgx >= b.x ? 1 : -1;
+  let rot = 0;
+  if(aiming || dashing){ const dx = (aiming ? b.ax - b.x : b.lx1 - b.lx0) * face, dy = aiming ? b.ay - b.y : b.ly1 - b.ly0; rot = Math.max(-0.9, Math.min(0.9, Math.atan2(dy, dx))) * (dashing ? 1 : 0.45); }
+  const figure = (alpha) => {
+    ctx.save(); ctx.globalAlpha *= alpha;
+    const crouch = aiming ? 0.86 : tired ? 0.84 : 1, lean = aiming ? 0.3 : tired ? 0.34 : dashing ? 0.5 : rec ? 0.1 : 0;
+    const wind = charging ? -1 : dashing ? 1.6 : Math.min(1, Math.abs(p.vx) * 0.02) + 0.3;      // 망토·머리칼이 날리는 세기(기세 땐 위로)
+    const coat = hurt ? "#f4ecd9" : "#2f3546", straw = hurt ? "#f4ecd9" : "#b9995a", skin = hurt ? "#fff" : "#e6c2a0", hair = hurt ? "#fff" : "#eef1f4";
+    const wv = (s) => calm ? 0 : Math.sin(time*0.11 - s) * 3;
+    ctx.rotate(lean); ctx.scale(1, crouch);
+    // 월보 — 발밑에 번지는 물결 고리
+    if(!dashing){ ctx.strokeStyle = "rgba(235,242,248,.5)"; ctx.lineWidth = 1.6; const rk = (time*0.03) % 1; ctx.beginPath(); ctx.ellipse(-2, 44, 8 + rk*16, 2.5 + rk*4, 0, 0, Math.PI*2); ctx.globalAlpha *= (1 - rk); ctx.stroke(); ctx.globalAlpha = alpha; }
+    // 칼집(뒤로 뻗음)과 붉은 두건 조각
+    const sheathA = aiming ? 0.2 : 0.42;
+    ctx.save(); ctx.translate(-7, 6); ctx.rotate(Math.PI - sheathA);
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(44, 0); }, 5, hurt ? "#f4ecd9" : "#3a2a26", "rgba(255,255,255,.25)");
+    ctx.fillStyle = "#d9a62c"; ctx.fillRect(41, -3.2, 4, 6.4);
+    if(!hurt){ const fl = wind >= 0 ? 1 : -1;
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(8, -3); ctx.lineTo(13, -3); ctx.quadraticCurveTo(18 + wv(1), 6*fl + 8, 26 + wv(2), 16 + 4*fl); ctx.lineTo(20 + wv(2.4), 19 + 4*fl); ctx.quadraticCurveTo(12 + wv(1), 10, 8, 3); ctx.closePath(); }, "#c0392b", { pool:false, line:1.4 });
+      ctx.fillStyle = "#c0392b"; ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.rect(7.5, -4.2, 6, 8.4); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+    // 바지(하카마) — 두 다리
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(-11, 6); ctx.lineTo(11, 6); ctx.lineTo(15, 38); ctx.lineTo(4, 39); ctx.lineTo(0, 20); ctx.lineTo(-5, 39); ctx.lineTo(-16, 38); ctx.closePath(); }, coat, { shade: () => { ctx.beginPath(); ctx.rect(1, 0, 20, 44); }, shadeCol:"rgba(0,0,0,.22)", line:2 });
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(-10, 41, 7, 3.2, 0, 0, Math.PI*2); }, "#c9b48a", { pool:false, line:1.5 });
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(10, 41, 7, 3.2, 0, 0, Math.PI*2); }, "#c9b48a", { pool:false, line:1.5 });
+    // 도롱이 — 짚을 세 겹으로 엮은 망토. 아랫단이 한 박자 늦게 날린다
+    const sw = wind >= 0 ? -wind*7 : 0, lift = wind < 0 ? 12 * (1 - b.charge / MU_CHARGE) : 0;
+    for(let L = 2; L >= 0; L--){
+      const top = -22 + L*9, bot = -2 + L*10 - lift*(L + 1)*0.5, hw = 17 + L*5, dx2 = sw * (L + 1) * 0.5 + wv(L*0.9) * (L + 1) * 0.4;
+      inkShape(() => {
+        ctx.beginPath(); ctx.moveTo(-hw*0.72, top); ctx.lineTo(hw*0.72, top);
+        const n = 7; for(let i=0;i<=n;i++){ const u = i/n; ctx.lineTo(hw - u*2*hw + dx2, bot + (i % 2 ? 5 : 0) + Math.sin(u*Math.PI)*3); }
+        ctx.closePath();
+      }, L === 1 ? (hurt ? "#f4ecd9" : "#a88848") : straw, { pool:"rgba(90,60,20,.25)", poolW:4, line:1.8 });
+      if(!hurt){ ctx.strokeStyle = "rgba(90,60,20,.45)"; ctx.lineWidth = 1; for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*hw*0.3, top + 2); ctx.lineTo(i*hw*0.38 + dx2*0.7, bot - 1); ctx.stroke(); } }
+    }
+    // 팔 — 자세마다
+    const armCol = coat;
+    if(dashing){                                           // 베어 낸 팔과 칼
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(6, -14); ctx.lineTo(26, -10); }, 6, armCol);
+      ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(26, -10); ctx.lineTo(82, -16); ctx.stroke();
+      ctx.strokeStyle = "#f2f6fa"; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(28, -10); ctx.lineTo(82, -16); ctx.stroke();
+    } else if(aiming){                                     // 칼자루를 쥔 손 — 굳으면 칼날이 한 치 비친다
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(6, -14); ctx.quadraticCurveTo(10, 0, -4, 4); }, 6, armCol);
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(-6, 5); ctx.lineTo(8, 9); }, 4, "#3a2a26");
+      if(b.stT <= (b.lock || 14)){ ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(-8, 4.5); ctx.lineTo(-15, 2.5); ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,.9)"; const gl = 5 + Math.sin(time*0.9)*2; ctx.beginPath(); ctx.moveTo(-12, 3 - gl); ctx.lineTo(-10.5, 2); ctx.lineTo(-12 + gl, 3.5); ctx.lineTo(-10.5, 5); ctx.lineTo(-12, 3 + gl); ctx.lineTo(-13.5, 5); ctx.lineTo(-12 - gl, 3.5); ctx.lineTo(-13.5, 2); ctx.closePath(); ctx.fill(); }
+    } else if(rec){                                        // 칼을 거둔다 — 든 칼이 칼집 쪽으로 돌아간다
+      const k = 1 - Math.max(0, b.stT) / MU_RECOVER, sa = -0.3 + k*2.6;
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(6, -14); ctx.lineTo(18 - k*14, -6 + k*8); }, 6, armCol);
+      ctx.save(); ctx.translate(18 - k*14, -6 + k*8); ctx.rotate(sa);
+      ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(50 * (1 - k*0.6), 0); ctx.stroke();
+      ctx.strokeStyle = "#f2f6fa"; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(50 * (1 - k*0.6), 0); ctx.stroke();
+      ctx.restore();
+    } else if(tired){                                      // 칼을 짚고 선다
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(6, -14); ctx.lineTo(20, 2); }, 6, armCol);
+      ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(20, -4); ctx.lineTo(24, 44); ctx.stroke();
+      ctx.strokeStyle = "#f2f6fa"; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(20.4, 2); ctx.lineTo(24, 44); ctx.stroke();
+    } else {                                               // 팔짱
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(-10, -12); ctx.quadraticCurveTo(-2, -2, 9, -7); }, 6, armCol);
+      inkTube(() => { ctx.beginPath(); ctx.moveTo(10, -12); ctx.quadraticCurveTo(2, -1, -8, -6); }, 6, armCol);
+    }
+    // 머리 — 뒤로 묶어 날리는 백발, 흰 눈썹·수염
+    const hy = -34 + (tired ? 3 : 0);
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(-7, hy - 6);
+      if(wind < 0){ ctx.quadraticCurveTo(-16, hy - 26 - lift, -8 + wv(1), hy - 40 - lift); ctx.quadraticCurveTo(-6, hy - 22, -2, hy - 10); }
+      else { ctx.quadraticCurveTo(-20 - wind*5, hy - 4 + wv(0.6), -30 - wind*9 + wv(1.6), hy + 12 + wv(2.2)); ctx.quadraticCurveTo(-18 - wind*4, hy + 9, -8, hy + 3); }
+      ctx.closePath(); }, hair, { pool:"rgba(120,140,160,.3)", line:1.8 });
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(0, hy, 10.5, 11.5, 0, 0, Math.PI*2); }, skin, { shade: () => { ctx.beginPath(); ctx.ellipse(-6, hy + 2, 8, 12, 0, 0, Math.PI*2); }, shadeCol:"rgba(150,90,60,.2)", line:2 });
+    inkShape(() => { ctx.beginPath(); ctx.arc(0, hy, 11, Math.PI*0.95, Math.PI*1.9); ctx.quadraticCurveTo(2, hy - 6, -10.8, hy + 1.6); ctx.closePath(); }, hair, { pool:false, line:1.6 });
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(-3, hy - 12, 4.5, 3.6, 0, 0, Math.PI*2); }, hair, { pool:false, line:1.5 });       // 상투
+    if(!hurt){
+      ctx.strokeStyle = "#f6f8fa"; ctx.lineWidth = 2.6; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(2, hy - 3.5); ctx.lineTo(9, hy - 2 + (aiming || dashing ? 1.5 : 0)); ctx.stroke();   // 흰 눈썹
+      ctx.strokeStyle = tired ? "#c0504a" : INK; ctx.lineWidth = 1.8;
+      ctx.beginPath(); if(aiming || dashing || charging){ ctx.moveTo(3.5, hy + 0.5); ctx.lineTo(8.5, hy + 0.8); } else { ctx.moveTo(3.5, hy + 0.2); ctx.quadraticCurveTo(6, hy + 2, 8.5, hy + 0.2); } ctx.stroke();   // 감은 듯한 눈(겨눌 땐 실눈)
+      inkShape(() => { ctx.beginPath(); ctx.moveTo(1, hy + 5); ctx.lineTo(10, hy + 5); ctx.quadraticCurveTo(9, hy + 16, 5 + wv(1)*0.3, hy + 21); ctx.quadraticCurveTo(2, hy + 14, 1, hy + 5); ctx.closePath(); }, hair, { pool:false, line:1.4 });   // 수염
+      if(tired){ ctx.fillStyle = "#9fdcee"; ctx.strokeStyle = INK; ctx.lineWidth = 1; for(let i=0;i<2;i++){ const dk = ((time*0.03 + i*0.5) % 1); ctx.beginPath(); ctx.ellipse(-12 - i*4, hy - 4 + dk*16, 2.2, 3.2, 0, 0, Math.PI*2); ctx.globalAlpha = alpha * (1 - dk); ctx.fill(); ctx.stroke(); ctx.globalAlpha = alpha; }
+        const bk = (time*0.02) % 1; ctx.fillStyle = "rgba(240,246,250," + (0.6*(1 - bk)).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(14 + bk*14, hy + 8 - bk*5, 3 + bk*5, 0, Math.PI*2); ctx.fill(); }
+    }
+    ctx.restore();
+  };
+  if(dashing && !calm){                                    // 잔상 — 지나온 길에 옅은 그림자 셋
+    const k = 1 - Math.max(0, b.stT) / MU_DASH;
+    for(let i=3;i>=1;i--){ const u = Math.max(0, k - i*0.14); ctx.save(); ctx.translate(b.lx0 + (b.lx1 - b.lx0)*u - cam.x, b.ly0 + (b.ly1 - b.ly0)*u); ctx.scale(face, 1); ctx.rotate(rot); figure(0.12 + (3 - i)*0.07); ctx.restore(); }
+  }
+  ctx.save(); ctx.translate(x, y + (calm || dashing ? 0 : Math.sin(time*0.05)*1.5)); ctx.scale(face, 1); ctx.rotate(rot);
+  figure(1);
   ctx.restore();
-  // 칼 — 몸 둘레를 돈다
-  const tx = x + Math.cos(b.t*0.07)*44, ty = y + Math.sin(b.t*0.07)*44;
-  ctx.strokeStyle = "#dfe6ee"; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(x + Math.cos(b.t*0.07)*12, y + Math.sin(b.t*0.07)*12); ctx.lineTo(tx, ty); ctx.stroke();
+}
+// 발도 직전 — 화면이 잠깐 흑백이 된다(연출 줄이기면 musangGray가 0)
+function drawMusangGray(){
+  const g = musangGray(boss); if(g <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = "saturation"; ctx.fillStyle = "rgba(128,128,128," + g.toFixed(2) + ")"; ctx.fillRect(0, 0, W, H); ctx.restore();
 }
 function drawThunder(b, x, hurt){
   const y = b.y;
@@ -13204,6 +13349,7 @@ function drawFrame(){
   sea();
   ctx.restore();
   drawAwakenInk();
+  drawMusangGray();
   drawAnglerDark();
   drawJail();
   drawPaper();
