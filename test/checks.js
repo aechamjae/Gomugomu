@@ -972,7 +972,7 @@ function swing(a, st){
     });
     if(s.deathReason === "완주") break;
   }
-  ok("보스 러시 — 해군 대장 군함까지 9연전을 순서대로 치르고 완주한다", s.deathReason === "완주" && order.join(",") === "0,1,3,4,2,6,5,7,8" && !fishSeen,
+  ok("보스 러시 — 뽑힌 대진 다섯을 순서대로 치르고 완주한다(v60: 무작위 5연전)", s.deathReason === "완주" && order.length === 5 && order.join(",") === a.rush().list.join(",") && !fishSeen,
      "사인=" + s.deathReason + " 순서=" + order.join(","));
   a.startMain();
 }
@@ -3572,6 +3572,62 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("storyMode = null; storyResult = null; storyTalk = null; chapCard = null; endRoll = null");
   a.toMenu();
 }
+
+/* ===================== v60 systems: 보스 러시 · 기술 · 동료 · 칭호 · 메뉴 ===================== */
+/* --- v60 systems: 보스 러시 무작위 5연전 --- */
+{
+  const a = A(), R = () => a.rush(), E2 = (x) => T().ev(x);
+  const pool = R().pool, all = pool.mid.concat(pool.named, pool.big);
+  let good = true, why = "", seen = new Set(), firsts = new Set();
+  for(let i=0;i<400;i++){
+    const l = R().roll(), cls = l.map(t => R().cls(t)), bigs = cls.filter(c => c === "big").length;
+    l.forEach(t => seen.add(t)); firsts.add(l.join(","));
+    if(l.length !== 5 || new Set(l).size !== 5){ good = false; why = "겹침 " + l; }
+    if(cls[0] !== "mid" || cls[1] !== "mid" || cls[2] !== "named"){ good = false; why = "앞 세 자리 " + cls; }
+    if(cls[4] === "mid"){ good = false; why = "마지막이 일반 " + l; }
+    if(bigs < 1 || bigs > 2){ good = false; why = "대형 수 " + bigs; }
+    if(l.indexOf(15) >= 0 || l.indexOf(20) >= 0){ good = false; why = "전용 보스가 섞임 " + l; }
+  }
+  ok("v60 러시: 대진은 겹치지 않는 다섯 — 일반·일반·네임드·(일반|대형)·결전(대형, 대형이 둘이면 네임드도), 대형 1~2", good, why);
+  ok("v60 러시: 400번 굴리면 풀의 보스가 전부 나오고 대진이 매번 다르다", all.every(t => seen.has(t)) && firsts.size > 300, "종류 " + seen.size + "/" + all.length + " · 서로 다른 대진 " + firsts.size);
+  ok("v60 러시: 풀의 등급이 실제 보스 등급과 맞다", pool.mid.every(t => R().cls(t) === "mid") && pool.named.every(t => R().cls(t) === "named") && pool.big.every(t => R().cls(t) === "big"));
+  // 판마다 새로, 출항 화면에서 선원만 바꿀 땐 그대로
+  a.startRush(); H.step();
+  const l1 = R().list.slice();
+  ok("v60 러시: 시작하면 대진 다섯이 정해지고 출항 화면(state 0)", a.peek().state === 0 && l1.length === 5);
+  T().reset(); H.step();
+  ok("v60 러시: 출항 화면에서 다시 꾸려도(선원·기어 바꾸기) 대진은 그대로", R().list.join(",") === l1.join(","));
+  let changed = false;
+  for(let i=0;i<6 && !changed;i++){ a.startRush(); H.step(); if(R().list.join(",") !== l1.join(",")) changed = true; }
+  ok("v60 러시: 새로 시작하면 대진을 다시 뽑는다", changed);
+  for(let i=0;i<90;i++) H.step();
+  ok("v60 러시: 대진표 카드가 뒤집히는 동안 오류 없이 그려진다", a.peek().state === 0 && a.fx().rushT > 60);
+  // 기록 — 새 5연전 기록과 옛 9연전 기록은 따로
+  R().setBest(0, 61234);
+  a.toMenu();
+  a.rows().find(r => /도전/.test(r.label)).action();
+  ok("v60 러시: 5연전 기록이 없으면 도전 화면에 옛 9연전 기록을 보여 준다", /옛 9연전 17:00/.test(a.rows().find(r => /보스 러시/.test(r.label)).label), a.rows().find(r => /보스 러시/.test(r.label)).label);
+  let s = null;
+  for(let attempt = 0; attempt < 3; attempt++){
+    a.startRush(); H.step(); a.hold(true); H.step(); a.hold(false);
+    T().setFusen(2);
+    s = run(a, 9000, (st) => {
+      if(st.boss){ st.boss.hp = 1; st.boss.invul = 0; T().dmg(true, "테스트"); }
+      else { swing(a, st); T().setFusen(2); }
+    });
+    if(s.deathReason === "완주") break;
+  }
+  ok("v60 러시: 완주하면 5연전 기록만 새로 서고 옛 9연전 기록은 그대로", s.deathReason === "완주" && R().best > 0 && R().best9 === 61234, "사인=" + s.deathReason + " 5연전=" + R().best + " 9연전=" + R().best9);
+  const saved = JSON.parse(E2("recShop()"));
+  ok("v60 러시: 저장에 rush5(새 기록)·rush9(옛 기록)가 따로 들어간다", saved.rush5 === R().best && saved.rush9 === 61234);
+  // 하위 호환 — 옛 저장(rush9만 있음)을 읽어도 9연전 기록으로만 남는다
+  E2("(function(){ const r = JSON.parse(recShop()); delete r.rush5; r.rush9 = 43210; rushBest = 777; applyShopRecord(JSON.stringify(r)); })()");
+  ok("v60 러시: 옛 저장(rush9만)은 '옛 9연전 기록'으로만 읽힌다 — 새 기록은 비어 있다", R().best === 0 && R().best9 === 43210, "5연전=" + R().best + " 9연전=" + R().best9);
+  R().setBest(0, 0);
+  ok("v60 러시: 계정 코드 낱말표 끝에 rush5", E2("CODE2_WORDS.indexOf('rush5') > CODE2_WORDS.indexOf('jail')"));
+  a.toMenu();
+}
+/* ===================== v60 systems 끝 ===================== */
 
 /* --- 프로젝트 원칙 --- */
 {

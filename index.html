@@ -1155,15 +1155,31 @@ function startBlitz(){
   return true;
 }
 
-// 보스 러시 — 중간보스 6종 + 크라켄 + 유령선 + 해군 대장 군함 9연전. 잡몹·날씨 없이 보스만, 완주 시간 기록
-// v39에서 해군 대장이 들어와 9연전이 됐다 — 8연전 시절 최단 기록(swing:shop의 rush)은 비교가 안 되니 rush9에 따로 둔다
-const RUSH_ORDER = [0, 1, 3, 4, 2, 6, 5, 7, 8];
-let rushMode = false, rushBest = 0;
+// 보스 러시 (v60) — 판마다 무작위 5연전. 잡몹·날씨 없이 보스만, 완주 시간 기록.
+// 대진: 일반 · 일반 · 네임드 · (일반 또는 대형) · 마지막은 대형(네 번째가 대형이면 반반으로 네임드) — 대형은 많아야 둘, 겹치지 않는다.
+// 각성한 크라켄(15)·해저 감옥 간수장(20)은 전용 무대가 따로 있어 뺐다.
+// 기록: 예전 고정 9연전 최단 기록(swing:shop의 rush9)은 rushBest9에 그대로 두고 '옛 9연전 기록'으로만 보여 준다. 새 5연전 기록은 rush5(rushBest)
+const RUSH_N = 5;
+const RUSH_POOL = { mid:[0, 1, 2, 3, 4, 9, 10, 12, 14, 16], named:[6, 11, 13, 17], big:[5, 7, 8, 18, 19] };
+const RUSH_LEGACY = [0, 1, 3, 4, 2, 6, 5, 7, 8];     // v59까지의 고정 순서(기록 설명용)
+const RUSH_GAP = 26;                                 // 보스 사이 쉬는 거리(m) — 예전 40
+let rushMode = false, rushBest = 0, rushBest9 = 0, rushList = null;
+function rollRush(rnd){
+  rnd = rnd || Math.random;
+  const used = [], take = (pool) => { const left = pool.filter(t => used.indexOf(t) < 0), t = left[Math.floor(rnd() * left.length)]; used.push(t); return t; };
+  const out = [take(RUSH_POOL.mid), take(RUSH_POOL.mid), take(RUSH_POOL.named)];
+  const bigFourth = rnd() < 0.5;
+  out.push(take(bigFourth ? RUSH_POOL.big : RUSH_POOL.mid));
+  out.push(take(bigFourth && rnd() < 0.5 ? RUSH_POOL.named : RUSH_POOL.big));
+  return out;
+}
+const rushClass = (t) => isBigType(t) ? "big" : isNamed(t) ? "named" : "mid";
 function startRush(){
   practiceMode = null; storyMode = null;
   dailyMode = false;
   blitzMode = false;
   rushMode = true;
+  rushList = null;               // 새 대진을 뽑는다(reset이 굴린다)
   reset();
 }
 const fmtTime = (fr) => { const t = fr / 60, m = Math.floor(t / 60), sec = t - m*60; return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(1); };
@@ -2523,7 +2539,7 @@ function menuRows(){
     return btnRows([
       { y: top,        label: "1) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
       { y: top + rh,   label: "2) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝 (내일 다시)" : "") + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
-      { y: top + rh*2, label: "3) 보스 러시" + (rushBest ? " — 최단 " + fmtTime(rushBest) : ""), action: startRush },
+      { y: top + rh*2, label: "3) 보스 러시 — 무작위 5연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : rushBest9 ? " · 옛 9연전 " + fmtTime(rushBest9) : ""), action: startRush },
       { y: top + rh*3, label: "4) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
       { key: 9, y: top + rh*4 + 14, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } }
     ], 480, 36);
@@ -2617,6 +2633,8 @@ let p, cam, anchors, coins, rope, state, dist, distOffset, best = 0, treasure,
     sling, slingCd, slings, navy, nextNavyAt, navyEscapes, navyChases, navyBeaten, navyCaught = 0, cuffT = 0, jailEscaped = false, viceHook, navyRand = Math.random, routes, routeLeft, routeSeq, nextRouteAt, routesDone, rival, nextRivalAt, rivalWins, rivalRaces, rivalRand = Math.random, nextPortAt, portIdx, portAt, portPending, portBought, portMsg;
 
 function reset(){
+  // 보스 러시 — 판마다 대진을 새로 뽑는다. 출항 화면에서 선원·기어만 바꿔 다시 꾸릴 땐(state가 READY) 같은 대진 그대로
+  if(rushMode && (!rushList || state !== STATE.READY)){ rushList = rollRush(); fx.rushT = 0; }
   // 60초 사냥은 하루 한 판 — 끝나고 R로 다시 시작하면 본게임으로 넘어간다
   if(blitzMode && !blitzFresh) blitzMode = false;
   blitzFresh = false;
@@ -4460,7 +4478,7 @@ function spawnBoss(big, forceType){
   if(forceType !== undefined) type = forceType;
   else if(storyMode) type = storyBossType();
   else if(practiceMode && practiceMode.type === "boss") type = practiceMode.bossType;
-  else if(rushMode) type = RUSH_ORDER[rushIdx];
+  else if(rushMode) type = rushList[rushIdx];
   else if(big){
     type = BIG_BOSSES[Math.floor(Math.random()*BIG_BOSSES.length)]; bigSpawns++;   // 2000m마다 넷 중 같은 확률
     if(type === 5 && Math.random() < AWAKEN_CHANCE) type = AWAKEN;                 // 운이 나쁘면 크라켄이 각성한 채로 나온다
@@ -4508,8 +4526,69 @@ function drawRushHud(){
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = "700 14px 'Gowun Batang', serif";
   ctx.fillStyle = "#f4ecd9";
-  ctx.fillText("보스 러시 " + Math.min(rushIdx + 1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length + "  ·  " + fmtTime(rushT), W/2, y);
+  ctx.fillText("보스 러시 " + Math.min(rushIdx + 1, RUSH_N) + "/" + RUSH_N + "  ·  " + fmtTime(rushT), W/2, y);
   ctx.restore();
+  // 쉬는 구간 — 다음 보스 예고 카드(작게, 위쪽 가운데)
+  if(boss || bossIntro) fx.rushNext = 0; else fx.rushNext = (fx.rushNext || 0) + fx.dt;
+  if(!boss && !bossIntro && rushList && rushIdx < RUSH_N && !rushDone){
+    const t = rushList[rushIdx], cl = rushClass(t), cc = RUSH_CLASS[cl];
+    const bx = W/2 - 150, by = y + 22, bw = 300, bh = 50, k = settings.calm ? 1 : ease.outBack(clamp01((fx.rushNext || 0) / 16), 1.3);
+    ctx.save(); ctx.translate(W/2, by + bh/2); ctx.scale(k, k); ctx.translate(-W/2, -(by + bh/2));
+    drawPanel({ x: bx, y: by, w: bw, h: bh, sel: true }, 8);
+    drawMedal(bx + 28, by + bh/2, 18, cl === "big" ? 4 : cl === "named" ? 3 : 1, { kind: BOSS_EMB[t] });
+    uiText((rushIdx ? "다음 상대 " : "첫 상대 ") + (rushIdx + 1) + "/" + RUSH_N + " · " + cc.name, bx + 54, by + 16, UIF(700, 11), cc.col);
+    uiText(BOSSES[t].name, bx + 54, by + 34, UIF(800, 16), "#f4ecd9");
+    ctx.restore();
+  }
+}
+// 보스 러시 대진표 — 출항 화면에 카드 다섯 장이 차례로 뒤집히며 공개된다(fx.rushT, 그리기 전용)
+const RUSH_CLASS = { mid:{ name:"일반", col:"#e08a6a", tier:1 }, named:{ name:"네임드", col:"#ffd76a", tier:3 }, big:{ name:"대형", col:"#d9a8f0", tier:4 } };
+const BOSS_EMB = ["dagger","harpoon","cannon","rope","wind","tentacle","octo","ghost","anchor","fin","chain","sword","bolt","hammer","flame","eye","lantern","jelly","whale","serpent","key"];
+const RUSH_FLIP0 = 18, RUSH_FLIP_GAP = 16, RUSH_FLIP_T = 20;
+function drawRushBracket(){
+  const cw = 152, ch = 214, gap = 12, x0 = W/2 - (RUSH_N*cw + (RUSH_N - 1)*gap)/2, y0 = 104, calm = settings.calm;
+  fx.rushT = (fx.rushT || 0) + fx.dt;
+  centerText("보스 러시 — 이번 대진", 44, UIF(800, 26), "#f4ecd9");
+  centerText("판마다 무작위 다섯 상대 · 잡몹 없이 보스만 · 시간 초과면 끝", 74, UIF(500, 13), "rgba(244,236,217,.72)");
+  const pu = paperUI;
+  rushList.forEach((t, i) => {
+    const st = fx.rushT - RUSH_FLIP0 - i*RUSH_FLIP_GAP, k = calm ? 1 : clamp01(st / RUSH_FLIP_T);
+    const face = k >= 0.5, sx = calm ? 1 : Math.max(0.03, Math.abs(Math.cos(k * Math.PI))), lift = calm ? 0 : Math.sin(k * Math.PI) * 14;
+    const cl = rushClass(t), cc = RUSH_CLASS[cl], x = x0 + i*(cw + gap), cx = x + cw/2, last = i === RUSH_N - 1;
+    ctx.save(); ctx.translate(cx, y0 - lift); ctx.scale(sx, 1); ctx.translate(-cx, -y0);
+    if(!face){
+      // 뒷면 — 짙은 남빛 가죽에 놋쇠 닻
+      paperUI = false;
+      rrPath(x, y0, cw, ch, 10); ctx.fillStyle = "#2a2030"; ctx.fill();
+      rrPath(x + 6, y0 + 6, cw - 12, ch - 12, 7); ctx.strokeStyle = "#b8893c"; ctx.lineWidth = 2; ctx.stroke();
+      rrPath(x, y0, cw, ch, 10); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.stroke();
+      drawMedal(cx, y0 + ch/2, 30, 0, { kind: "anchor" });
+      ctx.font = UIF(800, 15); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#d9b877"; ctx.fillText("?", cx, y0 + ch - 30);
+      paperUI = pu;
+    } else {
+      drawPanel({ x, y: y0, w: cw, h: ch, sel: last, glow: false }, 10);
+      // 등급 띠
+      paperUI = false;
+      ctx.fillStyle = cl === "big" ? "#6a3a8a" : cl === "named" ? "#9a6a14" : "#8a3a2a";
+      rrPath(x + 10, y0 + 10, cw - 20, 24, 5); ctx.fill();
+      ctx.font = UIF(800, 12); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff4d8";
+      ctx.fillText((i + 1) + "번째 · " + cc.name + (last ? " · 결전" : ""), cx, y0 + 23);
+      paperUI = pu;
+      drawMedal(cx, y0 + 88, 38, cc.tier, { kind: BOSS_EMB[t] });
+      const lines = wrapLines(BOSSES[t].name, cw - 20, UIF(800, 16), 2);
+      lines.forEach((ln, j) => uiText(ln, cx, y0 + 146 + j*20 - (lines.length - 1)*10 + 10, UIF(800, 16), "#f4ecd9", "center"));
+      uiText("체력 " + (BOSS_HP[t] || 3) + " · " + bossTimeOf({ type: t, big: cl === "big", named: cl === "named" }) / 60 + "초", cx, y0 + ch - 20, UIF(600, 12), "rgba(244,236,217,.7)", "center");
+    }
+    ctx.restore();
+    // 뒤집히는 순간 먹이 튄다
+    if(!calm && st > RUSH_FLIP_T*0.5 && st < RUSH_FLIP_T*0.5 + 18){ paperUI = false; inkSplat(cx, y0 + ch/2, (st - RUSH_FLIP_T*0.5) / 18, t*3.3 + i, 7, "30,20,14", 90); paperUI = pu; }
+  });
+  const done = calm || fx.rushT > RUSH_FLIP0 + (RUSH_N - 1)*RUSH_FLIP_GAP + RUSH_FLIP_T;
+  ctx.globalAlpha = done ? 1 : 0.35;
+  centerText(rushBest ? "5연전 최단 기록 " + fmtTime(rushBest) : "아직 5연전 완주 기록이 없다", 342, UIF(700, 15), "#ffd76a");
+  if(rushBest9) centerText("옛 9연전 기록 " + fmtTime(rushBest9) + " (v59까지의 고정 순서 — 따로 보존)", 364, UIF(500, 12), "rgba(244,236,217,.6)");
+  centerText("화면을 누르거나 Space로 출항 · R 대진 다시 뽑기 · M 메뉴로", 390, UIF(500, 13), "rgba(244,236,217,.75)");
+  ctx.globalAlpha = 1;
 }
 
 function drawBlitzTimer(){
@@ -4857,13 +4936,13 @@ function damageBoss(ranged, mark, power){
     // 연습은 예전처럼 바로 무작위 보상, 그 밖에는 슬로모션이 끝나면 카드 3장 중에서 고른다(러시 마지막 보스는 곧 완주라 생략)
     if(practiceMode) applyBossReward(b);
     else if(storyMode){ storyBossKilled(b); if(!storyRun.win) applyBossReward(b); }
-    else if(!(rushMode && rushIdx + 1 >= RUSH_ORDER.length)){ pickOffer = rollCards(false, b.named ? 2 : 1); pickPending = true; }
+    else if(!(rushMode && rushIdx + 1 >= RUSH_N)){ pickOffer = rollCards(false, b.named ? 2 : 1); pickPending = true; }
     if(storyMode){
       // 스토리 — 다음 보스는 storyBossKilled()가 정한다(러시만)
     } else if(rushMode){
       rushIdx++;
-      nextBossAt = dist + 40; nextBigAt = Infinity;
-      if(rushIdx >= RUSH_ORDER.length) rushDone = true;   // 마지막 해군 대장 군함까지 — update()에서 완주 처리
+      nextBossAt = dist + RUSH_GAP; nextBigAt = Infinity;
+      if(rushIdx >= RUSH_N) rushDone = true;   // 다섯 번째까지 — update()에서 완주 처리
     } else if(practiceMode && practiceMode.type === "boss"){
       // 연습 대상만 짧은 간격으로 계속 반복 등장
       if(b.big){ nextBigAt = dist + 60; nextBossAt = Infinity; }
@@ -7073,7 +7152,7 @@ function update(dt){
   }
   if(rushMode){
     rushT += dt;
-    if(!boss && dist >= nextBossAt && rushIdx < RUSH_ORDER.length) spawnBoss(isBigType(RUSH_ORDER[rushIdx]));
+    if(!boss && dist >= nextBossAt && rushIdx < RUSH_N) spawnBoss(isBigType(rushList[rushIdx]));
   } else if(!boss && !navy && !(rival && !rival.over)){   // 해군 추격·라이벌 경주 중엔 보스가 끼어들지 않는다 — 끝난 뒤에 나온다
     if(dist >= nextBigAt) spawnBoss(true);
     else if(dist >= nextBossAt && dist + 220 < nextBigAt) spawnBoss(false);
@@ -7281,7 +7360,7 @@ function resetProfile(){
   best = 0; bestChain = 0;
   lifeBossKills = 0; lifeKrakenKills = 0; lifeGhostKills = 0; lifeAdmiralKills = 0; unlockedTitles = new Set(); titleSel = null;
   bank = 0; upgrades = {}; bestBounty = 0; ownedSkins = ["red"]; skin = "red"; parrotOn = true;
-  mapPieces = 0; mapsDone = 0; blitzBest = 0; blitzDate = ""; rushBest = 0; bestGrade = "";
+  mapPieces = 0; mapsDone = 0; blitzBest = 0; blitzDate = ""; rushBest = 0; rushBest9 = 0; bestGrade = "";
   gearUnlocked = 2; gearSel = 2; crewOwned = []; crewSel = null; crewXp = {}; diffSel = "normal"; bestDiff = { easy:0, hard:0 };
   miniBest = { jelly:0, cannon:0, hop:0 }; miniMedals = { jelly:0, cannon:0, hop:0 }; miniPlays = 0; mini = null;
   techLv = { pistol:1, whip:1 }; mats = { melee:0, ranged:0, gear:0 }; eqRanged = "pistol"; eqMelee = "whip";
@@ -7354,7 +7433,8 @@ const CODE_HEAD = "GOMU1-", CODE2_HEAD = "G2-";
 // 낱말표 — 코드 형식의 일부라 절대 고치지 않는다(순서를 바꾸면 예전 코드를 못 읽는다). 새 낱말은 끝에만 덧붙일 것
 const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022",
   "story","st","seen","end","art","grab","sense","redhawk","puff","spin","jack","boss15","biome3","voyage_end","star81","captain","starlit",
-  "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail"];
+  "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail",
+  "rush5"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -7719,7 +7799,8 @@ function applyShopRecord(v){
     mapPieces = r.mapPieces || 0; mapsDone = r.mapsDone || 0;
     blitzBest = r.blitz || 0;
     blitzDate = r.blitzD || "";
-    rushBest = r.rush9 || 0;
+    rushBest9 = r.rush9 || 0;        // 옛 고정 9연전 기록 — 보존만
+    rushBest = r.rush5 || 0;         // v60 무작위 5연전 기록
     bestGrade = r.grade || "";
     gearUnlocked = Math.min(5, Math.max(2, r.gearU || 2));
     gearSel = Math.min(gearUnlocked, Math.max(2, r.gearS || 2));
@@ -7758,7 +7839,7 @@ async function loadShop(){
   }catch(e){}
 }
 function recShop(){
-  return JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, blitzD: blitzDate, rush9: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
+  return JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, blitzD: blitzDate, rush9: rushBest9, rush5: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
                            tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel, crewXp,
                            mini: { b: miniBest, m: miniMedals, n: miniPlays }, diff: diffSel, bestDiff,
                            story: { st: storyRec(), seen: storySeen, end: storyEnd }, art: artSel });
@@ -12646,6 +12727,95 @@ function rrPath(x, y, w, h, r){
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
+/* ---------- 문장(엠블럼) (v60) ----------
+   메뉴 아이콘·칭호 문장·러시 대진 카드가 같이 쓰는 작은 잉크 그림. 원점은 가운데, s는 반지름쯤.
+   한 가지 색(col)으로 선과 면을 그린다 — 바탕(놋쇠 메달·양피지)은 부르는 쪽이 깐다 */
+function drawEmblem(kind, x, y, s, col){
+  const c = ctx, L = (...a) => { c.beginPath(); c.moveTo(a[0], a[1]); for(let i=2;i<a.length;i+=2) c.lineTo(a[i], a[i+1]); },
+        S = () => c.stroke(), F = () => c.fill(), O = (cx, cy, r) => { c.beginPath(); c.arc(cx, cy, Math.max(0, r), 0, Math.PI*2); },
+        A = (cx, cy, r, a0, a1, ccw) => { c.beginPath(); c.arc(cx, cy, Math.max(0, r), a0, a1, !!ccw); };
+  c.save(); c.translate(x, y); c.scale(s, s);
+  c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 0.15; c.lineCap = "round"; c.lineJoin = "round";
+  switch(kind){
+    case "anchor": O(0, -0.62, 0.17); S(); L(0, -0.45, 0, 0.72); S(); L(-0.32, -0.2, 0.32, -0.2); S(); A(0, 0.1, 0.62, 0.15, Math.PI - 0.15); S();
+      L(-0.74, 0.02, -0.6, 0.2, -0.42, 0.1); S(); L(0.74, 0.02, 0.6, 0.2, 0.42, 0.1); S(); break;
+    case "map": L(-0.75, -0.5, -0.25, -0.62, 0.25, -0.5, 0.75, -0.62, 0.75, 0.5, 0.25, 0.62, -0.25, 0.5, -0.75, 0.62); c.closePath(); S();
+      L(-0.25, -0.62, -0.25, 0.5); S(); L(0.25, -0.5, 0.25, 0.62); S(); c.lineWidth = 0.11; L(0.4, -0.2, 0.6, 0.02); S(); L(0.6, -0.2, 0.4, 0.02); S(); break;
+    case "skull": c.beginPath(); c.arc(0, -0.15, 0.58, Math.PI*0.9, Math.PI*0.1); c.lineTo(0.34, 0.5); c.lineTo(-0.34, 0.5); c.closePath(); S();
+      O(-0.23, -0.12, 0.15); F(); O(0.23, -0.12, 0.15); F(); L(0, 0.1, -0.07, 0.25, 0.07, 0.25); c.closePath(); F(); c.lineWidth = 0.1; L(-0.12, 0.5, -0.12, 0.72); S(); L(0.12, 0.5, 0.12, 0.72); S(); break;
+    case "chest": L(-0.7, -0.1, -0.7, 0.6, 0.7, 0.6, 0.7, -0.1); S(); c.beginPath(); c.moveTo(-0.7, -0.1); c.quadraticCurveTo(-0.7, -0.62, 0, -0.62); c.quadraticCurveTo(0.7, -0.62, 0.7, -0.1); c.closePath(); S();
+      c.fillRect(-0.13, -0.2, 0.26, 0.34); break;
+    case "compass": O(0, 0, 0.72); S(); L(0, -0.52, 0.17, 0, 0, 0.52, -0.17, 0); c.closePath(); S(); L(0, -0.52, 0.17, 0, -0.17, 0); c.closePath(); F(); break;
+    case "book": L(0, -0.5, 0, 0.6); S(); c.beginPath(); c.moveTo(0, -0.5); c.quadraticCurveTo(-0.4, -0.72, -0.78, -0.5); c.lineTo(-0.78, 0.55); c.quadraticCurveTo(-0.4, 0.36, 0, 0.6); c.quadraticCurveTo(0.4, 0.36, 0.78, 0.55); c.lineTo(0.78, -0.5); c.quadraticCurveTo(0.4, -0.72, 0, -0.5); S();
+      c.lineWidth = 0.09; L(-0.55, -0.22, -0.22, -0.26); S(); L(-0.55, 0.04, -0.22, 0); S(); L(0.22, -0.26, 0.55, -0.22); S(); break;
+    case "cog": for(let i=0;i<8;i++){ const a = i*Math.PI/4; L(Math.cos(a)*0.5, Math.sin(a)*0.5, Math.cos(a)*0.76, Math.sin(a)*0.76); c.lineWidth = 0.22; S(); } c.lineWidth = 0.17; O(0, 0, 0.46); S(); O(0, 0, 0.14); F(); break;
+    case "person": O(0, -0.36, 0.27); S(); A(0, 0.66, 0.58, Math.PI, 0); S(); c.lineWidth = 0.12; L(-0.4, -0.5, 0.4, -0.5); S(); L(-0.27, -0.52, -0.2, -0.76, 0.2, -0.76, 0.27, -0.52); S(); break;
+    case "jelly": A(0, -0.08, 0.6, Math.PI, 0); c.closePath(); S(); c.lineWidth = 0.11; for(let i=-1;i<=1;i++){ c.beginPath(); c.moveTo(i*0.34, -0.02); c.quadraticCurveTo(i*0.34 + 0.16, 0.3, i*0.34 - 0.06, 0.72); S(); } break;
+    case "sword": L(-0.55, 0.6, 0.5, -0.56); c.lineWidth = 0.17; S(); L(0.5, -0.56, 0.66, -0.72); S(); c.lineWidth = 0.14; L(-0.52, 0.12, -0.12, 0.56); S(); O(-0.64, 0.7, 0.09); F(); break;
+    case "swords": c.lineWidth = 0.13; L(-0.6, 0.6, 0.55, -0.6); S(); L(0.6, 0.6, -0.55, -0.6); S(); L(-0.62, 0.2, -0.22, 0.58); S(); L(0.62, 0.2, 0.22, 0.58); S(); break;
+    case "dagger": L(0, -0.75, 0.16, 0.1, -0.16, 0.1); c.closePath(); F(); L(-0.36, 0.14, 0.36, 0.14); S(); L(0, 0.14, 0, 0.62); c.lineWidth = 0.2; S(); break;
+    case "harpoon": L(-0.6, 0.62, 0.42, -0.42); S(); L(0.68, -0.7, 0.5, -0.12, 0.14, -0.5); c.closePath(); F(); c.lineWidth = 0.09; A(-0.5, 0.42, 0.26, 0.4, 3.4); S(); break;
+    case "cannon": c.save(); c.rotate(-0.32); c.fillRect(-0.55, -0.22, 1.05, 0.4); c.fillRect(0.42, -0.28, 0.16, 0.52); c.restore(); O(-0.28, 0.42, 0.26); S(); O(-0.28, 0.42, 0.06); F(); break;
+    case "rope": A(0, -0.1, 0.44, 0.5, Math.PI*2 + 0.1); S(); L(0.3, 0.2, 0.62, 0.7); S(); c.lineWidth = 0.1; L(-0.74, 0.5, -0.3, 0.74); S(); L(-0.7, 0.74, -0.34, 0.5); S(); break;
+    case "wind": for(let i=0;i<3;i++){ const yy = -0.42 + i*0.42, w = [0.5, 0.72, 0.36][i]; c.beginPath(); c.moveTo(-0.74, yy); c.lineTo(w - 0.2, yy); c.arc(w - 0.2, yy - 0.15, 0.15, Math.PI/2, -Math.PI*0.8, true); S(); } break;
+    case "tentacle": c.lineWidth = 0.24; c.beginPath(); c.moveTo(-0.3, 0.74); c.bezierCurveTo(-0.5, 0, 0.5, 0, 0.3, -0.42); c.bezierCurveTo(0.2, -0.76, -0.24, -0.66, -0.12, -0.4); S(); c.lineWidth = 0.08; for(let i=0;i<3;i++){ O(-0.02 + i*0.1, 0.5 - i*0.3, 0.06); F(); } break;
+    case "octo": A(0, -0.16, 0.5, Math.PI, 0); c.lineTo(0.5, 0.12); c.lineTo(-0.5, 0.12); c.closePath(); S(); c.lineWidth = 0.12; for(let i=0;i<4;i++){ const xx = -0.42 + i*0.28; c.beginPath(); c.moveTo(xx, 0.12); c.quadraticCurveTo(xx + (i < 2 ? -0.22 : 0.22), 0.46, xx + (i < 2 ? -0.06 : 0.06), 0.74); S(); }
+      O(-0.18, -0.16, 0.08); F(); O(0.18, -0.16, 0.08); F(); break;
+    case "ship": L(-0.74, 0.22, 0.74, 0.22, 0.5, 0.62, -0.5, 0.62); c.closePath(); S(); L(0, 0.22, 0, -0.76); S(); L(0.08, -0.66, 0.6, 0.02, 0.08, 0.02); c.closePath(); F(); L(-0.08, -0.42, -0.5, 0.02, -0.08, 0.02); c.closePath(); S(); break;
+    case "ghost": c.beginPath(); c.arc(0, -0.16, 0.5, Math.PI, 0); c.lineTo(0.5, 0.7); c.lineTo(0.26, 0.5); c.lineTo(0, 0.7); c.lineTo(-0.26, 0.5); c.lineTo(-0.5, 0.7); c.closePath(); S(); O(-0.19, -0.14, 0.1); F(); O(0.19, -0.14, 0.1); F(); break;
+    case "star": c.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2 + i*Math.PI/5, r = i % 2 ? 0.34 : 0.78; c.lineTo(Math.cos(a)*r, Math.sin(a)*r); } c.closePath(); F(); break;
+    case "fin": c.beginPath(); c.moveTo(-0.5, 0.36); c.quadraticCurveTo(-0.1, -0.2, 0.3, -0.76); c.quadraticCurveTo(0.26, -0.1, 0.56, 0.36); c.closePath(); F(); c.lineWidth = 0.11; c.beginPath(); c.moveTo(-0.8, 0.52); c.quadraticCurveTo(-0.4, 0.34, 0, 0.52); c.quadraticCurveTo(0.4, 0.7, 0.8, 0.52); S(); break;
+    case "chain": c.lineWidth = 0.13; c.save(); c.rotate(-0.7); for(let i=-1;i<=1;i++){ c.beginPath(); c.ellipse(i*0.48, 0, 0.3, 0.18, 0, 0, Math.PI*2); S(); } c.restore(); break;
+    case "bolt": L(0.2, -0.78, -0.4, 0.08, -0.04, 0.08, -0.24, 0.78, 0.44, -0.16, 0.06, -0.16); c.closePath(); F(); break;
+    case "hammer": c.save(); c.rotate(0.6); c.fillRect(-0.5, -0.74, 1, 0.44); L(0, -0.3, 0, 0.76); c.lineWidth = 0.17; S(); c.restore(); break;
+    case "flame": c.beginPath(); c.moveTo(0, -0.8); c.bezierCurveTo(0.2, -0.3, 0.66, -0.1, 0.5, 0.36); c.bezierCurveTo(0.4, 0.7, -0.4, 0.7, -0.5, 0.36); c.bezierCurveTo(-0.6, 0.04, -0.3, -0.1, -0.24, -0.34); c.bezierCurveTo(-0.1, -0.2, 0, -0.3, 0, -0.8); S(); c.beginPath(); c.moveTo(0, 0.02); c.quadraticCurveTo(0.26, 0.3, 0, 0.5); c.quadraticCurveTo(-0.26, 0.3, 0, 0.02); F(); break;
+    case "lantern": L(0, -0.78, 0, -0.5); S(); L(-0.3, -0.5, 0.3, -0.5); S(); L(-0.34, 0.5, 0.34, 0.5); S(); L(-0.3, -0.5, -0.38, 0.5); S(); L(0.3, -0.5, 0.38, 0.5); S(); O(0, 0.02, 0.17); F(); L(-0.2, 0.5, -0.2, 0.7, 0.2, 0.7, 0.2, 0.5); S(); break;
+    case "whale": c.beginPath(); c.moveTo(-0.76, 0.1); c.quadraticCurveTo(-0.5, -0.56, 0.2, -0.36); c.quadraticCurveTo(0.5, -0.26, 0.56, 0.02); c.lineTo(0.8, -0.3); c.lineTo(0.74, 0.3); c.quadraticCurveTo(0, 0.7, -0.76, 0.1); c.closePath(); S(); O(-0.42, -0.02, 0.07); F(); c.lineWidth = 0.1; L(-0.2, -0.5, -0.3, -0.78); S(); L(-0.16, -0.5, -0.02, -0.76); S(); break;
+    case "serpent": c.lineWidth = 0.2; c.beginPath(); c.moveTo(-0.76, 0.5); c.bezierCurveTo(-0.5, -0.5, -0.1, -0.5, 0, 0.1); c.bezierCurveTo(0.1, 0.7, 0.5, 0.5, 0.52, -0.2); S(); L(0.52, -0.2, 0.3, -0.62, 0.78, -0.5); c.closePath(); F(); break;
+    case "key": O(-0.4, -0.3, 0.26); S(); L(-0.2, -0.12, 0.62, 0.62); S(); L(0.3, 0.32, 0.5, 0.14); S(); L(0.48, 0.5, 0.68, 0.32); S(); break;
+    case "lock": c.fillRect(-0.48, -0.06, 0.96, 0.72); A(0, -0.08, 0.32, Math.PI, 0); S(); break;
+    case "crown": L(-0.7, 0.44, -0.74, -0.4, -0.34, 0.02, 0, -0.62, 0.34, 0.02, 0.74, -0.4, 0.7, 0.44); c.closePath(); S(); c.fillRect(-0.7, 0.3, 1.4, 0.2); break;
+    case "clock": O(0, 0.06, 0.66); S(); L(0, 0.06, 0, -0.36); S(); L(0, 0.06, 0.28, 0.2); S(); c.fillRect(-0.12, -0.84, 0.24, 0.14); break;
+    case "hook": c.lineWidth = 0.19; L(0, -0.76, 0, 0.1); S(); A(-0.26, 0.16, 0.34, 0, Math.PI*0.95); S(); L(-0.6, 0.2, -0.66, -0.12); c.lineWidth = 0.13; S(); c.fillRect(-0.2, -0.8, 0.4, 0.16); break;
+    case "wheel": O(0, 0, 0.5); S(); O(0, 0, 0.12); F(); c.lineWidth = 0.11; for(let i=0;i<8;i++){ const a = i*Math.PI/4; L(Math.cos(a)*0.12, Math.sin(a)*0.12, Math.cos(a)*0.78, Math.sin(a)*0.78); S(); } break;
+    case "coin": O(0, 0, 0.66); S(); O(0, 0, 0.44); c.lineWidth = 0.08; S(); c.fillRect(-0.07, -0.26, 0.14, 0.52); break;
+    case "flag": L(-0.5, -0.78, -0.5, 0.78); S(); L(-0.5, -0.7, 0.7, -0.5, 0.36, -0.18, 0.7, 0.14, -0.5, 0.1); c.closePath(); F(); break;
+    case "target": O(0, 0, 0.68); S(); O(0, 0, 0.36); S(); O(0, 0, 0.1); F(); c.lineWidth = 0.1; L(0, -0.86, 0, -0.56); S(); L(0, 0.86, 0, 0.56); S(); L(-0.86, 0, -0.56, 0); S(); L(0.86, 0, 0.56, 0); S(); break;
+    case "note": c.save(); c.rotate(-0.3); c.beginPath(); c.ellipse(-0.36, 0.5, 0.22, 0.16, 0, 0, Math.PI*2); F(); c.beginPath(); c.ellipse(0.4, 0.34, 0.22, 0.16, 0, 0, Math.PI*2); F(); c.restore(); L(-0.02, 0.52, -0.02, -0.56, 0.72, -0.72, 0.72, 0.16); S(); break;
+    case "gull": c.beginPath(); c.moveTo(-0.8, -0.1); c.quadraticCurveTo(-0.4, -0.56, 0, 0.02); c.quadraticCurveTo(0.4, -0.56, 0.8, -0.1); S(); O(0, 0.12, 0.09); F(); break;
+    case "balloon": c.beginPath(); c.ellipse(0, -0.22, 0.48, 0.54, 0, 0, Math.PI*2); S(); L(-0.08, 0.34, 0.08, 0.34, 0, 0.22); c.closePath(); F(); c.lineWidth = 0.08; c.beginPath(); c.moveTo(0, 0.34); c.quadraticCurveTo(0.2, 0.52, 0, 0.8); S(); break;
+    case "shield": c.beginPath(); c.moveTo(0, -0.74); c.lineTo(0.6, -0.5); c.quadraticCurveTo(0.6, 0.4, 0, 0.78); c.quadraticCurveTo(-0.6, 0.4, -0.6, -0.5); c.closePath(); S(); c.fillRect(-0.08, -0.34, 0.16, 0.68); c.fillRect(-0.3, -0.1, 0.6, 0.16); break;
+    case "wave": for(let i=0;i<2;i++){ const yy = -0.2 + i*0.44; c.beginPath(); c.moveTo(-0.8, yy); c.quadraticCurveTo(-0.6, yy - 0.36, -0.4, yy); c.quadraticCurveTo(-0.2, yy + 0.36, 0, yy); c.quadraticCurveTo(0.2, yy - 0.36, 0.4, yy); c.quadraticCurveTo(0.6, yy + 0.36, 0.8, yy); S(); } break;
+    case "scroll": c.strokeRect(-0.5, -0.5, 1, 1); c.lineWidth = 0.2; L(-0.62, -0.56, 0.62, -0.56); S(); L(-0.62, 0.56, 0.62, 0.56); S(); c.lineWidth = 0.09; L(-0.28, -0.2, 0.28, -0.2); S(); L(-0.28, 0.06, 0.28, 0.06); S(); L(-0.28, 0.3, 0.1, 0.3); S(); break;
+    case "fist": rrPath(-0.46, -0.4, 0.92, 0.72, 0.2); S(); c.lineWidth = 0.1; for(let i=-1;i<=1;i++){ L(i*0.23, -0.4, i*0.23, -0.06); S(); } L(-0.3, 0.32, -0.3, 0.76, 0.3, 0.76, 0.3, 0.32); S(); break;
+    case "scarf": c.beginPath(); c.moveTo(-0.72, -0.2); c.quadraticCurveTo(0, -0.62, 0.5, -0.2); c.quadraticCurveTo(0, 0.02, -0.72, -0.2); F(); L(0.44, -0.2, 0.8, 0.3, 0.52, 0.22, 0.56, 0.66, 0.3, -0.1); c.closePath(); F(); break;
+    case "gem": L(-0.44, -0.5, 0.44, -0.5, 0.74, -0.12, 0, 0.74, -0.74, -0.12); c.closePath(); S(); c.lineWidth = 0.09; L(-0.74, -0.12, 0.74, -0.12); S(); L(-0.2, -0.5, 0, 0.74, 0.2, -0.5); S(); break;
+    case "bars": c.lineWidth = 0.14; for(let i=-2;i<=2;i++){ L(i*0.3, -0.7, i*0.3, 0.7); S(); } c.lineWidth = 0.17; L(-0.76, -0.7, 0.76, -0.7); S(); L(-0.76, 0.7, 0.76, 0.7); S(); break;
+    case "eye": c.beginPath(); c.moveTo(-0.8, 0); c.quadraticCurveTo(0, -0.7, 0.8, 0); c.quadraticCurveTo(0, 0.7, -0.8, 0); S(); O(0, 0, 0.24); F(); break;
+    case "island": A(0, 0.4, 0.66, Math.PI, 0); c.closePath(); F(); L(0.1, -0.26, 0.16, -0.76); S(); c.lineWidth = 0.11; c.beginPath(); c.moveTo(0.16, -0.76); c.quadraticCurveTo(-0.2, -0.86, -0.4, -0.52); S(); c.beginPath(); c.moveTo(0.16, -0.76); c.quadraticCurveTo(0.5, -0.84, 0.64, -0.48); S(); break;
+    case "bone": c.lineWidth = 0.2; L(-0.44, 0.44, 0.44, -0.44); S(); for(const q of [[-0.56, 0.36], [-0.36, 0.56], [0.56, -0.36], [0.36, -0.56]]){ O(q[0], q[1], 0.14); F(); } break;
+    case "back": L(0.6, 0, -0.6, 0); S(); L(-0.1, -0.5, -0.62, 0, -0.1, 0.5); S(); break;
+    default: O(0, 0, 0.5); S();
+  }
+  c.restore();
+}
+// 놋쇠 메달 — 엠블럼 바탕. tier: 0 놋쇠(기본) · 1 동 · 2 은 · 3 금 · 4 전설(보랏빛 금)
+const BRASS_COLS = [["#f3dc98", "#b8893c", "#6e4a1c"], ["#e9b58a", "#b06a3a", "#6a3a1c"], ["#f4f6f8", "#aab4be", "#5e6872"], ["#fff0a8", "#e0aa2c", "#8a5a10"], ["#f6d8ff", "#b46ad0", "#5a2a78"]];
+function drawMedal(x, y, r, tier, o){
+  o = o || {};
+  const m = BRASS_COLS[tier || 0], pu = paperUI; paperUI = false;
+  ctx.save();
+  if(o.dim) ctx.globalAlpha *= 0.42;
+  const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+  g.addColorStop(0, m[0]); g.addColorStop(0.55, m[1]); g.addColorStop(1, m[2]);
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, r*0.09); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r*0.8, 0, Math.PI*2); ctx.fillStyle = o.face || "#2e2118"; ctx.fill();
+  ctx.strokeStyle = "rgba(255,240,190,.5)"; ctx.lineWidth = Math.max(0.8, r*0.05); ctx.stroke();
+  if(o.kind) drawEmblem(o.kind, x, y, r*0.56, o.col || m[0]);
+  ctx.restore();
+  paperUI = pu;
+}
 function uiText(t, x, y, font, color, align){
   ctx.textAlign = align || "left"; ctx.textBaseline = "middle";
   ctx.font = font; ctx.fillStyle = color;
@@ -13134,7 +13304,7 @@ function drawFrame(){
     centerText("닻을 내렸다", H/2 - 120, "700 30px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9");
     if(storyMode) centerText("스토리 " + storyStage().id + " " + storyStage().name + " — " + storyGoalText(storyStage()), H/2 - 88, "600 14px 'Gowun Batang', 'Pretendard', serif", "#ffd76a");
     else if(practiceMode || dailyMode || blitzMode || rushMode)
-      centerText(practiceMode ? "연습 모드 — " + practiceLabel() : dailyMode ? "오늘의 항해" : blitzMode ? "60초 보물 사냥 · 남은 " + Math.ceil(blitzT/60) + "초" : "보스 러시 " + Math.min(rushIdx+1, RUSH_ORDER.length) + "/" + RUSH_ORDER.length,
+      centerText(practiceMode ? "연습 모드 — " + practiceLabel() : dailyMode ? "오늘의 항해" : blitzMode ? "60초 보물 사냥 · 남은 " + Math.ceil(blitzT/60) + "초" : "보스 러시 " + Math.min(rushIdx+1, RUSH_N) + "/" + RUSH_N + " — " + rushList.map((t, i) => (i < rushIdx ? "✓" : "") + BOSSES[t].name).join(" → "),
                  H/2 - 88, "600 14px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
     // 이번 판 상황
     const facts = [Math.floor(dist) + "m", "보물 " + bigNum(treasure)];
@@ -13159,9 +13329,9 @@ function drawFrame(){
     drawVersion();
     drawScreenButtons();
   } else if(state === STATE.READY){
-    ctx.fillStyle = "rgba(13,27,38,0.66)";
+    ctx.fillStyle = rushMode ? "rgba(13,27,38,0.9)" : "rgba(13,27,38,0.66)";
     ctx.fillRect(0,0,W,H);
-    if(rushMode) centerText("보스 러시 — 중간보스 6종과 크라켄·유령선·해군 대장 군함까지 9연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : ""), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
+    if(rushMode){ drawRushBracket(); drawScreenButtons(); return; }
     if(blitzMode) centerText("60초 보물 사냥 — 보스 없이 60초 동안 보물을 최대한! 하루 한 판 · 바다에 빠지면 끝" + (blitzBest ? " · 최고 " + Math.floor(blitzBest) : ""), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
     if(dailyMode) centerText("오늘의 항해 " + todayKey() + " — 오늘은 모두 같은 바다" + (dailyBestToday() ? " · 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : ""), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
     if(practiceMode) centerText("연습 모드 — " + practiceLabel(), H/2 - 130, "700 15px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8");
@@ -13230,7 +13400,7 @@ function drawFrame(){
     if(practiceMode) line("연습 모드 — " + practiceLabel(), "600 13px 'Gowun Batang', 'Pretendard', serif", "#8fd6d8", 26);
     if(storyMode) line("스토리 " + storyStage().id + " " + storyStage().name, "700 14px 'Gowun Batang', 'Pretendard', serif", "#ffd76a", 26);
     if(rushMode) line(rushDone ? ((newRushRecord ? "★ 최단 기록 " : "완주 기록 ") + fmtTime(rushT) + (rushBest && !newRushRecord ? " · 최단 " + fmtTime(rushBest) : ""))
-                               : ("보스 " + rushIdx + "/" + RUSH_ORDER.length + " 격파" + (rushBest ? " · 최단 " + fmtTime(rushBest) : "")),
+                               : ("보스 " + rushIdx + "/" + RUSH_N + " 격파" + (rushList && rushList[rushIdx] !== undefined ? " — " + BOSSES[rushList[rushIdx]].name + "에게 막혔다" : "") + (rushBest ? " · 최단 " + fmtTime(rushBest) : "")),
                       "700 14px 'Gowun Batang', 'Pretendard', serif", newRushRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(blitzMode) line((newBlitzRecord ? "★ 60초 사냥 신기록 " : "60초 보물 사냥 · 최고 ") + Math.floor(blitzBest), "700 14px 'Gowun Batang', 'Pretendard', serif", newBlitzRecord ? "#ffd76a" : "#8fd6d8", 26);
     if(dailyMode && streakReward) line("🔥 " + streak + "일 연속 출석! 창고 보물 +" + streakReward, "700 14px 'Gowun Batang', 'Pretendard', serif", "#ffb070", 26);
@@ -14243,6 +14413,7 @@ window.__swing = {
   streak: () => ({ date: streakDate, n: streak, reward: streakReward, set: (d, n) => { streakDate = d; streak = n; } }),
   startBlitz: startBlitz,
   startRush: startRush,
+  rush: () => ({ list: rushList, best: rushBest, best9: rushBest9, idx: rushIdx, n: RUSH_N, pool: RUSH_POOL, roll: rollRush, cls: rushClass, setList: (l) => { rushList = l; }, setBest: (v, v9) => { rushBest = v; if(v9 !== undefined) rushBest9 = v9; } }),
   revive: () => revive(), decline: () => declineRevive(),
   log: () => lifeLog,
   level: () => levelOf(lifeLog.xp || 0),
