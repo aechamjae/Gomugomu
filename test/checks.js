@@ -3392,6 +3392,97 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v59: 각성한 크라켄 리메이크 — 내려찍기 · 휩쓸기 · 먹물 포탄 · 심연 포효 · 마지막 발악 --- */
+{
+  const a = A(), AW = () => a.awaken(), C = AW().C, P = () => T().P();
+  const fresh = (hp) => {
+    a.startMain(); H.step(); a.hold(true); H.step();
+    const K = a.spawnBoss(true, 15);
+    T().ev("bossIntro = null; mobs.length = 0; gulls.length = 0; iframes = 0; stun = 0");
+    H.step();                                   // updateAwaken이 한 번 돌아 상태가 꾸려진다
+    K.atkCd = 1e6; K.tLeft = 1e6; K.mawCd = 1e6; K.tiredCd = 1e6; K.assistCd = 1e6;
+    if(hp){ K.hp = hp; K.aw = AW().stage(K); K.chains = 4 - K.aw; }
+    return K;
+  };
+  const still = () => { T().setFusen(9); T().setIframes(0); };
+  let K = fresh();
+  ok("v59: 각성한 크라켄 제한 시간 150초 · 봉인 사슬 셋", a.spawnBoss(true, 15).tMax === 150*60 && K.chains === 3);
+  K = fresh();
+  ok("v59: 패턴 예고는 모두 45프레임 이상", C.AW_SLAM_WARN >= 45 && C.AW_SWEEP_WARN >= 45 && C.AW_BOMB_T >= 45 && C.AW_GATE_WARN >= 45);
+  const picks = new Set(); for(let i=0;i<80;i++){ K.lastAtk = null; picks.add(AW().pick(K, 1)); }
+  ok("v59: 1페이즈는 내려찍기·휩쓸기만, 2페이즈부터 먹물 포탄", picks.size === 2 && !picks.has("bombs") && (() => { for(let i=0;i<80;i++){ K.lastAtk = null; if(AW().pick(K, 2) === "bombs") return true; } return false; })());
+  K.lastAtk = "slam";
+  ok("v59: 직전과 같은 패턴은 잇달아 고르지 않는다", [...Array(30)].every(() => AW().pick(K, 1) === "sweep"));
+  // 내려찍기 — 예고 동안은 안 닿고, 꽂힌 뒤엔 고리가 끊기고 칼자국이 약점이 된다
+  AW().start(K, "slam", 1);
+  const q = K.slams[0];
+  const tgt = T().anchors().find(an => Math.abs(an.x - q.x) < 1);
+  let err = null, hurtEarly = false;
+  try{
+    for(let i=0;i<C.AW_SLAM_WARN - 4;i++){ still(); P().x = q.x; P().y = 200; P().vx = 0; P().vy = 0; H.step(); if(a.peek().stun > 0) hurtEarly = true; }
+  }catch(e){ err = e.message; }
+  ok("v59: 내려찍기 — 예고 동안엔 그 자리에 있어도 안 맞는다", !err && !hurtEarly && !q.done, err);
+  for(let i=0;i<14;i++){ still(); P().x = q.x; P().y = 200; H.step(); }
+  ok("v59: 내려찍기 — 내리꽂히면 강한 휘청, 그 고리는 끊긴다", q.done && q.hitP && a.peek().stun > 0 && (!tgt || tgt.cut > 1), "done " + q.done + " hit " + q.hitP + " stun " + a.peek().stun);
+  ok("v59: 박힌 촉수의 칼자국이 약점", a.weak().some(w => w.mark === "칼자국"));
+  K.invul = 0; const hp0 = K.hp; T().dmg(true, "칼자국");
+  ok("v59: 칼자국을 맞히면 피해를 주고 그 약점은 사라진다", K.hp < hp0 && q.scar && !a.weak().some(w => w.mark === "칼자국"));
+  // 휩쓸기 — 띠 안이면 맞고, 띠 밖이면 안 맞는다
+  const sweepAt = (dy) => {
+    const B = fresh();
+    T().ev("rope = null");
+    AW().start(B, "sweep", 1);
+    const y = B.sweep.y + dy; let hit = false;
+    for(let i=0;i<C.AW_SWEEP_WARN + 40 && B.sweep;i++){ still(); T().ev("rope = null; stun = 0"); P().y = y; P().vy = 0; P().vx = 6; H.step(); if(a.peek().stun > 0) hit = true; }
+    return hit;
+  };
+  ok("v59: 휩쓸기 — 예고된 높이 띠 안에 있으면 맞는다", sweepAt(0));
+  ok("v59: 휩쓸기 — 띠 위로 올라가 있으면 안 맞는다", !sweepAt(-90));
+  // 먹물 포탄 — 착탄 표시 자리에서 터진다
+  K = fresh(9);
+  AW().start(K, "bombs", 2);
+  ok("v59: 먹물 포탄 3발(3페이즈 5발)", K.bombs.length === 3 && (() => { const B = fresh(4); AW().start(B, "bombs", 3); return B.bombs.length === 5; })());
+  K = fresh(9); AW().start(K, "bombs", 2);
+  const bm = K.bombs[0]; let boomed = false, early = false;
+  for(let i=0;i<C.AW_BOMB_T + 6;i++){ still(); T().ev("rope = null"); P().x = bm.tx; P().y = bm.ty; P().vx = 0; P().vy = 0; H.step(); if(a.peek().stun > 0 && i < C.AW_BOMB_T - 4) early = true; if(a.peek().stun > 0) boomed = true; }
+  ok("v59: 먹물 포탄 — 떨어지기 전엔 안 맞고, 착탄 자리에 있으면 휘청", boomed && !early);
+  // 페이즈 전환 — 포효, 사슬 끊김, 빨아들임(매달리면 버틴다)
+  K = fresh();
+  K.hp = 10; H.step();
+  ok("v59: 2페이즈로 넘어가면 포효하고 사슬 하나가 끊긴다", K.aw === 2 && K.roar > 0 && K.chains === 2 && K.shards.length > 0);
+  for(let i=0;i<30;i++){ still(); H.step(); }
+  a.hold(false); T().ev("rope = null; stun = 0"); P().vy = 0; P().y = 150; const vy0 = P().vy; still(); H.step();
+  const pulled = P().vy - vy0;
+  T().ev("rope = null; stun = 0"); P().vy = 0; P().y = 150; K.roar = 0; still(); H.step();
+  const plain = P().vy;
+  ok("v59: 포효 — 공중에선 중력보다 더 세게 아래로 빨려 든다(매달려 있으면 이 힘이 없다)", pulled > plain + 0.05, "포효 " + pulled.toFixed(3) + " / 평소 " + plain.toFixed(3));
+  // 마지막 발악
+  K = fresh(2);
+  ok("v59: 체력 2 이하면 마지막 발악을 먼저 고른다", AW().pick(K, 3) === "gate");
+  AW().start(K, "gate", 3);
+  ok("v59: 마지막 발악 — 촉수 통로 넷, 마지막 사슬이 끊기고 심장이 드러난다", K.gate && K.gate.cols.length === 4 && K.chains === 0 && K.tired > 0);
+  err = null;
+  try{ for(let i=0;i<C.AW_GATE_WARN + 30;i++){ still(); H.step(); } }catch(e){ err = e.message; }
+  K.phase = 0;
+  ok("v59: 발악 중 '심장' 약점 · 그리기 오류 없음", !err && a.weak().some(w => w.mark === "심장"), err);
+  ok("v59: 발악 직후엔 다시 발악을 고르지 않는다(간격)", AW().pick(K, 3) !== "gate");
+  // 세 페이즈를 오래 돌려도 오류 없음(연출 줄이기 켠 채로도)
+  err = null;
+  try{
+    for(const calm of [false, true]){
+      a.settings.calm = calm;
+      for(const hp of [15, 9, 4, 2]){
+        const B = fresh(hp); B.atkCd = 10; B.mawCd = 60; B.tiredCd = 80;
+        for(let i=0;i<700;i++){ const st = a.peek(); if(st.state !== 1) break; still(); swing(a, st); H.step(); }
+      }
+    }
+  }catch(e){ err = e.stack; }
+  a.settings.calm = false;
+  ok("v59: 각성한 크라켄 — 페이즈마다 700프레임씩 싸워도 오류 없음", !err, err);
+  T().setBoss(null);
+  a.toMenu();
+}
+
 /* --- 프로젝트 원칙 --- */
 {
   const fs = require("fs"), path = require("path");
