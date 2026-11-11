@@ -3903,6 +3903,73 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.rush().setBest(rush0);
   a.toMenu();
 }
+/* --- v60 systems: 메뉴 '← 이전' 버튼 · 이동 이력 --- */
+{
+  const a = A(), N = () => a.nav(), E = (x) => T().ev(x), st = () => a.peek().state;
+  const back = () => a.rows().find(r => r.back);
+  const sameSpot = (r) => r && r.x === N().btn.x && r.y === N().btn.y && r.w === N().btn.w && r.h === N().btn.h && r.label === "← 이전";
+  a.toMenu();
+  ok("v60 이전: 메인 메뉴엔 '← 이전'이 없다", !back() && N().id === "menu");
+  // 모든 하위 화면 — 같은 자리(왼쪽 위)에 같은 버튼
+  const open = {
+    challenge: () => a.rows().find(r => /도전/.test(r.label)).action(),
+    practice: () => { a.rows().find(r => /도전/.test(r.label)).action(); a.rows().find(r => /연습 모드/.test(r.label)).action(); },
+    shop: () => a.rows().find(r => /보물 창고/.test(r.label)).action(),
+    log: () => a.rows().find(r => /항해 일지/.test(r.label)).action(),
+    "log/title": () => { a.rows().find(r => /항해 일지/.test(r.label)).action(); a.rows().find(r => r.key === 3).action(); },
+    "log/dex": () => { a.rows().find(r => /항해 일지/.test(r.label)).action(); a.rows().find(r => r.key === 4).action(); },
+    settings: () => a.rows().find(r => /설정/.test(r.label)).action(),
+    mini: () => a.rows().find(r => /미니게임/.test(r.label)).action(),
+    map: () => a.rows().find(r => /스토리 모드/.test(r.label)).action()
+  };
+  const parent = { challenge:"menu", practice:"challenge", shop:"menu", log:"menu", "log/title":"log", "log/dex":"log", settings:"menu", mini:"menu", map:"menu" };
+  let spotOk = true, parOk = true, why = "";
+  for(const id of Object.keys(open)){
+    a.toMenu(); a.rows(); open[id](); a.rows();
+    if(N().id !== id){ spotOk = false; why += " [" + id + " 대신 " + N().id + "]"; continue; }
+    if(!sameSpot(back())){ spotOk = false; why += " [" + id + " 버튼 자리]"; }
+    if(a.rows().filter(r => /메뉴로|뒤로가기|도전으로|← 항해 일지/.test(r.label || "")).length){ spotOk = false; why += " [" + id + " 옛 뒤로 버튼 남음]"; }
+    back().action();
+    if(N().id !== parent[id]){ parOk = false; why += " [" + id + " → " + N().id + "]"; }
+    for(let i=0;i<2;i++) H.step();
+  }
+  ok("v60 이전: 하위 화면 아홉 곳 모두 왼쪽 위 같은 자리에 '← 이전' — 옛 '메뉴로·뒤로가기' 줄은 없다", spotOk, why);
+  ok("v60 이전: 누르면 한 단계 위로(연습→도전, 칭호·도감→일지, 나머지→메뉴)", parOk, why);
+  // 이력 — 메뉴 → 도전 → 연습(3쪽)
+  a.toMenu(); a.rows(); open.practice(); a.rows();
+  a.rows().find(r => r.key === 8).action(); a.rows().find(r => r.key === 8).action();
+  ok("v60 이전: 이력 스택이 메뉴·도전·연습 순으로 쌓인다", N().stack.map(q => q.id).join(">") === "menu>challenge>practice", N().stack.map(q => q.id).join(">"));
+  N().key("Escape");
+  ok("v60 이전: Esc도 같은 동작 — 연습 → 도전", st() === 16 && N().stack.length === 2);
+  N().key("Backspace");
+  ok("v60 이전: Backspace도 같은 동작 — 도전 → 메뉴", st() === 4);
+  // 창고 — 탭을 옮겨도 이력은 한 칸, 이야기 창은 한 단계
+  a.toMenu(); a.rows(); open.shop(); a.rows();
+  a.shopUi().tab(4); a.rows(); a.shopUi().tab(2); a.rows();
+  ok("v60 이전: 창고에서 탭을 옮겨도 이력은 한 칸(탭은 쌓이지 않는다)", N().stack.length === 2 && N().stack[1].shopPage === 3);
+  E("crewStory = CREW.find(c => c.id === 'music')"); a.rows();
+  ok("v60 이전: 이야기 창이 뜨면 한 단계 더 — 그 창에도 '← 이전'", N().id === "shop/story" && sameSpot(back()) && N().stack.length === 3);
+  back().action();
+  ok("v60 이전: 이야기 창 → 창고(보던 탭 그대로)", st() === 6 && E("crewStory") === null && a.shopUi().page() === 3 && a.shopUi().cat() === "ranged");
+  back().action();
+  ok("v60 이전: 창고 → 메뉴", st() === 4);
+  // 윗단계를 건너뛰고 들어온 화면
+  a.toMenu(); a.rows(); a.title().open(); a.rows();
+  ok("v60 이전: 메뉴에서 곧장 칭호 화면으로 와도 이전은 일지", N().stack.map(q => q.id).join(">") === "menu>log>log/title");
+  N().back();
+  ok("v60 이전: 칭호 → 일지 → 메뉴", N().id === "log" && (N().back(), st() === 4));
+  // 판을 하고 돌아오면 이력은 메뉴부터
+  a.toMenu(); a.rows(); open.practice(); a.rows();
+  a.startPractice(0); H.step(); a.toMenu(); a.rows();
+  ok("v60 이전: 판을 하다 메뉴로 돌아오면 이력은 메뉴 한 칸", N().stack.length === 1 && N().stack[0].id === "menu");
+  // 스토리 지도에서 나가면 스토리 상태가 정리된다
+  a.toMenu(); a.rows(); open.map(); a.rows();
+  N().key("Escape");
+  ok("v60 이전: 스토리 지도 → 메뉴(스토리 모드 해제)", st() === 4 && E("storyMode") === null);
+  const src = require("fs").readFileSync(process.env.GAME || require("path").join(__dirname, "..", "index.html"), "utf8");
+  ok("v60 이전: 계정 창에도 '← 이전' 버튼", /id="acctBack">← 이전</.test(src) && /on\("acctBack",\s*closeAccount\)/.test(src));
+  a.toMenu();
+}
 /* ===================== v60 systems 끝 ===================== */
 
 /* --- 프로젝트 원칙 --- */

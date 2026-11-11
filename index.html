@@ -67,6 +67,8 @@
   .acct .box{width:min(380px,92%);background:#f1e3c0;color:#3b2a1e;border:2px solid #3b2a1e;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.4), inset 0 0 18px rgba(150,100,50,.25);
              padding:18px 20px;display:flex;flex-direction:column;gap:10px;max-height:96%;overflow:auto;}
   .acct h2{margin:0;font-size:20px;text-align:center;}
+  .acct .box{position:relative;}
+  .acct button.back{position:absolute;left:10px;top:10px;flex:none;min-width:0;padding:5px 10px;font-size:13px;}
   .acct .who{text-align:center;font-size:13px;color:#8a5a20;}
   .acct label{font-size:12px;color:rgba(59,42,30,.75);display:flex;flex-direction:column;gap:4px;}
   .acct input[type=text],.acct input[type=password]{
@@ -231,6 +233,7 @@
     <canvas id="game" tabindex="0" aria-label="해적선 스윙 게임"></canvas>
     <div class="acct" id="acct" hidden>
       <form class="box" id="acctForm" autocomplete="on" onsubmit="return false">
+        <button type="button" class="back" id="acctBack">← 이전</button>
         <h2>계정</h2>
         <div class="who" id="acctWho">게스트로 플레이 중</div>
         <label>아이디 <input type="text" id="acctId" maxlength="16" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
@@ -1864,8 +1867,8 @@ function storyMapRows(){
         if(s.crew || s.art) uiText("보상: " + [s.crew ? crewDef(s.crew).name : null, s.art ? artDef(s.art).short : null].filter(Boolean).join(" · "), x + 12, y + h - 12, UIF(700, 11), "#e6a8f0");
       } });
   });
-  rows.push({ key: 0, x: W/2 - 260, y: H - 64, w: 160, h: 38, label: "0) ← 메뉴로", action: leaveStory });
-  rows.push({ key: 9, x: W/2 - 80, y: H - 64, w: 160, h: 38, label: "9) 이야기 다시 보기", dim: !storySeen.length,
+  rows.push(backRow(0));
+  rows.push({ key: 9, x: W/2 - 170, y: H - 64, w: 160, h: 38, label: "9) 이야기 다시 보기", dim: !storySeen.length,
               action: () => {
                 const st = STORY_CH[storyCh].stages, s = st.filter(q => storyCleared(q.id) || storySeen.indexOf(q.id) >= 0).pop();
                 if(!s) return;
@@ -1873,7 +1876,7 @@ function storyMapRows(){
                 openTalk(s.pre.concat(storyCleared(s.id) ? s.post : []), STATE.STORY_MAP, null, s.end && storyCleared(s.id) ? () => startEnding(STATE.STORY_MAP) : undefined);
                 if(st.indexOf(s) === 0) chapCard = { ch: storyCh, t: 0 };
               } });
-  rows.push({ key: 8, x: W/2 + 100, y: H - 64, w: 160, h: 38, label: "8) 비기: " + (artSel ? artDef(artSel).short : "없음"), dim: !ARTS.some(a => artOwned(a.id)), action: cycleArt });
+  rows.push({ key: 8, x: W/2 + 10, y: H - 64, w: 160, h: 38, label: "8) 비기: " + (artSel ? artDef(artSel).short : "없음"), dim: !ARTS.some(a => artOwned(a.id)), action: cycleArt });
   return rows;
 }
 const storyGoalText = (s) => {
@@ -2528,8 +2531,58 @@ function drawStoryHud(){
   ctx.restore();
 }
 
+/* ---------- 메뉴 이동 이력 (v60) ----------
+   하위 메뉴마다 왼쪽 위 같은 자리(BACK_BTN)에 '← 이전' 버튼 — 누르면 한 단계 위로, 맨 위면 메인 메뉴. Esc·Backspace·터치 모두 navBack().
+   화면 이름(navId): menu · challenge · practice · shop · shop/story · log · log/title · log/dex · settings · mini · map.
+   상태는 여기저기서 바로 바뀌므로(state = …) 이력은 navSync()가 '지금 화면'을 보고 맞춘다 — 스택 맨 위와 같으면 그 화면의 쪽(탭·페이지)만 새로 적고,
+   스택 안에 있던 화면이면 거기까지 걷어 내고, 처음 보는 화면이면 쌓는다. 그래서 돌아가면 떠날 때의 탭·페이지가 그대로다. */
+const BACK_BTN = { x: 16, y: 16, w: 96, h: 34 };
+let navStack = [];
+const navId = () => state === STATE.MENU ? "menu" : state === STATE.CHALLENGE ? "challenge" : state === STATE.PRACTICE_SELECT ? "practice"
+  : state === STATE.SHOP ? (crewStory ? "shop/story" : "shop") : state === STATE.LOG ? (dexPage ? "log/dex" : titlePage ? "log/title" : "log")
+  : state === STATE.SETTINGS ? "settings" : state === STATE.MINI_SELECT ? "mini" : state === STATE.STORY_MAP ? "map" : null;
+const navSnap = (id) => ({ id, state, shopPage, techCat, practicePage, titlePage, storyCh });
+const NAV_PARENT = { practice: "challenge", "shop/story": "shop", "log/title": "log", "log/dex": "log" };
+const NAV_STATE = { menu: STATE.MENU, challenge: STATE.CHALLENGE, shop: STATE.SHOP, log: STATE.LOG };
+function navSync(){
+  const id = navId();
+  if(!id) return;
+  const top = navStack[navStack.length - 1];
+  if(top && top.id === id){ navStack[navStack.length - 1] = navSnap(id); return; }
+  const at = navStack.findIndex(q => q.id === id);
+  if(at >= 0){ navStack.length = at + 1; navStack[at] = navSnap(id); return; }
+  if(id === "menu" || !navStack.length) navStack = [{ id: "menu", state: STATE.MENU }];
+  if(id === "menu") return;
+  // 윗단계를 건너뛰고 들어왔으면(예: 메뉴에서 곧장 연습 목록) 윗단계를 끼워 둔다 — '이전'은 늘 한 단계 위
+  const par = NAV_PARENT[id];
+  if(par && !navStack.some(q => q.id === par)) navStack.push(Object.assign(navSnap(par), { state: NAV_STATE[par], titlePage: 0, practicePage: 0 }));
+  navStack.push(navSnap(id));
+}
+function navBack(){
+  navSync();
+  if(!navId() || navStack.length < 2){ state = STATE.MENU; return; }
+  const cur = navStack.pop(), prev = navStack[navStack.length - 1];
+  // 떠나는 화면 정리
+  if(cur.id === "map"){ leaveStory(); }
+  if(cur.id === "shop"){ shopPage = 0; crewStory = null; shopMsg = null; }
+  if(cur.id === "shop/story") crewStory = null;
+  if(cur.id === "log/title") closeTitles();
+  if(cur.id === "log/dex") dexPage = false;
+  if(cur.id === "practice") practicePage = 0;
+  // 돌아갈 화면 — 떠날 때의 탭·페이지 그대로
+  state = prev.state;
+  if(prev.id === "shop" && prev.shopPage !== undefined){ shopPage = prev.shopPage; techCat = prev.techCat; }
+  if(prev.id === "practice" && prev.practicePage !== undefined) practicePage = prev.practicePage;
+  if(prev.id === "log"){ titlePage = 0; dexPage = false; }
+  if(prev.id === "menu"){ shopPage = 0; practicePage = 0; }
+}
+const backRow = (key) => Object.assign({ key, back: true, label: "← 이전", icon: "back", action: navBack }, BACK_BTN);
 // MENU/PRACTICE_SELECT 화면의 선택지 — 그리기와 클릭·숫자키 판정이 이 배열 하나를 같이 본다
 function menuRows(){
+  navSync();
+  return menuRowsRaw();
+}
+function menuRowsRaw(){
   if(state === STATE.MENU){
     const top = H/2 - 108, rh = 33;
     const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
@@ -2552,7 +2605,7 @@ function menuRows(){
       { y: top + rh,   label: "2) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝 (내일 다시)" : "") + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
       { y: top + rh*2, label: "3) 보스 러시 — 무작위 5연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : rushBest9 ? " · 옛 9연전 " + fmtTime(rushBest9) : ""), action: startRush },
       { y: top + rh*3, label: "4) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
-      { key: 9, y: top + rh*4 + 14, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } }
+      backRow(9)
     ], 480, 36);
   }
   if(state === STATE.STORY_MAP) return storyMapRows();
@@ -2563,7 +2616,7 @@ function menuRows(){
       return { y: top + i*rh, label: (i+1) + ") " + q.name + (b ? " — 최고 " + b + q.unit : "") + (md ? "  " + "🏅".repeat(md) : ""),
                sub: q.desc, col: q.col, action: () => startMini(q.id) };
     });
-    rows.push({ key: 9, y: top + 3*rh + 20, label: "9) ← 메뉴로", action: () => { state = STATE.MENU; } });
+    rows.push(backRow(9));
     rows.forEach(r => { if(r.sub){ r.x = W/2 - 260; r.w = 520; r.h = 56; r.cy = r.y; r.y = r.y - 19; } });
     return btnRows(rows, 260, 34);
   }
@@ -2579,15 +2632,15 @@ function menuRows(){
           try{ if(window.localStorage) localStorage.removeItem("swing:hints"); }catch(e){}
           shopMsg = { text: "힌트를 다시 보여 준다", t: 90, good: true };
         } },
-      { y: H/2 + 160, label: "6) ← 뒤로가기", action: () => { state = STATE.MENU; } }
+      backRow(6)
     ], 460, 36);
   }
   if(state === STATE.LOG && dexPage){
-    return [{ key: 9, y: H - 30, label: "9) ← 항해 일지", action: () => { dexPage = false; } }];
+    return [backRow(9)];
   }
   if(state === STATE.LOG && titlePage > 0) return titleRows();
   if(state === STATE.LOG){
-    const rows = [{ y: H - 44, label: "1) ← 뒤로가기", action: () => { state = STATE.MENU; } }];
+    const rows = [backRow(1)];
     if(parrotUnlocked()) rows.push({ y: H - 74, label: "2) 앵무새 동료 " + (parrotOn ? "켜짐 — 끄기" : "꺼짐 — 켜기"),
                                      action: () => { parrotOn = !parrotOn; saveShop(); } });
     else rows.push({ y: H - 74, label: "앵무새 동료 — 보스 누적 " + PARROT_UNLOCK + "마리 격파 시 합류 (" + lifeBossKills + "/" + PARROT_UNLOCK + ")", action: () => {} });
@@ -2606,7 +2659,7 @@ function menuRows(){
     }));
     rows.push({ key: 8, y: top + PER*rowH + 10, label: "8) " + (practicePage < pages - 1 ? "다음 페이지 →" : "← 이전 페이지") + "  (" + (practicePage+1) + "/" + pages + ")",
                 action: () => { practicePage = (practicePage + 1) % pages; } });
-    rows.push({ key: 9, y: top + PER*rowH + 44, label: "9) ← 도전으로", action: () => { state = STATE.CHALLENGE; practicePage = 0; } });
+    rows.push(backRow(9));
     return btnRows(rows, 480, 30);
   }
   return [];
@@ -2624,7 +2677,7 @@ function closeTitles(){ titlePage = 0; titleFresh.clear(); }
 function titleTab(i){ titlePage = (i + TITLE_CATS.length) % TITLE_CATS.length + 1; fx.titleT = 0; shopMsg = null; }
 function titleRows(){
   const rows = [], cat = TITLE_CATS[titlePage - 1] || TITLE_CATS[0], list = TITLES.filter(t => t.cat === cat.id);
-  rows.push({ key: 9, back: true, x: 16, y: 16, w: 96, h: 34, label: "← 이전", action: closeTitles });
+  rows.push(backRow(9));
   rows.push({ key: 0, x: W - 16 - 190, y: 16, w: 190, h: 34, label: "0) 자동 — 가장 높은 칭호", on: !titleSel, action: () => pickTitle(null) });
   const tw = (W - 32 - 5*8) / 6;
   TITLE_CATS.forEach((c, i) => {
@@ -3377,7 +3430,7 @@ function drawDex(){
       leftText("??? · " + cat.name, cx + 18, cy, "500 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.32)");
     }
   });
-  for(const row of menuRows()) centerText(row.label, row.y, "600 15px 'Gowun Batang', 'Pretendard', serif", "#d9b877");
+  for(const row of menuRows()) drawBtn(row, UIF(700, 14));
 }
 
 /* ---------- 항로 갈림길 ---------- */
@@ -3927,15 +3980,9 @@ window.addEventListener("keydown", (e)=>{
       storyCh = (storyCh + (k === "ArrowRight" ? 1 : STORY_CH.length - 1)) % STORY_CH.length;
       return;
     }
-    if(k === "Escape"){
+    if(k === "Escape" || k === "Backspace"){
       e.preventDefault();
-      if(state === STATE.LOG && dexPage) dexPage = false;          // 도감 → 일지
-      else if(state === STATE.LOG && titlePage) closeTitles();     // 칭호 → 일지
-      else if(state === STATE.SHOP && crewStory) crewStory = null;   // 이야기 창 → 선원 탭
-      else if(state === STATE.SHOP){ state = STATE.MENU; shopPage = 0; }   // 창고는 탭이라 한 번에 메뉴로
-      else if(state === STATE.STORY_MAP) leaveStory();
-      else if(state === STATE.PRACTICE_SELECT) state = STATE.CHALLENGE;
-      else if(state !== STATE.MENU) state = STATE.MENU;
+      if(state !== STATE.MENU) navBack();       // 한 단계 위로 — 화면의 '← 이전' 버튼과 같은 동작(v60)
       return;
     }
     if(state === STATE.LOG && titlePage && (k === "ArrowLeft" || k === "ArrowRight")){
@@ -7970,6 +8017,7 @@ function acctLoadCode(){
   if(idIn) idIn.addEventListener("input", () => { acctChecked = null; });
   on("acctLogout", () => logout().then((r) => acctRefresh(r.msg, r.ok)));
   on("acctClose",  closeAccount);
+  on("acctBack",   closeAccount);
   on("acctMake",   acctMakeCode);
   on("acctMail",   acctMailCode);
   on("acctLoad",   acctLoadCode);
@@ -13375,7 +13423,7 @@ function shopTab(i){
 function shopUI(){
   if(shopPage === 2) shopPage = 3;              // 예전 '기술 뽑기' 쪽은 기술 탭에 합쳤다
   const cards = [], rows = [];
-  rows.push({ key:0, x:16, y:16, w:96, h:34, label:"← 메뉴", action: () => { state = STATE.MENU; shopPage = 0; crewStory = null; } });
+  rows.push(backRow(0));
   const tw = (SHOP_W - 5*8) / 6, cur = shopTabIdx();
   SHOP_TABS.forEach((t, i) => {
     const news = t.page === 4 && crewNewsCount();
@@ -13497,7 +13545,8 @@ function shopUI(){
     const c = crewStory, bw = 220;
     modal = [
       { key:1, x: W/2 - bw - 8, y: H/2 + 104, w: bw, h: 42, col:"#9fe0a0", label:"1) 동료로 맞이하기", action: () => acceptCrew(c) },
-      { key:9, x: W/2 + 8, y: H/2 + 104, w: bw, h: 42, label:"9) 나중에", action: () => { crewStory = null; } }
+      { key:9, x: W/2 + 8, y: H/2 + 104, w: bw, h: 42, label:"9) 나중에", action: () => { crewStory = null; } },
+      backRow(0)
     ];
   }
   return { cards, rows: modal || rows, base: rows, modal };
@@ -14005,8 +14054,11 @@ function drawFrame(){
       });
     }
     drawRecentChart(W/2 - 310, 414, 620, 32);
-    menuRows().forEach((row, i) => centerText(row.label, row.y, i === 0 || row.key === 3 ? "600 16px 'Gowun Batang', 'Pretendard', serif" : "500 14px 'Gowun Batang', 'Pretendard', serif",
-                                              i === 0 ? "#d9b877" : row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)"));
+    menuRows().forEach((row, i) => {
+      if(row.w !== undefined){ drawBtn(row, UIF(700, 14)); return; }
+      centerText(row.label, row.y, row.key === 3 ? "600 16px 'Gowun Batang', 'Pretendard', serif" : "500 14px 'Gowun Batang', 'Pretendard', serif",
+                 row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)");
+    });
   } else if(state === STATE.SHOP){
     drawShop();
   } else if(state === STATE.MINI_SELECT){
@@ -14896,6 +14948,7 @@ window.__swing = {
   title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage, cur: currentTitle(), list: TITLES, cats: TITLE_CATS, tiers: TITLE_TIERS, fresh: titleFresh, toast: titleToast, check: checkTitles, stats: titleStats,
                   open: () => { state = STATE.LOG; dexPage = false; openTitles(); }, close: closeTitles, tab: titleTab, run: titleRun, setKill: (k) => { lastKill = k; } }),
   rows: () => menuRows(),
+  nav: () => ({ stack: navStack, id: navId(), back: navBack, sync: navSync, btn: BACK_BTN, key: (k) => { if((k === "Escape" || k === "Backspace") && inMenu() && state !== STATE.MENU) navBack(); } }),
   shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
   shopUi: () => ({ tab: (i) => { state = STATE.SHOP; shopTab(i); }, page: () => shopPage, cat: () => techCat, idx: shopTabIdx,
                    key: (k) => { if(k === "ArrowLeft" || k === "ArrowRight") shopTab(shopTabIdx() + (k === "ArrowRight" ? 1 : -1)); },
