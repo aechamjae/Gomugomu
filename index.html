@@ -4139,7 +4139,7 @@ const BOSSES = [
   { name:"심해의 크라켄", tag:"눈이 드러난 순간에만 통한다", big:true },
   { name:"먹물 장군 문어", tag:"박자에 맞춰 던진 물고기·통을 받아 되던져라 — 격노하면 먹물 조명을 벗어나라", named:true },
   { name:"망령의 유령선", tag:"뒤집히면 선창·귀화, 일어서면 등불·선장 — 유령일 땐 무적", big:true },
-  { name:"해군 대장 군함", tag:"포격 표식과 그물을 피해 대장·화약고·망루를 노려라", big:true },
+  { name:"해군 대장 군함", tag:"작살·칼·포격 호령을 피해 — 숨 고르거나 미끄러진 대장을 쳐라", big:true },
   { name:"심해 상어 톱니턱",   tag:"매달린 돛대를 물어뜯고 앞쪽 돛대로 뛰어오른다 — 이빨이 박혀 버둥댈 때 아가미를 쳐라" },
   { name:"쇠사슬 바이스",     tag:"뒤에서 사슬을 걸어 끌어당긴다 — Q·W로 끊어라. 사슬 반동으로 앞에 끌려 나왔을 때를 쳐라" },
   { name:"패기의 검호 무상",   tag:"패왕의 기세는 기어 상태로만 버틴다 — 기세 뒤 지친 몸을 노려라", named:true },
@@ -4201,9 +4201,9 @@ const bossBounty = (b) => b.big || b.type === MAGELLAN ? (600 + bossKills*80) : 
 // v57 보스 제한 시간(초) — 일반 60 · 네임드 100 · 대형 120 · 탈옥전 그롬 100. 등장 컷인이 끝난 뒤부터 잰다.
 //   다 지나면 보스가 달아난다(현상금·카드 없음). 스토리 보스 스테이지·보스 러시·탈옥전에선 그대로 실패.
 //   빨리 잡을수록 남은 1초마다 BOSS_QUICK만큼 '빠른 격침' 보물을 더 준다
-const BOSS_TIME = { mid: 60, named: 100, big: 120 }, BOSS_TIME_MG = 100, BOSS_TIME_AW = 150, BOSS_QUICK = { mid: 4, named: 6, big: 8 };
+const BOSS_TIME = { mid: 60, named: 100, big: 120 }, BOSS_TIME_MG = 100, BOSS_TIME_AW = 150, BOSS_TIME_ADM = 140, BOSS_QUICK = { mid: 4, named: 6, big: 8 };
 const bossTier = (b) => b.big ? "big" : b.named ? "named" : "mid";
-const bossTimeOf = (b) => (b.type === MAGELLAN ? BOSS_TIME_MG : b.type === AWAKEN ? BOSS_TIME_AW : BOSS_TIME[bossTier(b)]) * 60;
+const bossTimeOf = (b) => (b.type === MAGELLAN ? BOSS_TIME_MG : b.type === AWAKEN ? BOSS_TIME_AW : b.type === ADMIRAL ? BOSS_TIME_ADM : BOSS_TIME[bossTier(b)]) * 60;   // v60: 해군 대장은 대장이 직접 싸워 틈이 짧아 140초
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
 const RC_LEAP = 38, RC_SAW = 40, RC_HOP = 30, RC_AHEAD = 280;
@@ -4493,7 +4493,7 @@ function spawnBoss(big, forceType){
   if(type === THUNDER){ boss.y = 96; boss.colX = p.x; boss.drums = [true, true, true]; boss.storm = 220; boss.warn = 0; boss.boltT = 0; boss.fire = 110; }
   if(type === SMITH){ boss.y = SEA - 64; boss.st = "idle"; boss.wait = 80; boss.cols = []; boss.hotCd = 120; boss.meltCd = 120; boss.blob = null; }
   if(type === FIREBIRD){ boss.st = "hover"; boss.stT = FB_HOVER + 60; boss.by = Math.max(70, Math.min(SEA - 70, p.y)); boss.x = p.x + 560; boss.y = -40; boss.face = -1; boss.bands = []; boss.band = null; }
-  if(type === ADMIRAL){ boss.y = SEA - 10; boss.fire = 100; boss.net = 160; boss.walk = 0; }
+  if(type === ADMIRAL){ boss.y = SEA - 10; boss.fire = 100; boss.net = 160; boss.walk = 0; boss.dk = { at: 0, st: "stand", t: 0, T: 70, x: ADM_PERCH[0][0], y: ADM_PERCH[0][1], cx: 0, cy: 0, cvx: 0, cvy: 0, face: -1, moves: 0, last: null }; }
   if(type === MAGELLAN){ boss.x = p.x + 420; boss.y = MG_Y; boss.st = "idle"; boss.wait = 120; boss.fire = 100; boss.gates = []; boss.keyGot = false; boss.key = { x: p.x + 480, y: 200 }; }
   bossIntro = { type, big:!!big, named:boss.named, t: 0, bounty: bossBounty(boss) };
   if(type === AWAKEN && !storyMode && !practiceMode && !rushMode) pops.push({ x:p.x, y:p.y - 90, t:160, text:"운이 나쁘다… 크라켄이 각성했다!", color:"#d9a8f0" });
@@ -4702,12 +4702,8 @@ function weakPoints(b){
     }
 
   } else if(b.type === ADMIRAL){
-    // 해군 대장 군함 — 갑판을 오가는 대장, 뱃머리 화약고(뚜껑이 열릴 때만), 높은 망루
-    // 화약고 뚜껑과 망루 감시병은 번갈아 드러난다 — 늘 열려 있는 건 낮은 갑판의 대장뿐
-    // v58: 대장은 포격을 지휘한 직후(ADM_EXPOSE)에만 갑판에 나선다 — 예전엔 늘 서 있어 약점이 61%나 열려 있었다
-    if(b.expose > 0) out.push({ x:b.x + Math.sin(b.walk)*64, y:SEA - 78, r:24, mark:"대장" });
-    if(admiralHatch(b)) out.push({ x:b.x + 108, y:SEA - 44, r:22, mark:"화약고" });
-    else if(admiralLookout(b)) out.push({ x:b.x - 30 + Math.sin(b.t*0.04)*14, y:SEA - 236, r:22, mark:"망루" });
+    // v60: 드레이크 대장 본인이 약점 — 공격 뒤 숨을 몰아쉬는 틈(tired)과 발을 헛디뎌 미끄러진 틈(slip)에만
+    admiralWeak(b, out);
 
   } else if(b.type === 6){
     // 문어 머리 — 되던진 물고기·통에 맞거나 줄다리기에 져서 어질어질한 동안만
@@ -5103,30 +5099,7 @@ function updateBoss(dt){
       b.x += Math.max(-4, Math.min(CAP, want)) * dt;
     }
     b.walk += 0.028 * dt;
-    if(b.expose > 0) b.expose -= dt;
-    if(b.dive === 0){
-      const rage = b.hp <= 5 ? 0.7 : 1;
-      // 포격 — 플레이어가 갈 자리에 표식을 잇달아 찍는다(포격 구간과 같은 포탄)
-      b.fire -= dt;
-      if(b.fire <= 0){
-        b.fire = 110 * rage;
-        b.expose = ADM_EXPOSE;                   // v58: 포격을 지휘한 뒤 한동안만 갑판에 서 있다
-        const n = b.hp <= 5 ? 3 : 2;
-        for(let i=0;i<n;i++){
-          const lead = SHELL_WARN * (0.55 + i*0.25);
-          shells.push({ x: p.x + p.vx*lead + (Math.random()-0.5)*50, y: Math.max(60, Math.min(SEA - 30, p.y + p.vy*lead*0.5)), t: -i*10, boom:false });
-        }
-        for(let i=0;i<10;i++) spark(b.x - 60, SEA - 70, i % 2 ? "#f4ecd9" : "#5a5a5a");
-      }
-      // 그물 — 맞으면 휘청하고 군함 쪽으로 끌려간다
-      b.net -= dt;
-      if(b.net <= 0){
-        b.net = 190 * rage;
-        aimShot({ x:b.x - 40, y:SEA - 90 }, 8.4, 0, 4, 16);
-        if(b.hp <= 5) aimShot({ x:b.x - 40, y:SEA - 90 }, 8.4, 0.18, 4, 16);
-        pops.push({ x:b.x, y:SEA - 130, t:50, text:"그물 발사!", color:"#bcd4f4" });
-      }
-    }
+    updateDrake(b, dt);
 
   } else if(b.type === 6){
     updateOcto(b, dt);
@@ -5552,6 +5525,123 @@ function updateGhostShip(b, dt){
       }
     } else b.rot = f.from + (settings.calm ? 0 : Math.sin(f.t * 0.9) * 0.03 * (f.t / GS_FLIP_WARN));   // 예고 — 부르르 떤다
   }
+}
+/* ---------- 해군 대장 군함(8) — '대장이 직접 싸우는 군함' (v60) ----------
+   군함은 무대다. 드레이크 대장이 돛대 사이를 줄을 타고 뛰어다니며 직접 싸운다(b.dk). 약점은 대장 본인뿐 —
+   공격 뒤 숨을 몰아쉬는 틈(tired)과 옮겨 앉다 발을 헛디뎌 미끄러진 틈(slip)에만 드러난다.
+   자리(ADM_PERCH): 고물 갑판 · 주돛대 활대 · 앞돛대 활대 · 이물 갑판. 옮길 땐 활대에 맨 줄을 타거나 뛰어 건넌다(ADM_MOVE).
+   공격(하나 끝나면 ADM_GAP 쉬고 다음, 같은 걸 잇달아 하지 않는다):
+     사슬 작살(harp) — 높은 활대에서. 조준선 ADM_HARP_AIM(마지막 ADM_LOCK 고정) → 사슬이 곧게 날아간다(맞으면 휘청 + 배 쪽으로 끌림) → 거둬들이고 숨 고르기
+     칼(slash) — 갑판에서, 가까이 오면. 칼을 젖히고 베일 부채꼴 ADM_SLASH_WARN → 내달리며 벤다 → 숨 고르기
+     확성기 호령(order) — 갑판에서. "포격하라!" ADM_ORDER_T 뒤 병사 포격(포격 구간과 같은 표식 포탄 — 표식 SHELL_WARN). 격노하면 셋. 외친 뒤에도 잠깐 숨을 고른다
+   옮겨 앉을 때 두 번에 한 번 미끄러진다. 맞으면 곧장 다른 자리로 피한다 */
+const ADM_PERCH = [[-118, SEA - 62, 0], [-30, SEA - 206, 1], [54, SEA - 166, 1], [100, SEA - 62, 0]];   // [배 기준 x, 발 높이, 높은 자리]
+const ADM_MOVE = 42, ADM_GAP = 36, ADM_HARP_AIM = 54, ADM_LOCK = 16, ADM_HARP_SPD = 24, ADM_HARP_LEN = 620, ADM_HARP_R = 14,
+      ADM_SLASH_WARN = 48, ADM_SLASH_R = 125, ADM_SLASH_ARC = 0.8, ADM_ORDER_T = 48, ADM_TIRED = 110, ADM_SLIP = 84;
+const dkPos = (b) => ({ x: b.x + b.dk.x, y: b.dk.y });       // 대장의 발
+const DK_S = 1.3;                                              // 대장 그림 배율(판정 좌표도 이 배율로)
+const dkHand = (b) => { const q = dkPos(b); return { x: q.x + b.dk.face * 14 * DK_S, y: q.y - 40 * DK_S }; };
+function admiralWeak(b, out){
+  const d = b.dk;
+  if(!d) return;
+  if(d.st === "tired" || d.st === "slip"){ const q = dkPos(b); out.push({ x:q.x, y:q.y - (d.st === "slip" ? 18 : 36), r: d.st === "slip" ? 34 : 30, mark:"드레이크" }); }
+}
+function dkGo(b, st, T){ const d = b.dk; d.st = st; d.t = 0; d.T = T; }
+function dkMove(b){
+  const d = b.dk, opts = [0, 1, 2, 3].filter(i => i !== d.at);
+  // 플레이어가 높이 있으면 높은 활대, 낮으면 갑판을 조금 더 좋아한다
+  const hiP = p.y < SEA - 230;
+  opts.sort((u, v) => (ADM_PERCH[v][2] === (hiP ? 1 : 0) ? 1 : 0) - (ADM_PERCH[u][2] === (hiP ? 1 : 0) ? 1 : 0) + (Math.random() - 0.5) * 1.6);
+  d.to = opts[0]; d.fx = d.x; d.fy = d.y;
+  dkGo(b, "move", ADM_MOVE);
+}
+function updateDrake(b, dt){
+  const d = b.dk;
+  if(!d) return;
+  const rage = b.hp <= 5, R = rage ? 0.75 : 1, ox = d.x, oy = d.y;
+  d.t += dt;
+  const q = dkPos(b);
+  if(d.st !== "move" && d.st !== "slip" && !(d.st === "slash" && d.t >= ADM_SLASH_WARN)) d.face = p.x < q.x ? -1 : 1;
+  // 맞으면 곧장 다른 자리로 피한다
+  if((d.st === "tired" || d.st === "slip") && b.invul > 0 && b.flash > 0) dkMove(b);
+  if(b.dive){                                                     // 배가 앞질러 나가는 동안엔 난간을 붙들고 버틴다
+    d.harp = null;
+    if(d.st !== "stand" && d.st !== "move"){ dkGo(b, "stand", ADM_GAP); }
+  }
+  if(d.st === "stand"){
+    if(d.t >= d.T && !b.dive && state === STATE.PLAY){
+      const hi = ADM_PERCH[d.at][2], near = Math.hypot(p.x - q.x, p.y - (q.y - 38)) < 240;
+      if(!hi && near && d.last !== "slash"){ d.last = "slash"; d.sa = Math.atan2(p.y - (q.y - 38), p.x - q.x); dkGo(b, "slash", ADM_SLASH_WARN + 18); d.hitS = false; }
+      else if(hi && d.last !== "harp"){ d.last = "harp"; d.ax = p.x; d.ay = p.y; dkGo(b, "harp", 1e9); d.harp = null;
+        pops.push({ x:q.x, y:q.y - 70, t:50, text:"사슬 작살!", color:"#bcd4f4" }); }
+      else if(!hi && d.last !== "order"){ d.last = "order"; d.fired = false; dkGo(b, "order", ADM_ORDER_T + 22); }
+      else { d.last = null; dkMove(b); }
+    }
+  } else if(d.st === "harp"){
+    if(d.t < ADM_HARP_AIM){
+      if(d.t < ADM_HARP_AIM - ADM_LOCK){ d.ax += ((p.x + p.vx * 12) - d.ax) * 0.25 * dt; d.ay += ((p.y + p.vy * 5) - d.ay) * 0.25 * dt; }
+    } else if(!d.harp){
+      const h = dkHand(b), dx = d.ax - h.x, dy = d.ay - h.y, l = Math.hypot(dx, dy) || 1;
+      d.harp = { ux: dx / l, uy: dy / l, len: 0, back: false, hit: false };
+      addKick(-4 * d.face, 2);
+    } else {
+      const c = d.harp, h = dkHand(b);
+      if(!c.back){
+        c.len = Math.min(ADM_HARP_LEN, c.len + ADM_HARP_SPD * dt);
+        if(c.len >= ADM_HARP_LEN || h.y + c.uy * c.len > SEA) c.back = true;
+        const ex = h.x + c.ux * c.len, ey = h.y + c.uy * c.len;
+        if(!c.hit && stun <= 0 && state === STATE.PLAY && distOriginToSeg(h.x - p.x, h.y - p.y, ex - p.x, ey - p.y) < ADM_HARP_R + 13){
+          c.hit = true; c.back = true;
+          const s0 = stun; knock(false);
+          if(stun > s0){ p.vx = Math.min(p.vx, -5); p.vy -= 2; pops.push({ x:p.x, y:p.y - 44, t:60, text:"사슬 작살에 걸렸다!", color:"#bcd4f4" }); }
+        }
+      } else {
+        c.len -= ADM_HARP_SPD * 1.4 * dt;
+        if(c.len <= 0){ d.harp = null; dkGo(b, "tired", ADM_TIRED * R); }
+      }
+    }
+  } else if(d.st === "slash"){
+    if(d.t >= ADM_SLASH_WARN && d.t < ADM_SLASH_WARN + 10){
+      d.x = Math.max(-150, Math.min(150, d.x + Math.cos(d.sa) * 7 * dt));
+      const hx = q.x, hy = q.y - 38, dd = Math.hypot(p.x - hx, p.y - hy);
+      let da = Math.atan2(p.y - hy, p.x - hx) - d.sa; while(da > Math.PI) da -= Math.PI*2; while(da < -Math.PI) da += Math.PI*2;
+      if(!d.hitS && stun <= 0 && state === STATE.PLAY && dd < ADM_SLASH_R + 13 && Math.abs(da) < ADM_SLASH_ARC){ d.hitS = true; knock(false); }
+    }
+    if(d.t >= d.T) dkGo(b, "tired", ADM_TIRED * R);
+  } else if(d.st === "order"){
+    if(d.t >= ADM_ORDER_T && !d.fired){
+      d.fired = true;
+      const n = rage ? 3 : 2;
+      for(let i=0;i<n;i++){
+        const lead = SHELL_WARN * (0.55 + i*0.25);
+        shells.push({ x: p.x + p.vx*lead + (Math.random()-0.5)*50, y: Math.max(60, Math.min(SEA - 30, p.y + p.vy*lead*0.5)), t: -i*10, boom:false });
+      }
+      b.fireFx = 24;
+      for(let i=0;i<10;i++) spark(b.x - 60, SEA - 70, i % 2 ? "#f4ecd9" : "#5a5a5a");
+    }
+    if(d.t >= d.T){ dkGo(b, "tired", ADM_TIRED * 0.6 * R); }       // 목청껏 외친 뒤에도 잠깐 숨을 고른다
+  } else if(d.st === "tired"){
+    if(d.t >= d.T) dkMove(b);
+  } else if(d.st === "slip"){
+    if(d.t >= d.T) dkGo(b, "stand", 24);
+  } else if(d.st === "move"){
+    const k = Math.min(1, d.t / d.T), e = ease.inOutCubic(k), P1 = ADM_PERCH[d.to];
+    const swing = ADM_PERCH[d.at][2] || P1[2];
+    d.x = d.fx + (P1[0] - d.fx) * e;
+    d.y = d.fy + (P1[1] - d.fy) * e - Math.sin(k * Math.PI) * (swing ? 46 : 70);
+    if(k >= 1){
+      d.at = d.to; d.x = P1[0]; d.y = P1[1]; d.moves = (d.moves || 0) + 1;
+      if(d.moves % 2 === 0 && !b.dive){ dkGo(b, "slip", ADM_SLIP); pops.push({ x:b.x + d.x, y:d.y - 70, t:60, text:"대장이 미끄러졌다 — 지금!", color:"#ffd76a" }); }
+      else dkGo(b, "stand", ADM_GAP * R);
+    }
+  }
+  if(d.st !== "move" && d.st !== "slash"){ const P0 = ADM_PERCH[d.at]; d.x += (P0[0] - d.x) * Math.min(1, 0.2 * dt); d.y = P0[1]; }
+  // 코트 자락 — 움직임을 한 박자 늦게 따라간다(그림용 스프링)
+  const vx = (d.x - ox) / Math.max(0.01, dt), vy = (d.y - oy) / Math.max(0.01, dt);
+  d.cvx += ((-vx * 1.6 - d.cx) * 0.12 - d.cvx * 0.3) * dt; d.cx += d.cvx * dt;
+  d.cvy += ((-vy * 1.2 - d.cy) * 0.12 - d.cvy * 0.3) * dt; d.cy += d.cvy * dt;
+  d.cx = Math.max(-40, Math.min(40, d.cx)); d.cy = Math.max(-30, Math.min(30, d.cy));
+  if(b.fireFx > 0) b.fireFx -= dt;
 }
 function updateAwaken(b, dt){
   const st = awStage(b);
@@ -11681,69 +11771,196 @@ function drawBossWarn(){
   ctx.restore();
 }
 
-const ADM_EXPOSE = 70;
-const admiralHatch = (b) => (b.t % 220) < 60;
-const admiralLookout = (b) => (b.t % 220) >= 110 && (b.t % 220) < 170;
-// 해군 대장 군함 — 흰 선체 두 돛대, 갑판의 대장(정의 코트), 뱃머리 화약고, 높은 망루
+// 해군 대장 군함 그림(v60) — 흰 선체·푸른 띠·포문, 활대가 대장의 자리인 돛대 둘, '정의' 깃발. 대장(drawDrake)은 배 위에 따로
+const admBob = () => Math.sin(time*0.05) * 3;
 function drawAdmiralShip(b, x, hurt){
-  const deck = SEA - 30 + Math.sin(time*0.05)*3;
+  const bob = admBob(), deck = SEA - 30 + bob;
   ctx.save();
   if(b.dive === 2){
     ctx.strokeStyle = "rgba(244,246,248,.5)"; ctx.lineWidth = 3;
     for(let i=0;i<3;i++){ ctx.beginPath(); ctx.moveTo(x - 190 - i*40, SEA + 2 + i*3); ctx.lineTo(x - 120 - i*40, SEA + 2 + i*3); ctx.stroke(); }
   }
-  ctx.fillStyle = hurt ? "#f4ecd9" : "#eef2f6";
-  ctx.beginPath();
-  ctx.moveTo(x - 170, deck - 30); ctx.lineTo(x + 120, deck - 30); ctx.lineTo(x + 165, deck - 48);
-  ctx.lineTo(x + 92, deck + 34); ctx.lineTo(x - 160, deck + 34); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#2f5fa8"; ctx.fillRect(x - 166, deck - 8, 270, 9);
-  ctx.fillStyle = "#1b1218";
-  for(let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(x - 130 + i*50, deck + 14, 5.5, 0, Math.PI*2); ctx.fill(); }
-  // 돛대 둘 — 뒤 돛대 위 망루
-  ctx.fillStyle = "#4e3f33";
-  ctx.fillRect(x - 34, SEA - 236, 8, deck - 30 - (SEA - 236));
-  ctx.fillRect(x + 50, SEA - 190, 7, deck - 30 - (SEA - 190));
-  ctx.fillStyle = "#f4f6f8";
-  ctx.beginPath(); ctx.moveTo(x - 26, deck - 210); ctx.quadraticCurveTo(x + 48, deck - 160, x - 26, deck - 70); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(x + 57, deck - 165); ctx.quadraticCurveTo(x + 116, deck - 125, x + 57, deck - 70); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = "#2f5fa8"; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(x - 14, deck - 144); ctx.quadraticCurveTo(x - 4, deck - 154, x + 6, deck - 144); ctx.quadraticCurveTo(x + 16, deck - 154, x + 26, deck - 144); ctx.stroke();
-  // 망루(약점)
-  const nx = b.x - 30 + Math.sin(b.t*0.04)*14 - cam.x, ny = SEA - 236;
-  ctx.fillStyle = hurt ? "#f4ecd9" : "#6b4426";
-  ctx.fillRect(nx - 20, ny - 4, 40, 18);
-  ctx.fillStyle = "#2f5fa8"; ctx.fillRect(nx - 22, ny - 8, 44, 5);
-  if(admiralLookout(b)){                       // 감시병이 고개를 내밀 때만 약점
-    ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(nx, ny - 14, 7, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#eef2f6"; ctx.fillRect(nx - 8, ny - 24, 16, 6);
+  // 돛대 둘(뒤) — 활대가 대장의 자리
+  const sail = hurt ? "#ffffff" : "#f4f6f8";
+  for(const [mx, top, yardY, yw] of [[-30, SEA - 250, ADM_PERCH[1][1], 54], [54, SEA - 206, ADM_PERCH[2][1], 44]]){
+    const X = x + mx;
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(X - 4.5, deck - 30); ctx.lineTo(X - 3, top + bob); ctx.lineTo(X + 3, top + bob); ctx.lineTo(X + 4.5, deck - 30); ctx.closePath(); }, "#5a4636", { pool:false, line:1.8 });
+    const sy = yardY + bob, sw = Math.sin(time*0.04 + mx)*4;
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(X - yw + 4, sy + 6); ctx.lineTo(X + yw - 4, sy + 6); ctx.quadraticCurveTo(X + yw + 8 + sw, sy + 60, X + yw - 6, deck - 46); ctx.lineTo(X - yw + 6, deck - 46); ctx.quadraticCurveTo(X - yw + 10 + sw, sy + 60, X - yw + 4, sy + 6); ctx.closePath(); },
+      sail, { shade:() => { ctx.beginPath(); ctx.rect(X, sy, yw + 12, deck - sy); }, shadeCol:"rgba(60,80,120,.12)", pool:"rgba(60,80,120,.25)", line:1.8 });
+    ctx.strokeStyle = "#2f5fa8"; ctx.lineWidth = 3;                     // 돛의 갈매기 문장
+    ctx.beginPath(); ctx.moveTo(X - 18, (sy + deck)/2 - 10); ctx.quadraticCurveTo(X - 9, (sy + deck)/2 - 20, X, (sy + deck)/2 - 10); ctx.quadraticCurveTo(X + 9, (sy + deck)/2 - 20, X + 18, (sy + deck)/2 - 10); ctx.stroke();
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(X - yw, sy + 2); ctx.lineTo(X + yw, sy + 2); }, 5, "#6b4f38", "rgba(255,230,190,.35)");   // 활대(서 있는 자리)
+    // 꼭대기 깃발 '정의'
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(X + 2, top + bob); for(let i=0;i<=4;i++){ const u = i/4; ctx.lineTo(X + 2 + u*30, top + bob + Math.sin(time*0.16 - u*3)*3*u); } for(let i=4;i>=0;i--){ const u = i/4; ctx.lineTo(X + 2 + u*30, top + bob + 16 + Math.sin(time*0.16 - u*3)*3*u); } ctx.closePath(); }, "#2f5fa8", { pool:false, line:1.4 });
   }
-  // 뱃머리 화약고 — 뚜껑이 열리면 빨갛게 달아오른다
-  const open = admiralHatch(b);
-  ctx.fillStyle = "#3b2417"; ctx.fillRect(x + 92, SEA - 58, 32, 26);
-  if(open){
-    ctx.fillStyle = "rgba(240,120,60," + (0.6 + Math.sin(time*0.3)*0.25).toFixed(2) + ")";
-    ctx.fillRect(x + 95, SEA - 55, 26, 20);
-    ctx.fillStyle = "#3b2417"; ctx.fillRect(x + 90, SEA - 76, 36, 6);
-  } else {
-    ctx.fillStyle = "#6b4426"; ctx.fillRect(x + 90, SEA - 62, 36, 7);
-  }
-  // 대장 — 정의 코트를 걸치고 갑판을 오간다
-  // v58: 포격을 지휘한 직후(b.expose)만 갑판 위로 나선다 — 그 밖엔 난간 뒤로 몸을 숨긴다
-  const up = Math.min(1, (b.expose || 0) / 12);
-  const ax = b.x + Math.sin(b.walk)*64 - cam.x, ay = SEA - 78 + (1 - up) * 34;
-  ctx.translate(ax, ay);
-  ctx.fillStyle = hurt ? "#f4ecd9" : "#f4f6f8";
-  ctx.beginPath(); ctx.moveTo(-14, -6); ctx.lineTo(14, -6); ctx.lineTo(20, 26); ctx.lineTo(-20, 26); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#1f3a66"; ctx.fillRect(-9, -6, 18, 26);
-  ctx.fillStyle = "#e8b48c"; ctx.beginPath(); ctx.arc(0, -16, 10, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#f4f6f8"; ctx.fillRect(-12, -30, 24, 8);
-  ctx.fillStyle = "#1f3a66"; ctx.fillRect(-13, -24, 26, 4);
-  ctx.fillStyle = "#1b1218"; ctx.fillRect(-6, -18, 4, 2); ctx.fillRect(2, -18, 4, 2);
-  ctx.font = "800 8px 'Gowun Batang', 'Pretendard', serif"; ctx.textAlign = "center";
-  ctx.fillStyle = "#1f3a66"; ctx.fillText("정의", 0, 20);
+  // 삭구
+  ctx.strokeStyle = "rgba(30,30,40,.6)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x - 165, deck - 34); ctx.lineTo(x - 30, SEA - 248 + bob); ctx.lineTo(x + 54, SEA - 204 + bob); ctx.lineTo(x + 162, deck - 48); ctx.stroke();
+  // 선체
+  const hull = () => { ctx.beginPath(); ctx.moveTo(x - 172, deck - 34); ctx.lineTo(x - 140, deck - 34); ctx.lineTo(x - 136, deck - 30); ctx.lineTo(x + 118, deck - 30); ctx.quadraticCurveTo(x + 150, deck - 34, x + 168, deck - 50);
+    ctx.quadraticCurveTo(x + 150, deck + 10, x + 96, deck + 36); ctx.lineTo(x - 150, deck + 36); ctx.quadraticCurveTo(x - 170, deck + 6, x - 172, deck - 34); ctx.closePath(); };
+  inkShape(hull, hurt ? "#ffffff" : "#eef2f6", { shade:() => { ctx.beginPath(); ctx.rect(x - 180, deck + 12, 360, 40); }, shadeCol:"rgba(60,80,120,.18)", pool:"rgba(60,80,120,.3)", poolW:7, line:2.6 });
+  ctx.save(); hull(); ctx.clip();
+  ctx.fillStyle = "#2f5fa8"; ctx.fillRect(x - 180, deck - 12, 360, 9);
+  ctx.fillStyle = "#c9a227"; ctx.fillRect(x - 180, deck - 3, 360, 2.4);
+  ctx.strokeStyle = "rgba(60,80,120,.25)"; ctx.lineWidth = 1; for(const yy of [6, 18, 28]){ ctx.beginPath(); ctx.moveTo(x - 180, deck + yy); ctx.lineTo(x + 180, deck + yy); ctx.stroke(); }
   ctx.restore();
+  // 포문과 대포 — 호령 뒤 불을 뿜는다
+  const fz = Math.max(0, b.fireFx || 0) / 24;
+  for(let i=0;i<5;i++){
+    const px = x - 128 + i*52, py = deck + 14;
+    inkShape(() => { ctx.beginPath(); ctx.rect(px - 9, py - 7, 18, 14); }, "#1b1218", { pool:false, line:1.4 });
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - 14, py + 1); }, 6, "#3a3a44");
+    if(fz > 0){ ctx.fillStyle = "rgba(255,200,120," + (fz*0.9).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(px - 22, py + 1, 6 + (1 - fz)*10, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(200,200,200," + (fz*0.5).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(px - 34 - (1 - fz)*20, py - 4 - (1 - fz)*12, 8 + (1 - fz)*14, 0, Math.PI*2); ctx.fill(); }
+  }
+  // 난간
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(x - 134, deck - 40); ctx.lineTo(x + 120, deck - 40); ctx.stroke();
+  for(let xx = -130; xx <= 118; xx += 16){ ctx.beginPath(); ctx.moveTo(x + xx, deck - 40); ctx.lineTo(x + xx, deck - 30); ctx.stroke(); }
+  ctx.restore();
+  if(b.dive !== 2) bossWaterLip(x - 178, x + 160, b.x * 0.01);
+  drawDrake(b, hurt);
 }
-
+// 드레이크 대장 — 해군 모자·견장·푸른 코트, 등 뒤로 휘날리는 흰 '정의' 망토. 자세는 상태마다(서기·달리기/줄 타기·작살 조준·칼·확성기·숨 고르기·미끄러짐)
+function drawDrake(b, hurt){
+  const d = b.dk;
+  if(!d) return;
+  const bob = admBob(), fx = b.x + d.x - cam.x, fy = d.y + bob, f = d.face || -1, st = d.st, calm = settings.calm;
+  const coat = hurt ? "#f4ecd9" : "#27406e", cape = hurt ? "#ffffff" : "#f4f6f8", skin = "#e2b08a", gold = "#e0b84a";
+  // 줄 타기 — 활대 사이를 옮길 땐 돛대 꼭대기에 맨 줄을 잡는다
+  if(st === "move" && (ADM_PERCH[d.at][2] || ADM_PERCH[d.to][2])){
+    const mi = ADM_PERCH[d.to][2] ? d.to : d.at, mx = b.x + ADM_PERCH[mi][0] - cam.x, my = (mi === 1 ? SEA - 250 : SEA - 206) + bob;
+    ctx.strokeStyle = INK; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(fx + f*9, fy - 60); ctx.stroke();
+    ctx.strokeStyle = "#c9a878"; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(fx + f*9, fy - 60); ctx.stroke();
+  }
+  // 예고 — 작살 조준선 · 칼이 지나갈 부채꼴
+  if(st === "harp" && !d.harp){
+    const h = dkHand(b), lock = d.t >= ADM_HARP_AIM - ADM_LOCK, k = Math.min(1, d.t / ADM_HARP_AIM);
+    const dx = d.ax - h.x, dy = d.ay - h.y, l = Math.hypot(dx, dy) || 1, ex = h.x + dx / l * ADM_HARP_LEN - cam.x, ey = h.y + dy / l * ADM_HARP_LEN;
+    ctx.save();
+    ctx.strokeStyle = lock ? "rgba(255,110,90,.9)" : "rgba(188,212,244," + (0.35 + k*0.4).toFixed(2) + ")"; ctx.lineWidth = lock ? 3.2 : 2;
+    ctx.setLineDash(lock ? [] : [12, 9]); ctx.lineDashOffset = -time*3;
+    ctx.beginPath(); ctx.moveTo(h.x - cam.x, h.y); ctx.lineTo(ex, ey); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = lock ? "rgba(255,110,90,.9)" : "rgba(188,212,244,.7)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(d.ax - cam.x, d.ay, 18 - k*6, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+  if(st === "slash" && d.t < ADM_SLASH_WARN + 10){
+    const k = Math.min(1, d.t / ADM_SLASH_WARN), cx = fx, cy = fy - 38;
+    ctx.fillStyle = d.t >= ADM_SLASH_WARN ? "rgba(255,90,90,.35)" : "rgba(255,110,110," + (0.06 + k*0.18).toFixed(2) + ")";
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, ADM_SLASH_R, d.sa - ADM_SLASH_ARC, d.sa + ADM_SLASH_ARC); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(255,170,160," + (0.3 + k*0.6).toFixed(2) + ")"; ctx.lineWidth = 2.4; ctx.setLineDash([9, 7]);
+    ctx.beginPath(); ctx.arc(cx, cy, ADM_SLASH_R, d.sa - ADM_SLASH_ARC, d.sa + ADM_SLASH_ARC); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // 사슬 작살
+  if(d.harp){
+    const h = dkHand(b), c = d.harp, ex = h.x + c.ux * c.len, ey = h.y + c.uy * c.len;
+    awChain(h.x - cam.x, h.y, ex - cam.x, ey, 0);
+    ctx.save(); ctx.translate(ex - cam.x, ey); ctx.rotate(Math.atan2(c.uy, c.ux));
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(0, -8); ctx.lineTo(4, 0); ctx.lineTo(0, 8); ctx.closePath(); }, "#c9ced6", { pool:false, line:1.6 });
+    ctx.restore();
+  }
+  ctx.save();
+  ctx.translate(fx, fy); ctx.scale(DK_S, DK_S);
+  // 자세
+  let lean = 0, crouch = 0, legA = 0, rot = 0;
+  if(st === "move"){ const k = Math.min(1, d.t / d.T); legA = Math.sin(k * Math.PI * 3) * 0.7; lean = 0.25 * f; }
+  else if(st === "tired"){ crouch = 0.45; lean = 0.35 * f; }
+  else if(st === "slash"){ crouch = d.t < ADM_SLASH_WARN ? 0.35 * Math.min(1, d.t / 14) : 0.1; lean = d.t < ADM_SLASH_WARN ? -0.15 * f : 0.4 * f; }
+  else if(st === "slip"){ const k = Math.min(1, d.t / 14), back = d.t > ADM_SLIP - 18 ? (ADM_SLIP - d.t) / 18 : 1; rot = -f * 1.2 * ease.outBack(k) * back; }
+  else if(st === "harp"){ lean = -0.1 * f; }
+  else if(st === "stand" && !calm){ lean = Math.sin(time*0.05) * 0.03; }
+  ctx.rotate(rot);
+  const hipY = -20 + crouch * 8;
+  // 다리
+  const legs = [[-1, legA], [1, -legA]];
+  for(const [sg, a] of legs){
+    const kx = sg * 4 + Math.sin(a) * 10 + crouch * 6 * f, ky = hipY + 10 - crouch * 2, tx = sg * 6 + Math.sin(a) * 16, ty = 0;
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(sg * 3, hipY); ctx.quadraticCurveTo(kx, ky, tx, ty - 2); }, 5, "#e8ecf2");
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(tx + f * 3, ty - 1, 6, 3.2, 0, 0, Math.PI*2); }, "#1b1218", { pool:false, line:1.2 });
+  }
+  ctx.save(); ctx.translate(0, hipY); ctx.rotate(lean);
+  // 흰 '정의' 망토 — 어깨에서 등 뒤로 휘날린다(움직임을 한 박자 늦게)
+  const flow = -f * (12 + Math.abs(d.cx) * 0.6) + d.cx * 0.5, fl2 = calm ? 0 : Math.sin(time*0.2) * 3, lift = Math.max(-18, Math.min(10, d.cy * 0.6 - (st === "move" ? 10 : 0)));
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-9, -26); ctx.lineTo(9, -26); ctx.quadraticCurveTo(10 + flow*0.4, -6, 8 + flow + fl2, 16 + lift); ctx.lineTo(-6 + flow*0.9 - fl2, 20 + lift*0.8); ctx.quadraticCurveTo(-12 + flow*0.3, 0, -9, -26); ctx.closePath(); },
+    cape, { shade:() => { ctx.beginPath(); ctx.rect(-20 + flow*0.5, 0, 40, 30); }, shadeCol:"rgba(60,80,120,.18)", pool:"rgba(60,80,120,.25)", line:1.8 });
+  ctx.save(); ctx.translate(flow*0.55, 6 + lift*0.5); ctx.rotate(-f * 0.1);
+  ctx.font = "800 7px 'Gowun Batang', serif"; ctx.textAlign = "center"; ctx.fillStyle = "#27406e"; ctx.fillText("정의", 0, 0);
+  ctx.restore();
+  // 몸 — 푸른 코트·흰 셔츠·금단추·견장
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-9, -28); ctx.lineTo(9, -28); ctx.lineTo(11, 2); ctx.lineTo(-11, 2); ctx.closePath(); }, coat, { pool:"rgba(10,20,40,.35)", line:1.8 });
+  ctx.fillStyle = "#f4f6f8"; ctx.beginPath(); ctx.moveTo(-4, -28); ctx.lineTo(4, -28); ctx.lineTo(0, -16); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = gold; for(const yy of [-12, -5]){ ctx.beginPath(); ctx.arc(f * 3, yy, 1.4, 0, Math.PI*2); ctx.fill(); }
+  for(const sg of [-1, 1]){ inkShape(() => { ctx.beginPath(); ctx.ellipse(sg * 10, -27, 6, 3, sg * 0.2, 0, Math.PI*2); }, gold, { pool:false, line:1.2 });
+    ctx.strokeStyle = gold; ctx.lineWidth = 1; for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(sg * 10 + i*2, -25); ctx.lineTo(sg * 10 + i*2.4, -21); ctx.stroke(); } }
+  // 팔과 손에 든 것
+  const sh = { x: f * 8, y: -24 }, sh2 = { x: -f * 8, y: -24 };
+  let hand = { x: f * 12, y: -6 }, item = null;
+  if(st === "harp"){
+    const h = dkHand(b), aimA = d.harp ? Math.atan2(d.harp.uy, d.harp.ux) : Math.atan2(d.ay - h.y, d.ax - h.x);
+    hand = { x: sh.x + Math.cos(aimA - rot) * 18, y: sh.y + Math.sin(aimA - rot) * 18 }; item = { k: "harp", a: aimA - rot - lean };
+  } else if(st === "slash"){
+    if(d.t < ADM_SLASH_WARN){ hand = { x: -f * 14, y: -30 }; item = { k: "sword", a: -f * 2.2 - Math.PI/2 * (f > 0 ? 0 : 0) }; }
+    else { hand = { x: f * 20, y: -16 }; item = { k: "sword", a: d.sa - lean }; }
+  } else if(st === "order"){ hand = { x: f * 9, y: -36 }; item = { k: "horn" }; }
+  else if(st === "tired"){ hand = { x: f * 8, y: 4 }; }
+  else if(st === "slip"){ hand = { x: f * 16, y: -40 }; }
+  else if(st === "move"){ hand = { x: f * 7, y: -46 }; }
+  inkTube(() => { ctx.beginPath(); ctx.moveTo(sh.x, sh.y); ctx.quadraticCurveTo((sh.x + hand.x)/2 + f*3, (sh.y + hand.y)/2 + 3, hand.x, hand.y); }, 4.6, coat);
+  const off = st === "tired" ? { x: -f * 2, y: 4 } : st === "move" ? { x: -f * 12, y: -10 } : { x: -f * 9, y: -6 };
+  inkTube(() => { ctx.beginPath(); ctx.moveTo(sh2.x, sh2.y); ctx.quadraticCurveTo((sh2.x + off.x)/2 - f*2, (sh2.y + off.y)/2, off.x, off.y); }, 4.6, coat);
+  inkShape(() => { ctx.beginPath(); ctx.arc(hand.x, hand.y, 2.8, 0, Math.PI*2); }, skin, { pool:false, line:1 });
+  if(item && item.k === "harp"){
+    ctx.save(); ctx.translate(hand.x, hand.y); ctx.rotate(item.a);
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(16, 0); }, 4, "#5a4636");
+    if(!d.harp) inkShape(() => { ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(16, -5); ctx.lineTo(16, 5); ctx.closePath(); }, "#c9ced6", { pool:false, line:1.2 });
+    ctx.restore();
+  } else if(item && item.k === "sword"){
+    ctx.save(); ctx.translate(hand.x, hand.y); ctx.rotate(item.a);
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(4, -2); ctx.lineTo(38, -1); ctx.lineTo(42, 1); ctx.lineTo(4, 2); ctx.closePath(); }, "#e6ebf2", { pool:false, line:1.2 });
+    inkShape(() => { ctx.beginPath(); ctx.rect(-1, -5, 4, 10); }, gold, { pool:false, line:1 });
+    if(d.t < ADM_SLASH_WARN && d.t > ADM_SLASH_WARN - 12){ ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.beginPath(); ctx.arc(36, 0, 3 + Math.sin(time*0.8)*1.5, 0, Math.PI*2); ctx.fill(); }   // 칼끝 번쩍
+    ctx.restore();
+    if(d.t >= ADM_SLASH_WARN && d.t < ADM_SLASH_WARN + 12){                                   // 벤 자리 잔상
+      ctx.strokeStyle = "rgba(255,255,255," + (1 - (d.t - ADM_SLASH_WARN) / 12).toFixed(2) + ")"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, -16, 46, d.sa - lean - 0.9, d.sa - lean + 0.9); ctx.stroke();
+    }
+  } else if(item && item.k === "horn"){
+    ctx.save(); ctx.translate(hand.x + f * 4, hand.y - 4); ctx.scale(f, 1);
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(0, -3); ctx.lineTo(20, -10); ctx.lineTo(20, 10); ctx.lineTo(0, 3); ctx.closePath(); }, "#d9a440", { pool:false, line:1.4 });
+    if(d.t > ADM_ORDER_T - 20){ ctx.strokeStyle = "rgba(255,240,200,.8)"; ctx.lineWidth = 2; for(let i=1;i<=3;i++){ ctx.beginPath(); ctx.arc(22, 0, 6 + i*7 + (time*0.6 % 7), -0.6, 0.6); ctx.stroke(); } }
+    ctx.restore();
+  } else if(st !== "slip" && st !== "move"){
+    // 허리에 찬 칼
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(-f * 6, -2); ctx.lineTo(-f * 20, 14); }, 3, "#3a3a44");
+  }
+  // 머리 — 해군 모자·굳은 턱·콧수염
+  ctx.save(); ctx.translate(0, -36);
+  inkShape(() => { ctx.beginPath(); ctx.ellipse(f * 1, 0, 8.5, 9.5, 0, 0, Math.PI*2); }, skin, { pool:false, line:1.6 });
+  ctx.fillStyle = "#5a4636"; ctx.beginPath(); ctx.ellipse(f * 4, 4, 5, 2, 0, 0, Math.PI*2); ctx.fill();                 // 콧수염
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+  if(st === "tired" || st === "slip"){ ctx.beginPath(); ctx.moveTo(f * 2, -2); ctx.lineTo(f * 6, 0); ctx.moveTo(f * 2, 0); ctx.lineTo(f * 6, -2); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.moveTo(f * 2, -2); ctx.lineTo(f * 7, -1); ctx.stroke(); }
+  if(st === "order"){ ctx.fillStyle = "#3a1a1a"; ctx.beginPath(); ctx.ellipse(f * 5, 7, 2.6, 2, 0, 0, Math.PI*2); ctx.fill(); }
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(-10, -6); ctx.quadraticCurveTo(0, -18, 11, -7); ctx.lineTo(10, -4); ctx.lineTo(-9, -4); ctx.closePath(); }, "#f4f6f8", { pool:false, line:1.4 });
+  ctx.fillStyle = "#27406e"; ctx.fillRect(-9.5, -6.5, 20, 3);
+  ctx.fillStyle = "#1b1218"; ctx.beginPath(); ctx.moveTo(f * 2, -4); ctx.lineTo(f * 14, -2); ctx.lineTo(f * 2, -1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = gold; ctx.beginPath(); ctx.arc(f * 1, -9, 2, 0, Math.PI*2); ctx.fill();
+  if(st === "tired"){ ctx.fillStyle = "rgba(170,220,255,.9)"; for(let i=0;i<2;i++){ const u = (time*0.04 + i*0.5) % 1; ctx.beginPath(); ctx.ellipse(-f * (8 + i*4), -6 + u*14, 1.6, 2.6, 0, 0, Math.PI*2); ctx.fill(); } }
+  ctx.restore();
+  ctx.restore();
+  ctx.restore();
+  // 호령 말풍선
+  if(st === "order" && d.t < ADM_ORDER_T + 16){
+    const k = Math.min(1, d.t / 10), bx = fx + f * 34, by = fy - 112;
+    ctx.save(); ctx.translate(bx, by); ctx.scale(k, k);
+    inkShape(() => { ctx.beginPath(); ctx.ellipse(0, 0, 44, 16, 0, 0, Math.PI*2); ctx.moveTo(-f * 10, 12); ctx.lineTo(-f * 22, 26); ctx.lineTo(-f * 2, 14); }, "#f4ecd9", { pool:false, line:1.8 });
+    ctx.font = "900 13px 'Gowun Batang', serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#b03a34"; ctx.fillText("포격하라!", 0, 1);
+    ctx.restore();
+  }
+}
 // v60: 반투명으로 그릴 덩어리를 따로 한 장에 그려 한 번에 붙인다 — 겹친 부분이 더 진해지는 얼룩(띠)이 생기지 않게.
 //   레이어를 못 쓰는 환경(검사 하네스)에선 globalAlpha로 대신한다
 let fadeLayer = null, fadeLayerCtx = null;

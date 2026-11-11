@@ -1914,12 +1914,11 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("대령·소장·중장 다음(네 번째 추격)엔 해군 대장 군함이 대형 보스로 나온다", a.boss() && a.boss().type === 8 && a.boss().big && !N().n && N().chases === 4);
   const b = a.boss();
   ok("해군 대장 군함은 HP 10", b.maxHp === 10);
-  b.expose = 50;
-  b.t = 30;  const w1 = a.weak().map(w => w.mark);
-  b.t = 130; const w2 = a.weak().map(w => w.mark);
-  b.expose = 0;
-  b.t = 190; const w3 = a.weak().map(w => w.mark);
-  ok("v58: 대장은 포격을 지휘한 직후에만, 화약고와 망루는 번갈아 드러난다", w1.join() === "대장,화약고" && w2.join() === "대장,망루" && w3.join() === "", w1 + " / " + w2 + " / " + w3);
+  // v60: 드레이크 대장 본인만 약점 — 숨을 몰아쉬거나 미끄러진 틈에만(예전 v58의 화약고·망루는 없앴다)
+  b.dk.st = "tired"; const w1 = a.weak().map(w => w.mark);
+  b.dk.st = "slip";  const w2 = a.weak().map(w => w.mark);
+  b.dk.st = "stand"; const w3 = a.weak().map(w => w.mark);
+  ok("v60: 대장은 숨 고를 때·미끄러졌을 때만 약점(드레이크 본인)", w1.join() === "드레이크" && w2.join() === "드레이크" && w3.join() === "", w1 + " / " + w2 + " / " + w3);
   // 그물
   const st = a.peek();
   T().pushShot({ x: st.x, y: st.y, vx: 0, vy: 0, g: 0, r: 16, kind: 4, spin: 0 });
@@ -3808,6 +3807,65 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     ok("v60 bosses: 해룡 — 약점은 갈비뼈 사이 심장석(아치 가운데, 틈으로 들어가야 닿는다)", !!w && Math.abs(w.x - gemC.x) < gemC.R * 0.2 && w.y < E("SEA") - 30 && Math.hypot(w.x - gemC.x, E("SEA") - w.y) < gemC.R - 16 - w.r);
     let err = null; try{ E("drawBoss()"); K.st = "stuck"; K.dx0 = K.hx = K.x; K.hy = E("SEA") - 34; E("drawBoss()"); K.st = "aim"; E("drawBoss()"); }catch(e){ err = e.message; }
     ok("v60 bosses: 해룡 — 아치·해골 머리를 그려도 오류가 없다", !err, err);
+  }
+
+  /* --- 해군 대장 군함(8): 드레이크가 직접 싸운다 · 사슬 작살 · 칼 · 확성기 호령 · 지친 틈·미끄러짐 --- */
+  {
+    let K = fresh(8); calm(); H.step();
+    const D = K.dk;
+    ok("v60 bosses: 대장 — 예고(작살 조준·칼 부채꼴·호령)는 45프레임 이상", E("ADM_HARP_AIM") >= 45 && E("ADM_SLASH_WARN") >= 45 && E("ADM_ORDER_T") >= 45);
+    ok("v60 bosses: 대장 — 처음엔 갑판에 서 있고 약점이 없다", !!D && a.weak().length === 0);
+    // 사슬 작살 — 높은 활대에서
+    D.at = 1; D.x = E("ADM_PERCH[1][0]"); D.y = E("ADM_PERCH[1][1]"); D.st = "stand"; D.t = 1e3; D.last = null;
+    const tgt = () => { const h = E("dkHand(boss)"); return { x: h.x - 260, y: h.y + 60 }; };
+    let early = false;
+    calm(); { const t0 = tgt(); pin(t0.x, t0.y); } H.step();
+    ok("v60 bosses: 대장 — 높은 활대에선 사슬 작살을 겨눈다", D.st === "harp" && !D.harp);
+    for(let i=0;i<E("ADM_HARP_AIM") - 2;i++){ calm(); const t0 = tgt(); pin(t0.x, t0.y); H.step(); if(a.peek().stun > 0) early = true; }
+    let hit = false;
+    for(let i=0;i<40 && !hit;i++){ calm(); const t0 = tgt(); pin(t0.x, t0.y); H.step(); if(a.peek().stun > 0) hit = true; }
+    ok("v60 bosses: 대장 — 조준 동안엔 안 맞고, 날아온 사슬에 걸리면 휘청", !early && hit);
+    for(let i=0;i<80 && D.st === "harp";i++){ calm(); pin(K.x - 500, 150); H.step(); }
+    ok("v60 bosses: 대장 — 작살을 거둬들이면 숨을 몰아쉰다(대장 본인이 약점)", D.st === "tired" && a.weak().map(w => w.mark).join() === "드레이크");
+    // 칼 — 갑판에서 가까이 오면
+    K = fresh(8); calm(); H.step();
+    const D2 = K.dk; D2.at = 0; D2.x = E("ADM_PERCH[0][0]"); D2.y = E("ADM_PERCH[0][1]"); D2.st = "stand"; D2.t = 1e3; D2.last = null;
+    const spot = () => ({ x: K.x + D2.x - 90, y: D2.y - 60 });
+    calm(); { const q = spot(); pin(q.x, q.y); } H.step();
+    ok("v60 bosses: 대장 — 갑판에서 가까이 가면 칼을 젖힌다", D2.st === "slash");
+    let e2 = false, h2 = false;
+    for(let i=0;i<E("ADM_SLASH_WARN") - 2;i++){ calm(); const q = spot(); pin(q.x, q.y); H.step(); if(a.peek().stun > 0) e2 = true; }
+    for(let i=0;i<14;i++){ calm(); const q = spot(); pin(q.x, q.y); H.step(); if(a.peek().stun > 0) h2 = true; }
+    ok("v60 bosses: 대장 — 칼은 예고 동안 안 맞고, 부채꼴 안에 있으면 벤다", !e2 && h2);
+    // 확성기 호령 — 멀리 있으면
+    K = fresh(8); calm(); H.step();
+    const D3 = K.dk; D3.at = 3; D3.x = E("ADM_PERCH[3][0]"); D3.y = E("ADM_PERCH[3][1]"); D3.st = "stand"; D3.t = 1e3; D3.last = "slash";
+    calm(); pin(P().x, 100); H.step();
+    ok("v60 bosses: 대장 — 갑판에서 멀리 있으면 확성기로 포격을 호령한다", D3.st === "order");
+    let shells = 0;
+    for(let i=0;i<E("ADM_ORDER_T") + 3;i++){ calm(); pin(P().x, 100); H.step(); shells = Math.max(shells, a.peek().shells.length); if(i === E("ADM_ORDER_T") - 3) ok("v60 bosses: 대장 — 호령 전엔 포탄 표식이 없다", a.peek().shells.length === 0); }
+    ok("v60 bosses: 대장 — 호령 뒤 병사 포격(표식 포탄 둘)", shells === 2, "shells " + shells);
+    // 옮겨 앉다 미끄러짐
+    K = fresh(8); calm(); H.step();
+    const D4 = K.dk; D4.moves = 1; D4.fx = D4.x; D4.fy = D4.y; D4.to = 3; D4.st = "move"; D4.t = 0; D4.T = E("ADM_MOVE");
+    for(let i=0;i<E("ADM_MOVE") + 2;i++){ calm(); pin(P().x, 100); H.step(); }
+    ok("v60 bosses: 대장 — 두 번째로 옮겨 앉을 때 발을 헛디뎌 미끄러진다(약점)", D4.st === "slip" && a.weak().some(w => w.mark === "드레이크"));
+    K.invul = 0; T().dmg(true, "드레이크"); for(let i=0;i<6;i++){ calm(); pin(P().x, 100); H.step(); }   // 맞은 뒤 멈칫(v59) 몇 프레임
+    ok("v60 bosses: 대장 — 맞으면 곧장 다른 자리로 피한다", D4.st === "move");
+    let err = null; try{ for(const st of ["stand", "move", "harp", "slash", "order", "tired", "slip"]){ D4.st = st; D4.t = 20; E("drawBoss()"); } }catch(e){ err = e.message; }
+    ok("v60 bosses: 대장 — 모든 자세를 그려도 오류가 없다", !err, err);
+    ok("v60 bosses: 대장 — 제한 시간 140초(대장이 직접 싸워 틈이 짧다)", E("bossTimeOf(boss)") === 140 * 60);
+    // 스토리 5-4에서도 같은 대장
+    const ST = () => a.story(), stars0 = Object.assign({}, ST().stars);
+    for(const ch of ST().ch) for(const sg of ch.stages){ if(sg.id === "5-4") break; ST().setBits(sg.id, 1); }
+    E("boss = null"); T().setBoss(null); a.toMenu();
+    const ci = ST().ch.findIndex(c => c.stages.some(sg => sg.id === "5-4")), si = ST().ch[ci].stages.findIndex(sg => sg.id === "5-4");
+    ST().start(ci, si); { let n = 0; while(ST().talk && n++ < 50) ST().talkNext(true); } H.step(); a.hold(true); H.step(); T().setFusen(9);
+    T().teleport(140 * 22); for(let i=0;i<4;i++){ a.hold(true); H.step(); }
+    const sb = a.boss();
+    ok("v60 bosses: 대장 — 스토리 5-4에서도 드레이크가 직접 나와 싸운다", !!sb && sb.type === 8 && !!sb.dk, sb && sb.type);
+    for(const k of Object.keys(ST().stars)) delete ST().stars[k]; Object.assign(ST().stars, stars0);
+    E("storyMode = null; storyResult = null; storyTalk = null; chapCard = null");
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
