@@ -1394,11 +1394,11 @@ function swing(a, st){
   for(const i of [1, 2, 3]){
     U().tab(i);
     const rs = a.rows();
-    packs.push(rs.filter(r => r.key === 7 && /팩 열기/.test(r.label)).length);
-    if(i === 1) ok("근거리 탭에 장착 3개·강화 3개 버튼", [1,2,3].every(k => rs.some(r => r.key === k)) && [4,5,6].every(k => rs.some(r => r.key === k && /강화|최고/.test(r.label))));
+    packs.push(rs.filter(r => r.key === 9 && /팩 열기/.test(r.label)).length);
+    if(i === 1) ok("근거리 탭에 장착 4개·강화 4개 버튼(v60: 기술 넷)", [1,2,3,4].every(k => rs.some(r => r.key === k)) && [5,6,7,8].every(k => rs.some(r => r.key === k && /강화|최고/.test(r.label))));
   }
   ok("기술 탭 셋 모두 팩 버튼이 하나씩", packs.join() === "1,1,1", packs.join());
-  ok("예전 '기술 뽑기' 쪽(2)은 기술 탭으로", (a.shopPage(2), a.rows().some(r => r.key === 7)) && U().page() === 3);
+  ok("예전 '기술 뽑기' 쪽(2)은 기술 탭으로", (a.shopPage(2), a.rows().some(r => r.key === 9 && /팩 열기/.test(r.label))) && U().page() === 3);
   U().tab(0); U().key("ArrowRight");
   ok("→ 키로 다음 탭", U().page() === 3 && U().cat() === "melee");
   U().key("ArrowLeft"); U().key("ArrowLeft");
@@ -3626,6 +3626,128 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   R().setBest(0, 0);
   ok("v60 러시: 계정 코드 낱말표 끝에 rush5", E2("CODE2_WORDS.indexOf('rush5') > CODE2_WORDS.indexOf('jail')"));
   a.toMenu();
+}
+/* --- v60 systems: 기술 개편 (도끼·바주카·개틀링 강화, 팽이·별똥 신규) --- */
+{
+  const a = start(), tc = a.tech, E = (x) => T().ev(x), P = T().P();
+  const K = tc().K, lv0 = Object.assign({}, tc().lv), eqR0 = tc().eqR, eqM0 = tc().eqM;
+  const clear = () => { const s = a.peek(); s.mobs.length = 0; s.gulls.length = 0; s.barrels.length = 0; s.shots.length = 0; E("boss = null; gun = null; shock = null; comet = null; fist = null; volley = null; gunCd = 0; skillCd = 0; stun = 0; rope = null"); };
+  // 보스(곡예사, 약점 '기구'가 b.y-58)를 원하는 자리에 세운다
+  const bossAt = (dx, dy) => { E("boss = null; spawnBoss(false, 0); bossIntro = null; boss.hp = 9; boss.maxHp = 9; boss.t = 0; boss.invul = 0"); const b = a.peek().boss; b.x = P.x + dx; b.y = P.y + dy + 58; return b; };
+  ok("v60 기술: 목록에 근거리 넷(채찍·바주카·도끼·팽이) · 원거리 넷(피스톨·라이플·개틀링·별똥)",
+     tc().list.filter(t => t.cat === "melee").map(t => t.id).join() === "whip,bazooka,axe,top" && tc().list.filter(t => t.cat === "ranged").map(t => t.id).join() === "pistol,rifle,gatling,comet");
+  // 바주카 — 피해 3, 반경 150, 반동으로 위로
+  clear(); tc().set("bazooka", 1); tc().equip("bazooka");
+  P.y = 200; P.vx = 8; P.vy = 3; P.face = 1;
+  let b = bossAt(120 + 130, -4);            // 손바닥 자리(120 앞)에서 130 떨어진 약점 — 예전 반경 120이면 안 닿았다
+  a.fireGun();
+  ok("v60 기술: 바주카 — 보스 피해 3, 반경 150", b.hp === 6 && K.BAZOOKA_R === 150 && K.BAZOOKA_POW === 3, "체력 9→" + b.hp);
+  ok("v60 기술: 바주카 반동은 위로 솟는다(예전엔 이동 반대로 밀렸다)", P.vy <= -7 && P.vx >= 7, "vx=" + P.vx.toFixed(1) + " vy=" + P.vy.toFixed(1));
+  ok("v60 기술: 바주카 재충전 15초", Math.round(a.peek().gunCd) === 900, "쿨=" + a.peek().gunCd);
+  // 도끼 — 피해 2, 충격파
+  clear(); tc().set("axe", 1); tc().equip("axe");
+  P.y = 200; P.vx = 8; P.vy = 2;
+  b = bossAt(30 + 170, 40);                 // 기둥 반폭 190 안(예전 150 밖)
+  a.fireGun();
+  ok("v60 기술: 도끼 — 보스 피해 2, 반폭 190, 맞히면 튀어 오른다", b.hp === 7 && K.AXE_W === 190 && P.vy <= -5, "체력 9→" + b.hp + " vy=" + P.vy.toFixed(1));
+  ok("v60 기술: 도끼 재충전 10초", Math.round(a.peek().gunCd) === 600);
+  clear(); P.y = 200; P.vy = 2;
+  const sea = a.peek().SEA;
+  a.peek().mobs.push({ kind:0, x:P.x + 30 + 290, y:sea - 40, vy:0, air:true, gone:false }, { kind:0, x:P.x + 30 - 300, y:sea - 30, vy:0, air:true, gone:false }, { kind:0, x:P.x + 30 + 290, y:sea - 260, vy:0, air:true, gone:false });
+  a.fireGun();
+  const m = a.peek().mobs.slice();
+  ok("v60 기술: 도끼 기둥 밖(290px)의 물고기는 내리찍는 순간엔 안 맞는다 — 충격파가 생긴다", !m[0].gone && !m[1].gone && !!tc().shock);
+  for(let i=0;i<40;i++) E("updateGun(1)");
+  ok("v60 기술: 충격파가 수면을 따라 양옆으로 퍼져 수면 가까운 물고기를 친다(높이 뜬 건 안 맞는다)", m[0].gone && m[1].gone && !m[2].gone && !tc().shock);
+  clear(); P.y = 200; P.vy = 2;
+  b = bossAt(30 + 100, sea - 200 - 30);     // 기둥에도, 충격파에도 걸리는 자리
+  a.fireGun();
+  for(let i=0;i<40;i++){ b.invul = 0; E("updateGun(1)"); }
+  ok("v60 기술: 기둥에 맞은 보스는 충격파에 또 맞지 않는다", b.hp === 7, "체력 9→" + b.hp);
+  // 개틀링 — 피해 2
+  clear(); tc().set("gatling", 1); tc().equip("gatling");
+  P.y = 200; P.vx = 6; P.vy = 0;
+  b = bossAt(260, 0);
+  a.fire();
+  ok("v60 기술: 개틀링 — 보스 피해 2", b.hp === 7 && K.GATLING_POW === 2, "체력 9→" + b.hp);
+  clear(); P.y = sea - 180;
+  a.peek().mobs.push({ kind:1, x:P.x + 200, y:sea, phase:3, t:0, h:150, gone:false });
+  a.fire();
+  ok("v60 기술: 개틀링은 여전히 해왕류를 못 쓰러뜨린다(원거리 규칙 유지)", !a.peek().mobs[0].gone);
+  // 팽이 — 등 뒤까지, 보스는 한 번, 탄을 튕겨 내고 천천히 떨어진다
+  clear(); tc().set("top", 1); tc().equip("top");
+  P.y = 200; P.vx = 6; P.vy = 8; P.face = 1;
+  a.peek().gulls.push({ x:P.x - 110, y:P.y, base:P.y, vx:0, t:0, gone:false }, { x:P.x + 100, y:P.y - 60, base:P.y - 60, vx:0, t:0, gone:false }, { x:P.x + 260, y:P.y, base:P.y, vx:0, t:0, gone:false });
+  a.peek().shots.push({ x:P.x - 60, y:P.y + 40, vx:0, vy:0, r:8 });
+  b = bossAt(90, 0);
+  a.fireGun();
+  ok("v60 기술: 팽이 — 쓰면 도장이 찍히고 TOP_T 동안 돈다", a.peek().gun.kind === "top" && Math.round(a.peek().gun.t) === K.TOP_T && /팽이/.test(tc().stamp.text));
+  E("updateGun(1)");
+  const g = a.peek().gulls;
+  ok("v60 기술: 팽이는 등 뒤의 갈매기도 친다(반경 밖은 안 맞는다)", g[0].gone && g[1].gone && !g[2].gone);
+  ok("v60 기술: 팽이가 둘레의 탄을 튕겨 낸다", a.peek().shots.length === 0);
+  ok("v60 기술: 팽이 — 도는 동안 천천히 떨어진다", P.vy <= 1.2 + 1e-9, "vy=" + P.vy);
+  for(let i=0;i<30;i++){ b.invul = 0; b.x = P.x + 90; b.y = P.y + 58; E("updateGun(1)"); }
+  ok("v60 기술: 팽이 — 보스는 한 번 돌 때 한 번만 맞는다", b.hp === 8, "체력 9→" + b.hp);
+  for(let i=0;i<30;i++) E("updateGun(1)");
+  ok("v60 기술: 팽이가 끝나면 사라진다", !a.peek().gun);
+  clear(); P.y = sea - 150; P.vy = 0;
+  a.peek().mobs.push({ kind:1, x:P.x - 60, y:sea, phase:3, t:0, h:150, gone:false });
+  a.fireGun(); E("updateGun(1)");
+  ok("v60 기술: 팽이는 근거리라 등 뒤 해왕류도 쓰러뜨린다", a.peek().mobs[0].gone);
+  // 별똥 — 떨어지기 전엔 안 맞고, 떨어지면 둘레를 한꺼번에. 한가운데면 피해 2
+  clear(); tc().set("comet", 1); tc().equip("comet");
+  P.y = 200; P.vx = 0; P.vy = 0; P.face = 1;
+  for(const d of [[400, 0], [460, 50], [350, -40], [640, 0]]) a.peek().gulls.push({ x:P.x + d[0], y:P.y + d[1], base:P.y + d[1], vx:0, t:0, gone:false });
+  a.fire();
+  ok("v60 기술: 별똥 — 쏘면 표적이 정해지고 주먹(fist)은 남지 않는다", !!tc().comet && !a.peek().fist && Math.abs(tc().comet.x - (P.x + 350)) < 130 && /별똥/.test(tc().stamp.text), "x=" + (tc().comet.x - P.x));
+  for(let i=0;i<K.COMET_T - 2;i++) E("updateFist(1)");
+  ok("v60 기술: 별똥 — 떨어지기 전(예고 " + K.COMET_T + "프레임)엔 아무것도 안 맞는다", a.peek().gulls.every(q => !q.gone));
+  for(let i=0;i<4;i++) E("updateFist(1)");
+  const gg = a.peek().gulls;
+  ok("v60 기술: 별똥 — 떨어진 자리 둘레(반경 " + K.COMET_R + ")를 한꺼번에, 밖은 안 맞는다", gg[0].gone && gg[1].gone && gg[2].gone && !gg[3].gone);
+  for(let i=0;i<30;i++) E("updateFist(1)");
+  ok("v60 기술: 별똥 연출이 끝나면 사라진다", !tc().comet);
+  clear(); P.y = 200; P.vx = 0; P.vy = 0;
+  b = bossAt(300, 0); E("wpVel.length = 0");
+  a.fire();
+  for(let i=0;i<K.COMET_T + 2;i++){ b.t = 0; b.x = P.x + 300; b.y = P.y + 58; E("updateFist(1)"); }
+  ok("v60 기술: 별똥 — 약점 한가운데에 꽂히면 피해 2", b.hp === 7, "체력 9→" + b.hp);
+  clear(); P.y = 200; P.vx = 0; P.vy = 0;
+  b = bossAt(300, 0); E("wpVel.length = 0");
+  a.fire();
+  for(let i=0;i<K.COMET_T + 2;i++){ b.t = 0; b.x = P.x + 300 + 85; b.y = P.y + 58; E("updateFist(1)"); }
+  ok("v60 기술: 별똥 — 가장자리에 걸치면 피해 1", b.hp === 8, "체력 9→" + b.hp);
+  clear(); P.y = sea - 180;
+  a.peek().mobs.push({ kind:1, x:P.x + 250, y:sea, phase:3, t:0, h:150, gone:false });
+  a.fire(); for(let i=0;i<K.COMET_T + 2;i++) E("updateFist(1)");
+  ok("v60 기술: 별똥도 원거리라 해왕류는 못 쓰러뜨린다", !a.peek().mobs[0].gone);
+  // 뽑기·강화·저장
+  clear();
+  for(const k of Object.keys(tc().lv)) delete tc().lv[k];
+  Object.assign(tc().lv, { pistol:1, whip:1 });
+  a.shop().setBank(10000);
+  let seq = [0, 0.99]; const r1 = tc().open("melee", () => seq.shift());
+  seq = [0, 0.99]; const r2 = tc().open("ranged", () => seq.shift());
+  ok("v60 기술: 팩에서 새 기술 팽이·별똥이 나온다", r1.kind === "tech" && r1.id === "top" && r2.kind === "tech" && r2.id === "comet", r1.id + " · " + r2.id);
+  tc().mats.melee += 3;
+  const cdA = (tc().equip("top"), tc().meleeCd);
+  ok("v60 기술: 팽이를 비급으로 강화하면 재충전이 짧아진다", tc().up("top") === true && tc().lv.top === 2 && tc().meleeCd < cdA);
+  tc().mats.melee = 0;
+  tc().equip("comet");
+  const rec = JSON.parse(E("recShop()"));
+  ok("v60 기술: 저장에 새 기술 레벨과 장착이 들어간다", rec.tech.top === 2 && rec.tech.comet === 1 && rec.eqM === "top" && rec.eqR === "comet");
+  E("applyShopRecord(recShop())");
+  ok("v60 기술: 저장을 다시 읽어도 그대로", tc().lv.top === 2 && tc().eqM === "top" && tc().eqR === "comet");
+  ok("v60 기술: 계정 코드 낱말표 끝에 top·comet", E("CODE2_WORDS.indexOf('top') > CODE2_WORDS.indexOf('rush5') && CODE2_WORDS.indexOf('comet') > 0 && CODE2_WORDS.indexOf('rush9') === 50"));
+  a.shopUi().tab(1);
+  const rs = a.rows();
+  ok("v60 기술: 창고 근거리 탭 — 카드 넷이 화면 안에 겹치지 않고, 팩 버튼은 9", [1,2,3,4].every(k => { const r = rs.find(q => q.key === k); return r && r.x >= 16 && r.x + r.w <= 884; }) && rs.filter(r => r.key >= 1 && r.key <= 4).every((r, i, arr) => !i || r.x >= arr[i-1].x + arr[i-1].w) && rs.some(r => r.key === 9 && /팩 열기/.test(r.label)));
+  for(let i=0;i<3;i++) H.step();
+  // 되돌리기
+  for(const k of Object.keys(tc().lv)) delete tc().lv[k];
+  Object.assign(tc().lv, lv0); tc().equip(eqM0); tc().equip(eqR0); a.shop().setBank(0);
+  clear(); a.toMenu();
 }
 /* ===================== v60 systems 끝 ===================== */
 

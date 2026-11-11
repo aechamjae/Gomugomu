@@ -372,12 +372,18 @@ const GUN_CD    = 60*15;    // 채찍 재충전 15초
 const GUN_LIFE  = 30;       // 이펙트 지속 프레임
 const WHIP_R    = 250;      // 채찍 다리가 닿는 거리(몸 중심에서)
 const WHIP_BACK = -50;      // 등 뒤로는 이만큼까지만 휩쓴다(앞쪽 반원 + 살짝)
-const BAZOOKA_R = 120, BAZOOKA_AT = 120, BAZOOKA_KNOCK = 9.5;   // 바주카 — 코앞 한 점을 두 손바닥으로 강타, 반동
-const AXE_W     = 150;      // 도끼 — 발뒤꿈치로 내리찍는 기둥의 반폭
+// v60 기술 개편 — 바주카: 반경 120→150 · 보스 피해 2→3 · 재충전 18→15초 · 반동이 이동 반대(속도를 잃음) → 비스듬히 위로 솟음
+const BAZOOKA_R = 150, BAZOOKA_AT = 120, BAZOOKA_KNOCK = 9.5, BAZOOKA_POW = 3, BAZOOKA_LIFT = 7.2;
+// 도끼: 반폭 150→190 · 보스 피해 1→2 · 재충전 12→10초 · 내리찍은 자리에서 수면을 따라 양옆으로 충격파(AXE_WAVE_R까지) · 맞히면 살짝 튀어 오른다
+const AXE_W = 190, AXE_POW = 2, AXE_WAVE_SPD = 11, AXE_WAVE_R = 340, AXE_WAVE_H = 110, AXE_HOP = 5;
+// 팽이(v60 신규 근거리) — 몸을 축으로 TOP_T프레임 돌며 둘레(반경 TOP_R, 등 뒤 포함)를 TOP_TICK마다 쓸고, 도는 동안 탄을 튕겨 내고 천천히 떨어진다
+const TOP_R = 150, TOP_T = 48, TOP_TICK = 6, TOP_FALL = 1.2;
 
 /* 원거리 기술(Q) */
 const RIFLE_SPD = 38, RIFLE_LIFE = 30;    // 라이플 — 비틀어 쏘는 주먹. 더 빠르고 멀리, 관통
-const GATLING_RANGE = 440, GATLING_ARC = 0.42;   // 개틀링 — 조준 방향 부채꼴(반각 rad) 안을 순식간에 연타
+const GATLING_RANGE = 440, GATLING_ARC = 0.42, GATLING_POW = 2;   // 개틀링 — 조준 방향 부채꼴(반각 rad) 안을 순식간에 연타. v60: 보스 피해 1→2
+// 별똥(v60 신규 원거리) — 주먹을 하늘로 쏘아 올렸다가 COMET_T프레임 뒤 표적 위로 내리꽂는다. 반경 COMET_R 안을 한꺼번에, 약점 한가운데(COMET_CORE)에 꽂히면 피해 2
+const COMET_RANGE = 640, COMET_R = 110, COMET_T = 28, COMET_CORE = 42, COMET_AFTER = 18;
 
 /* 해왕류 처치 보상 — 위험한 대형 잡몹이라 금화 한두 개보다 훨씬 커야 공정하다 */
 const KING_REWARD = 600;
@@ -759,11 +765,13 @@ const TECH_CATS = {
 const TECH_ORDER = ["melee", "ranged", "gear"];
 const TECHS = [
   { id:"whip",    cat:"melee",  name:"고무고무 채찍",   short:"채찍",  cd:GUN_CD, base:true, desc:"다리를 휘둘러 앞쪽 반원을 휩쓴다" },
-  { id:"bazooka", cat:"melee",  name:"고무고무 바주카", short:"바주카", cd:60*18, desc:"코앞을 두 손바닥으로 강타 · 보스 피해 2 · 반동" },
-  { id:"axe",     cat:"melee",  name:"고무고무 도끼",   short:"도끼",  cd:60*12, desc:"발뒤꿈치로 발밑 기둥을 바다까지 내리찍는다" },
+  { id:"bazooka", cat:"melee",  name:"고무고무 바주카", short:"바주카", cd:60*15, desc:"코앞을 두 손바닥으로 강타 · 보스 피해 3 · 반동으로 위로 솟는다" },
+  { id:"axe",     cat:"melee",  name:"고무고무 도끼",   short:"도끼",  cd:60*10, desc:"발밑 기둥을 바다까지 내리찍는다 · 보스 피해 2 · 수면을 따라 양옆으로 충격파" },
+  { id:"top",     cat:"melee",  name:"고무고무 팽이",   short:"팽이",  cd:60*14, desc:"몸을 축으로 빙글빙글 — 등 뒤까지 둘레를 쓸고 탄을 튕겨 낸다 · 도는 동안 천천히 떨어진다" },
   { id:"pistol",  cat:"ranged", name:"고무고무 피스톨", short:"피스톨", cd:SKILL_CD, base:true, desc:"자동 조준 주먹 한 방" },
   { id:"rifle",   cat:"ranged", name:"고무고무 라이플", short:"라이플", cd:60*12, desc:"비틀어 쏜 주먹 — 더 빠르고 멀리, 꿰뚫는다" },
-  { id:"gatling", cat:"ranged", name:"고무고무 개틀링", short:"개틀링", cd:60*18, desc:"조준 방향 부채꼴을 순식간에 연타" },
+  { id:"gatling", cat:"ranged", name:"고무고무 개틀링", short:"개틀링", cd:60*18, desc:"조준 방향 부채꼴을 순식간에 연타 · 보스 피해 2" },
+  { id:"comet",   cat:"ranged", name:"고무고무 별똥",   short:"별똥",  cd:60*14, desc:"주먹을 하늘로 쏘아 올려 표적 위로 내리꽂는다 — 둘레를 한꺼번에, 한가운데면 피해 2" },
   { id:"gcharge", cat:"gear",   name:"투지",   desc:"기어 게이지가 레벨당 10% 빨리 찬다" },
   { id:"gtime",   cat:"gear",   name:"지구력", desc:"기어 지속 시간이 레벨당 8% 길어진다" },
   { id:"gstart",  cat:"gear",   name:"예열",   desc:"출항할 때 기어 게이지가 레벨당 12% 차 있다" }
@@ -2738,7 +2746,7 @@ function reset(){
   skillCd = 0;                 // 출발할 땐 충전되어 있다
   fist = null;
   gunCd = 0;                   // 근거리 기술(W)도 출발할 땐 충전
-  skillMax = rangedCd(); gunMax = meleeCd(); volley = null;
+  skillMax = rangedCd(); gunMax = meleeCd(); volley = null; comet = null; shock = null; techStamp = null;
   gun = null;
   fire = 0;
   stallX = p.x;
@@ -6128,7 +6136,7 @@ function leadPoint(c, spd){
   return { x:tx, y:ty };
 }
 // 사거리 안에서 가장 급한 목표를 고른다. spd가 있으면 그 속도로 날아갈 때 만나는 자리(예측점)를 돌려준다
-function pickAimTarget(spd, range, bossRange, noKing){
+function pickAimTarget(spd, range, bossRange, noKing, fixedT){
   let best = null, bd = 1e9, bp = 9;
   for(const c of aimCandidates()){
     if(noKing && c.king) continue;
@@ -6141,6 +6149,7 @@ function pickAimTarget(spd, range, bossRange, noKing){
     if(c.pri === 2 && (c.x < p.x + 20 || d > 760)) continue;
     if(c.pri < bp || (c.pri === bp && d < bd)){ bp = c.pri; bd = d; best = c; }
   }
+  if(best && fixedT) return { x: best.x + best.vx*fixedT, y: best.y + best.vy*fixedT + 0.5*best.ay*fixedT*fixedT };   // 정해진 시간 뒤의 자리(별똥)
   return best ? leadPoint(best, spd) : null;
 }
 
@@ -6153,13 +6162,14 @@ function pistolAim(spd, range){
 
 function pistolCd(){ return SKILL_CD * (1 - 0.12 * upLv("pistol")); }
 
-let skillMax = SKILL_CD, gunMax = GUN_CD, volley = null;
+let skillMax = SKILL_CD, gunMax = GUN_CD, volley = null, comet = null, shock = null, techStamp = null;
 function firePistol(){
   if(cuffed()) return;
   if(state !== STATE.PLAY || skillCd > 0 || fist || stun > 0) return;
   cutViceHook();
   skillCd = skillMax = rangedCd();
   if(eqRanged === "gatling"){ fireGatling(); return; }
+  if(eqRanged === "comet"){ fireComet(); return; }
   const rifle = eqRanged === "rifle";
   const spd = rifle ? RIFLE_SPD : FIST_SPD, life = rifle ? RIFLE_LIFE : FIST_LIFE;
   const a = pistolAim(spd, spd*life);
@@ -6187,11 +6197,35 @@ function fireGatling(){
     da = Math.atan2(Math.sin(da), Math.cos(da));
     return Math.abs(da) < GATLING_ARC + Math.asin(Math.min(1, r / d));
   };
-  strikeArea(inCone, "개틀링", 1, { ranged:true });
+  strikeArea(inCone, "개틀링", GATLING_POW, { ranged:true });
+}
+// 별똥 — 표적(없으면 앞쪽 허공)을 정해 두고 주먹을 쏘아 올린다. 떨어지는 자리는 쏠 때 정해진다(움직이는 표적은 COMET_T 뒤 자리를 미리 노린다)
+function fireComet(){
+  const t = pickAimTarget(0, COMET_RANGE, PISTOL_BOSS_RANGE, true, COMET_T);
+  const face = p.face || 1;
+  comet = { x: t ? t.x : p.x + face*300 + p.vx*COMET_T*0.6, y: t ? t.y : Math.min(SEA - 60, p.y), t: 0, done: false, ox: p.x, oy: p.y, seed: time };
+  techStamp = { text: "고무고무 별똥", t: 0, col: "240,162,78" };
+  for(let i=0;i<10;i++) spark(p.x, p.y - 20, "#f0a24e");
+}
+function cometLand(){
+  const c = comet; c.done = true;
+  addShake(7, 16);
+  for(let i=0;i<22;i++) spark(c.x + (Math.random() - 0.5)*COMET_R, c.y + (Math.random() - 0.5)*COMET_R*0.7, i % 2 ? "#f0a24e" : "#ffe6a0");
+  // 약점 한가운데에 꽂히면 피해 2
+  const core = !!boss && weakPoints(boss).some(w => Math.hypot(w.x - c.x, w.y - c.y) < COMET_CORE + w.r);
+  const hp0 = boss ? boss.hp : 0;
+  c.hits = strikeArea((x, y, r) => Math.hypot(x - c.x, y - c.y) < COMET_R + r, "별똥", core ? 2 : 1, { ranged:true });
+  if(core && boss && boss.hp < hp0) pops.push({ x:c.x, y:c.y - 40, t:60, text:"정통!", color:"#ffd76a" });
 }
 
 function updateFist(dt){
   if(volley){ volley.t += dt; if(volley.t > 22) volley = null; }
+  if(comet){
+    comet.t += dt;
+    if(!comet.done && comet.t >= COMET_T) cometLand();
+    if(comet && comet.t > COMET_T + COMET_AFTER) comet = null;
+  }
+  if(techStamp){ techStamp.t += dt; if(techStamp.t > 46) techStamp = null; }
   if(!fist) return;
   fist.px = fist.x; fist.py = fist.y;
   if(fist.back){
@@ -6340,7 +6374,7 @@ function strikeArea(inArea, how, power, opt){
   for(const g of gulls) if(!g.gone && inArea(g.x, g.y, GULL_R)){ killGull(g, 20); hits++; }
   for(const b of barrels) if(!b.gone && inArea(b.x, barrelY(b), BARREL_R)){ breakBarrel(b, how); hits++; }
   for(let i=shots.length-1;i>=0;i--) if(inArea(shots[i].x, shots[i].y, shots[i].r || 8)) shots.splice(i,1);
-  if(boss){
+  if(boss && !opt.noBoss){
     // 유령 상태(또는 가라앉은) 유령선은 무적 — 범위기로도 안 맞는다
     const ghostSafe = boss.type === 7 && (boss.phase === 1 || (boss.sink || 0) > 12);
     let hit;
@@ -6373,17 +6407,28 @@ function fireGun(){
     const gx = p.x + BAZOOKA_AT*face, gy = p.y - 4;
     gun.x = gx; gun.y = gy;
     const spd = Math.hypot(p.vx, p.vy);
-    if(spd > 0.4){ p.vx -= (p.vx/spd) * BAZOOKA_KNOCK; p.vy -= (p.vy/spd) * BAZOOKA_KNOCK; }
-    else p.vy -= BAZOOKA_KNOCK;
+    // v60 반동 — 예전엔 이동 반대쪽으로 밀려 속도만 잃었다. 이제 손바닥을 맞부딪친 반동으로 비스듬히 위로 솟는다(떨어질 때 높이를 벌어 준다)
+    p.vy = Math.max(-12, Math.min(p.vy, 0) - BAZOOKA_LIFT);
+    if(!rope && spd > 0.4) p.vx = Math.max(p.vx * 0.92, Math.min(p.vx, 5));
     for(let i=0;i<22;i++) spark(gx, gy, "#e8b48c");
-    strikeArea((x, y, r) => Math.hypot(x - gx, y - gy) < BAZOOKA_R + r, "바주카", 2);
+    strikeArea((x, y, r) => Math.hypot(x - gx, y - gy) < BAZOOKA_R + r, "바주카", BAZOOKA_POW);
   } else if(eqMelee === "axe"){
     // 도끼 — 다리를 높이 들었다 발밑 기둥을 바다까지 내리찍는다. 발밑의 해왕류·물고기를 노릴 때
     addShake(8, 18);
     const cx = p.x + 30*face;
     gun.x = cx;
     for(let i=0;i<20;i++) spark(cx + (Math.random()-0.5)*AXE_W, SEA, "#8fd6d8");
-    strikeArea((x, y, r) => Math.abs(x - cx) < AXE_W + r && y > p.y - 140 - r, "도끼", 1);
+    const hp0 = boss ? boss.hp : -1;
+    const n = strikeArea((x, y, r) => Math.abs(x - cx) < AXE_W + r && y > p.y - 140 - r, "도끼", AXE_POW);
+    if(n > 0 && !rope) p.vy = Math.min(p.vy, -AXE_HOP);          // 맞힌 반동으로 살짝 튀어 오른다
+    // 충격파 — 내리찍은 자리에서 수면을 따라 양옆으로 퍼진다(updateGun). 기둥에 이미 맞은 보스는 또 맞지 않는다
+    shock = { x: cx, t: 0, hitBoss: !!boss && boss.hp < hp0 || !boss && hp0 >= 0, seed: time };
+  } else if(eqMelee === "top"){
+    // 팽이 — 두 팔을 벌리고 몸을 축으로 돈다. 판정은 updateGun이 TOP_TICK마다
+    gun.t = TOP_T; gun.life = TOP_T; gun.tick = 0; gun.hitBoss = false; gun.seed = time;
+    techStamp = { text: t.name, t: 0, col: "192,138,240" };
+    pops.pop();                                                  // 이름은 도장으로 찍는다
+    addShake(4, 10);
   } else {
     // 채찍 — 다리를 크게 휘둘러 몸 주변 앞쪽 반원을 휩쓴다. 조준이 필요 없다
     addShake(6, 14);
@@ -6396,7 +6441,30 @@ function fireGun(){
 }
 
 function updateGun(dt){
+  if(gun && gun.kind === "top"){
+    // 팽이 — 몸을 따라다니며 둘레를 쓴다. 보스는 한 번만 맞는다. 줄 없이 떨어지는 중이면 천천히
+    gun.x = p.x; gun.y = p.y; gun.tick -= dt;
+    if(!rope && p.vy > TOP_FALL) p.vy = TOP_FALL;
+    if(stun > 0) gun.t = 0;
+    else if(gun.tick <= 0){
+      gun.tick = TOP_TICK;
+      const hp0 = boss ? boss.hp : -1;
+      strikeArea((x, y, r) => Math.hypot(x - p.x, y - p.y) < TOP_R + r, "팽이", 1, { noBoss: gun.hitBoss });
+      if(hp0 >= 0 && (!boss || boss.hp < hp0)) gun.hitBoss = true;
+    }
+  }
   if(gun){ gun.t -= dt; if(gun.t <= 0) gun = null; }
+  if(shock){
+    // 도끼 충격파 — 좌우 두 물마루가 AXE_WAVE_SPD로 퍼지며 수면 가까이(AXE_WAVE_H)의 것을 친다
+    shock.t += dt;
+    const d = shock.t * AXE_WAVE_SPD, sx = shock.x;
+    if(d > AXE_WAVE_R) shock = null;
+    else {
+      const hp0 = boss ? boss.hp : -1;
+      strikeArea((x, y, r) => y > SEA - AXE_WAVE_H - r && Math.abs(Math.abs(x - sx) - d) < 36 + r, "도끼 충격파", 1, { noBoss: shock.hitBoss });
+      if(hp0 >= 0 && (!boss || boss.hp < hp0)) shock.hitBoss = true;
+    }
+  }
 }
 
 
@@ -7434,7 +7502,7 @@ const CODE_HEAD = "GOMU1-", CODE2_HEAD = "G2-";
 const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022",
   "story","st","seen","end","art","grab","sense","redhawk","puff","spin","jack","boss15","biome3","voyage_end","star81","captain","starlit",
   "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail",
-  "rush5"];
+  "rush5","top","comet"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -11853,7 +11921,11 @@ function drawShield(){
 
 function drawGun(){
   drawVolley();
+  drawComet();
+  drawShock();
+  drawTechStamp();
   if(!gun) return;
+  if(gun.kind === "top"){ drawTop(); return; }
   const k = 1 - Math.max(0, gun.t) / GUN_LIFE;      // 0 → 1
   const px = p.x - cam.x, py = p.y, f = gun.face;
   ctx.save();
@@ -11909,6 +11981,101 @@ function drawGun(){
   ctx.restore();
 }
 
+// 팽이 — 두 팔이 바퀴살처럼 돌고, 둘레에 붓 자국 고리가 따라 돈다. 처음 몇 프레임은 팔을 감았다 푸는 예비 동작
+function drawTop(){
+  const k = 1 - Math.max(0, gun.t) / TOP_T, px = p.x - cam.x, py = p.y, calm = settings.calm;
+  const open = calm ? 1 : ease.outBack(clamp01(k / 0.14), 2), R = TOP_R * open, th = k * Math.PI * 7, al = Math.min(1, gun.t / 8);
+  ctx.save(); ctx.lineCap = "round";
+  // 쓸리는 둘레 — 옅은 원반 + 돌아가는 붓 자국 셋
+  ctx.globalAlpha = al * 0.13; ctx.fillStyle = "#c08af0";
+  ctx.beginPath(); ctx.arc(px, py, Math.max(0, R), 0, Math.PI*2); ctx.fill();
+  for(let i=0;i<3;i++){
+    const a0 = th + i * Math.PI*2/3;
+    ctx.globalAlpha = al * 0.75; ctx.strokeStyle = INK; ctx.lineWidth = 7 - i;
+    ctx.beginPath(); ctx.arc(px, py, Math.max(0, R - 6 - i*13), a0 - 1.25, a0); ctx.stroke();
+    ctx.globalAlpha = al * 0.5; ctx.strokeStyle = "#e9d6ff"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, Math.max(0, R - 2 - i*13), a0 - 0.9, a0 - 0.1); ctx.stroke();
+  }
+  // 두 팔(바퀴살)과 주먹
+  ctx.globalAlpha = al;
+  for(const s of [0, Math.PI]){
+    const a = th + s, hx = px + Math.cos(a)*R, hy = py + Math.sin(a)*R*0.86;
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo(px + Math.cos(a - 0.5)*R*0.55, py + Math.sin(a - 0.5)*R*0.5, hx, hy); }, 8, "#e8b48c");
+    inkShape(() => { ctx.beginPath(); ctx.arc(hx, hy, 12, 0, Math.PI*2); }, "#e8b48c");
+  }
+  if(!calm) inkSplat(px, py, clamp01(k / 0.3), gun.seed, 8, "60,40,90", TOP_R * 0.9);
+  ctx.restore();
+}
+// 도끼 충격파 — 수면을 따라 양옆으로 달리는 물마루 둘
+function drawShock(){
+  if(!shock) return;
+  const d = shock.t * AXE_WAVE_SPD, k = d / AXE_WAVE_R, al = 1 - k*k;
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for(const s of [-1, 1]){
+    const x = shock.x - cam.x + s*d, h = AXE_WAVE_H * (0.55 + 0.45*Math.sin(Math.min(1, k*3) * Math.PI/2)) * (1 - k*0.5);
+    ctx.globalAlpha = al * 0.85;
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(x - s*46, SEA + 4); ctx.quadraticCurveTo(x - s*8, SEA - h*0.5, x + s*10, SEA - h); ctx.quadraticCurveTo(x + s*30, SEA - h*0.62, x + s*20, SEA - h*0.3); ctx.quadraticCurveTo(x + s*26, SEA - 10, x + s*40, SEA + 4); ctx.closePath(); }, "#bfe8ea", { line: 2 });
+    ctx.globalAlpha = al * 0.6; ctx.strokeStyle = "#f4ffff"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - s*20, SEA - h*0.3); ctx.quadraticCurveTo(x - s*2, SEA - h*0.7, x + s*8, SEA - h*0.9); ctx.stroke();
+  }
+  if(!settings.calm) inkSplat(shock.x - cam.x, SEA - 10, clamp01(shock.t / 16), shock.seed, 9, "150,210,214", 120);
+  ctx.restore();
+}
+// 별똥 — 팔이 하늘로 솟고(예비 동작), 표적에 조준 고리가 조여 들고, 주먹이 내리꽂히며 먹이 튄다
+function drawComet(){
+  if(!comet) return;
+  const c = comet, px = p.x - cam.x, py = p.y, tx = c.x - cam.x, ty = c.y, calm = settings.calm;
+  ctx.save(); ctx.lineCap = "round";
+  if(c.t < COMET_T){
+    const k = c.t / COMET_T, up = clamp01(c.t / 9);
+    // 조준 고리 — 조여 든다
+    ctx.globalAlpha = 0.35 + 0.5*k; ctx.strokeStyle = "#f0a24e"; ctx.lineWidth = 2.5; ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.arc(tx, ty, Math.max(0, COMET_R * (1.5 - 0.5*k)), time*0.12, time*0.12 + Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 0.5 * k; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tx - 14, ty); ctx.lineTo(tx + 14, ty); ctx.moveTo(tx, ty - 14); ctx.lineTo(tx, ty + 14); ctx.stroke();
+    // 솟는 팔 — 화면 위로 뻗어 나간다
+    ctx.globalAlpha = 1 - clamp01((c.t - 12) / 8);
+    const ax = px + (tx - px) * 0.25 * up, ay = py - (py + 80) * ease.outCubic(up);
+    inkTube(() => { ctx.beginPath(); ctx.moveTo(px, py - 4); ctx.quadraticCurveTo(px - 8, (py + ay)/2, ax, ay); }, 8, "#e8b48c");
+    inkShape(() => { ctx.beginPath(); ctx.arc(ax, ay, 12, 0, Math.PI*2); }, "#e8b48c");
+    // 떨어지는 주먹 — 뒤로 불꼬리
+    const f = clamp01((c.t - 12) / (COMET_T - 12));
+    if(f > 0){
+      const e = f*f, fx0 = tx - 60*(1 - e), fy0 = -70 + (ty + 70) * e;
+      ctx.globalAlpha = 0.85; ctx.strokeStyle = "#ffcf7a"; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(fx0 - 26*(1 - e) - 8, fy0 - 96); ctx.lineTo(fx0, fy0); ctx.stroke();
+      ctx.strokeStyle = "#fff3c4"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(fx0 - 14*(1 - e) - 4, fy0 - 60); ctx.lineTo(fx0, fy0); ctx.stroke();
+      ctx.globalAlpha = 1;
+      inkShape(() => { ctx.beginPath(); ctx.arc(fx0, fy0, 17, 0, Math.PI*2); }, "#e8b48c");
+    }
+  } else {
+    const k = clamp01((c.t - COMET_T) / COMET_AFTER), e = ease.outCubic(k);
+    ctx.globalAlpha = (1 - k) * 0.3; ctx.fillStyle = "#ffcf7a";
+    ctx.beginPath(); ctx.arc(tx, ty, Math.max(0, COMET_R * (0.5 + 0.5*e)), 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = INK; ctx.lineWidth = 6 * (1 - k) + 1;
+    ctx.beginPath(); ctx.arc(tx, ty, Math.max(0, COMET_R * e), 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = "#f0a24e"; ctx.lineWidth = 3;
+    for(let i=0;i<10;i++){ const a = i * Math.PI/5 + c.seed; ctx.beginPath(); ctx.moveTo(tx + Math.cos(a)*COMET_R*0.35*e, ty + Math.sin(a)*COMET_R*0.35*e); ctx.lineTo(tx + Math.cos(a)*COMET_R*(0.6 + 0.5*e), ty + Math.sin(a)*COMET_R*(0.6 + 0.5*e)); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if(!calm) inkSplat(tx, ty, k, c.seed, 12, "40,26,16", COMET_R * 1.25);
+  }
+  ctx.restore();
+}
+// 기술 이름 도장 — 새 기술 둘은 이름이 머리 위에 붓 자국과 함께 찍힌다
+function drawTechStamp(){
+  if(!techStamp) return;
+  const s = techStamp, x = p.x - cam.x, y = p.y - 62, calm = settings.calm;
+  const k = clamp01(s.t / 9), sc = calm ? 1 : 1.5 - 0.5 * ease.outBack(k, 2.4), al = Math.min(1, (46 - s.t) / 10);
+  ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.rotate(-0.06); ctx.scale(sc, sc);
+  ctx.font = UIF(800, 17); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const w = ctx.measureText(s.text).width + 30;
+  ctx.fillStyle = "rgba(" + s.col + ",.9)"; brushBand(-w/2, w/2, -13, 26, 3.3); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(40,24,16,.75)"; ctx.strokeText(s.text, 0, 1);
+  ctx.fillStyle = "#fff6e0"; ctx.fillText(s.text, 0, 1);
+  ctx.restore();
+  if(!calm) inkSplat(x, y, clamp01(s.t / 14), 5.1, 6, s.col, 70);
+}
 // 개틀링 — 조준 방향 부채꼴로 주먹 여러 개가 번갈아 튀어나간다
 function drawVolley(){
   if(!volley) return;
@@ -12957,25 +13124,27 @@ function shopUI(){
       uiText(gearCat ? "특성은 기어(E)에 붙는다 — 가지고만 있으면 늘 적용" : "장착 중 — " + (techCat === "ranged" ? "Q " + techOf(eqRanged).name : "W " + techOf(eqMelee).name),
              SHOP_X + 4, SHOP_TOP + 38, UIF(500, 13), "rgba(244,236,217,.72)");
     } });
-    rows.push({ key:7, x: W - 16 - 320, y: SHOP_TOP - 2, w:320, h:52, col:C.col, dim: bank < C.price,
-                label:"📦 " + C.name + " 팩 열기 · 💰 " + commas(C.price), sub:(gearCat ? "특성 " : "기술 ") + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + " 2~6개  (7)",
+    // v60: 기술이 분류마다 넷이 될 수 있어 카드 수만큼 나눈다 — 장착 1~n, 강화 n+1~2n, 팩은 9
+    rows.push({ key:9, x: W - 16 - 320, y: SHOP_TOP - 2, w:320, h:52, col:C.col, dim: bank < C.price, icon:"chest",
+                label:"📦 " + C.name + " 팩 열기 · 💰 " + commas(C.price), sub:(gearCat ? "특성 " : "기술 ") + Math.round(TECH_CHANCE*100) + "% · 아니면 " + C.mat + " 2~6개  (9)",
                 action: () => openPack(techCat) });
-    const cw = (SHOP_W - 24) / 3, cy = SHOP_TOP + 62, ch = SHOP_BOT - cy;
+    const nT = list.length, cw = (SHOP_W - 12*(nT - 1)) / nT, cy = SHOP_TOP + 62, ch = SHOP_BOT - cy;
     list.forEach((t, i) => {
       const x = SHOP_X + i*(cw + 12), lv = tlv(t.id), on = t.id === eqRanged || t.id === eqMelee;
       cards.push({ x, y:cy, w:cw, h:ch, on: lv > 0 && (on || gearCat), dim: !lv, col: C.col, draw: () => {
-        uiText(t.name, x + 16, cy + 26, UIF(800, 17), lv ? "#f4ecd9" : "rgba(244,236,217,.45)");
+        uiText(t.name, x + 16, cy + 26, UIF(800, nT > 3 ? 16 : 17), lv ? "#f4ecd9" : "rgba(244,236,217,.45)");
         drawPips(x + cw - 18, cy + 52, lv, TECH_MAX, C.col);
         uiText(lv ? "Lv." + lv : "🔒 아직 없음", x + 16, cy + 52, UIF(700, 13), lv ? C.col : "rgba(244,236,217,.4)");
         drawWrapped(t.desc, x + 16, cy + 82, cw - 32, 19, UIF(500, 13), lv ? "rgba(244,236,217,.78)" : "rgba(244,236,217,.4)", 4);
         if(t.base) uiText("기본 기술", x + cw - 16, cy + 26, UIF(600, 11), "rgba(244,236,217,.45)", "right");
+        else if(t.id === "top" || t.id === "comet") uiText("새 기술", x + cw - 16, cy + 26, UIF(700, 11), "#ffd76a", "right");
       } });
       rows.push({ key:i + 1, x: x + 12, y: cy + ch - 88, w: cw - 24, h:34, dim: !lv, on: lv > 0 && (on || gearCat),
-                  label: !lv ? "🔒 팩에서 뽑아야 한다" : gearCat ? "✓ 늘 적용 중" : on ? "✓ 장착 중 (" + (t.cat === "ranged" ? "Q" : "W") + ")" : (i + 1) + ") 장착하기",
+                  label: !lv ? (nT > 3 ? "🔒 팩에서 뽑는다" : "🔒 팩에서 뽑아야 한다") : gearCat ? "✓ 늘 적용 중" : on ? "✓ 장착 중 (" + (t.cat === "ranged" ? "Q" : "W") + ")" : (i + 1) + ") 장착하기",
                   action: () => equipTech(t.id) });
       const need = TECH_UP[lv], maxed = lv >= TECH_MAX;
-      rows.push({ key:i + 4, x: x + 12, y: cy + ch - 46, w: cw - 24, h:34, col: C.col, dim: !lv || maxed || mats[t.cat] < need,
-                  label: !lv ? "강화 — 뽑은 뒤에" : maxed ? "최고 Lv." + TECH_MAX : (i + 4) + ") 강화 Lv." + lv + "→" + (lv + 1) + " · 비급 " + need,
+      rows.push({ key:i + 1 + nT, x: x + 12, y: cy + ch - 46, w: cw - 24, h:34, col: C.col, dim: !lv || maxed || mats[t.cat] < need,
+                  label: !lv ? "강화 — 뽑은 뒤에" : maxed ? "최고 Lv." + TECH_MAX : (i + 1 + nT) + ") 강화 " + lv + "→" + (lv + 1) + " · 비급 " + need,
                   action: () => upgradeTech(t.id) });
     });
   } else if(shopPage === 4){
@@ -14425,7 +14594,7 @@ window.__swing = {
   resultText: () => resultText(),
   ghost: () => ({ best: ghostBest, rec: ghostRec }),
   tech: () => ({ lv: techLv, mats, eqR: eqRanged, eqM: eqMelee, open: openPack, up: upgradeTech, equip: equipTech,
-                 set: (id, lv) => { techLv[id] = lv; }, rangedCd: rangedCd(), meleeCd: meleeCd(), volley, aim: (spd, range) => pickAimTarget(spd, range, PISTOL_BOSS_RANGE) }),
+                 set: (id, lv) => { techLv[id] = lv; }, rangedCd: rangedCd(), meleeCd: meleeCd(), volley, comet, shock, stamp: techStamp, K: { BAZOOKA_R, BAZOOKA_POW, AXE_W, AXE_POW, AXE_WAVE_R, GATLING_POW, TOP_R, TOP_T, COMET_R, COMET_T, COMET_RANGE }, list: TECHS, aim: (spd, range) => pickAimTarget(spd, range, PISTOL_BOSS_RANGE) }),
   title: () => ({ name: currentTitleName(), sel: titleSel, pick: pickTitle, page: titlePage }),
   rows: () => menuRows(),
   shopPage: (n) => { state = STATE.SHOP; shopPage = n; },
