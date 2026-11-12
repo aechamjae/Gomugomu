@@ -328,7 +328,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v2.0.0";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
+const GAME_VER = "v2.0.1";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -10716,6 +10716,8 @@ function drawAnglerDark(){
 //   빛이 꺼지면(dim) 여왕 둘레는 붉은 핵 불빛(JQ_LIGHT_DIM)만 남는다. 격노하면 빛이 가끔 깜빡 꺼진다(b.flick, JQ_FLICK — 연출 줄이기면 안 깜빡인다)
 const JQ_WARN = 60, JQ_ZAP = 90, JQ_DIM = 150, JQ_GAP = 130, JQ_W = 22, JQ_JELLY_T = 420, JQ_JELLY_R = 16;
 const JQ_LIGHT = 300, JQ_LIGHT_DIM = 96, JQ_SELF = 140, JQ_DARK = 0.66, JQ_FLICK = 34, JQ_FLICK_CD = 210;
+const LM_S = 0.25;                                     // 루미나 어둠 레이어 배율(화면의 1/4)
+let luminaMask = null, luminaMaskCtx = null;
 const jqLit = (b) => b.st !== "dim" && !(b.flick > 0);
 function updateJellyQueen(b, dt){
   for(let i=b.jellies.length-1;i>=0;i--){
@@ -10885,10 +10887,13 @@ function drawLuminaDark(){
   const R = (JQ_LIGHT_DIM + (JQ_LIGHT - JQ_LIGHT_DIM) * lk) * fl * z, self = JQ_SELF * z;
   const holes = [[...scr(b.x, b.y), R, 1], [...scr(p.x, p.y), self, 0.8]];
   for(const j of b.jellies) holes.push([...scr(j.x, j.y), 44*z, 0.75]);
-  if(inkTint && inkTintCtx && typeof inkTintCtx.getTransform === "function"){
-    const tc = inkTintCtx, k = inkDpr;
-    tc.setTransform(1, 0, 0, 1, 0, 0); tc.globalCompositeOperation = "copy"; tc.fillStyle = "rgba(6,6,22," + A.toFixed(3) + ")"; tc.fillRect(0, 0, inkTint.width, inkTint.height);
-    tc.globalCompositeOperation = "destination-out"; tc.setTransform(k, 0, 0, k, 0, 0);
+  // v2.0.1 랙 대책 — 어둠은 흐릿한 그러데이션뿐이라 화면의 1/4 크기 전용 레이어(luminaMask)에 그리고 늘려 붙인다.
+  //   예전엔 화면 전체 해상도(×dpr)로 잉크 레이어(inkTint)를 매 프레임 칠하고 뚫고 붙여서, 잉크 테두리와 겹쳐 아이패드에서 크게 느려졌다
+  if(!luminaMask){ luminaMask = document.createElement("canvas"); luminaMask.width = Math.round(W*LM_S); luminaMask.height = Math.round(H*LM_S); luminaMaskCtx = luminaMask.getContext("2d"); }
+  if(luminaMaskCtx){
+    const tc = luminaMaskCtx;
+    tc.setTransform(1, 0, 0, 1, 0, 0); tc.globalCompositeOperation = "copy"; tc.fillStyle = "rgba(6,6,22," + A.toFixed(3) + ")"; tc.fillRect(0, 0, luminaMask.width, luminaMask.height);
+    tc.globalCompositeOperation = "destination-out"; tc.setTransform(LM_S, 0, 0, LM_S, 0, 0);
     for(const [hx, hy, r, s] of holes){
       const g = tc.createRadialGradient(hx, hy, r*0.25, hx, hy, r);
       g.addColorStop(0, "rgba(0,0,0," + s + ")"); g.addColorStop(1, "rgba(0,0,0,0)");
@@ -10899,8 +10904,8 @@ function drawLuminaDark(){
       g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.5, "rgba(0,0,0,.8)"); g.addColorStop(1, "rgba(0,0,0,0)");
       tc.fillStyle = g; tc.fillRect(cx - w, 0, w*2, H);
     }
-    tc.globalCompositeOperation = "source-over"; tc.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(inkTint, 0, 0); ctx.restore();
+    tc.globalCompositeOperation = "source-over";
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.drawImage(luminaMask, 0, 0, W, H); ctx.restore();
   } else {
     // 레이어를 못 쓰면 여왕과 주인공 사이를 중심으로 한 큰 빛 하나로
     const [qx, qy] = scr(b.x, b.y), [px, py] = scr(p.x, p.y), mx = (qx + px)/2, my = (qy + py)/2;
@@ -14420,25 +14425,43 @@ function drawParrot(){
   ctx.restore();
 }
 
-function drawTerrainHazards(){
+/* 심연 소용돌이 — 잉크 테두리 레이어 밖에서 그린다(v2.0.1). 예전엔 빨아들이는 범위를 납작한 사각형으로 칠했는데,
+   잉크 레이어 안이라 테두리까지 둘러져 화면에 회색 네모로 떠 보였다. 이제 위로 갈수록 옅어지는 깔때기와 휘감겨 내려가는 물살로 보여 준다 */
+function drawWhirls(){
   for(const w of whirls){
     const x = w.x - cam.x;
     if(x < -120 || x > W/cam.z + 120) continue;
     const on = whirlOn(w), k = w.t % WHIRL_CYC, grow = k < 60 ? k / 60 : k > 240 ? Math.max(0, 1 - (k - 240) / 60) : 1;
     if(grow <= 0.02) continue;
     ctx.save();
+    ctx.lineCap = "round";
     for(let i=0;i<4;i++){
       const r = WHIRL_R * grow * (1 - i*0.22);
       ctx.strokeStyle = "rgba(185,168,240," + ((on ? 0.65 : 0.3) - i*0.1).toFixed(2) + ")"; ctx.lineWidth = 3;
       const a0 = w.t * (on ? 0.12 : 0.04) + i;
       ctx.beginPath(); ctx.ellipse(x, SEA + 2, Math.max(1, r), Math.max(1, r * 0.18), 0, a0, a0 + Math.PI * 1.4); ctx.stroke();
     }
-    if(on){                                                // 빨아들이는 범위 — 옅은 기둥
-      ctx.fillStyle = "rgba(120,100,200,.08)"; ctx.fillRect(x - WHIRL_R, SEA - WHIRL_H, WHIRL_R*2, WHIRL_H);
+    if(on){                                                // 빨아들이는 범위 — 위로 갈수록 옅어지는 깔때기
+      const R = WHIRL_R, top = SEA - WHIRL_H;
+      const g = ctx.createLinearGradient(0, top, 0, SEA);
+      g.addColorStop(0, "rgba(160,140,235,0)"); g.addColorStop(0.55, "rgba(160,140,235,.06)"); g.addColorStop(1, "rgba(175,155,245,.17)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(x - R, top);
+      ctx.quadraticCurveTo(x - R*0.7, SEA - WHIRL_H*0.35, x - R*0.5, SEA); ctx.lineTo(x + R*0.5, SEA);
+      ctx.quadraticCurveTo(x + R*0.7, SEA - WHIRL_H*0.35, x + R, top); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(205,190,255,.5)"; ctx.lineWidth = 1.6;   // 휘감겨 내려가는 물살
+      for(let i=0;i<5;i++){
+        const u = (w.t*0.012 + i/5) % 1, yy = top + u*WHIRL_H, half = R*(1 - u*0.5), a = w.t*0.09 + i*1.3;
+        ctx.globalAlpha = Math.sin(u*Math.PI);
+        ctx.beginPath(); ctx.ellipse(x, yy, half, half*0.12, 0, a, a + 1.7); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
       if(Math.random() < 0.3) spark(w.x + (Math.random()-0.5)*WHIRL_R*1.6, SEA - Math.random()*WHIRL_H, "#b9a8f0");
     }
     ctx.restore();
   }
+}
+function drawTerrainHazards(){
   for(const q of floes){
     const x = q.x + Math.sin(q.t*0.02)*14 - cam.x;
     if(x < -80 || x > W/cam.z + 80) continue;
@@ -16551,6 +16574,7 @@ function drawFrame(){
   drawGrabRings();
   drawTrail();
   drawGhost();
+  drawWhirls();
   inkLayerBegin();               // 여기부터 drawRival까지는 잉크 테두리를 두른다
   if(boss) drawBoss();
   drawMobs();
