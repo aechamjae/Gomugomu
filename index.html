@@ -328,7 +328,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v61";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v62";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -4316,9 +4316,9 @@ const BIOME_POOLS = [
   { mid:[0, 3, 2],          named:6 },        // 노을 군도 — 곡예사·밧줄 끊는 자·흑조호 / 먹물 장군 문어
   { mid:[9, 12, 1],         named:MUSANG },   // 빙하 — 톱니턱·뇌명·작살잡이 / 무상
   { mid:[4, 10, FIREBIRD],  named:SMITH },    // 화산 — 돌풍술사·바이스·불새 / 용암 대장장이
-  { mid:[ANGLER, SHARK, 1],  named:JELLYQ }    // 심연 — 아귀 등불·톱니턱·작살잡이 / 해파리 여왕 루미나
+  { mid:[ANGLER, MIRAGE, TARAN], named:[JELLYQ, KRINO] }   // 심연 — 아귀 등불·거울 갑오징어·닻발 거미게 / 네임드는 해파리 여왕 루미나·바다나리 크리노 중 무작위(v62 — 예전엔 톱니턱·작살잡이를 빌려 왔다)
 ];
-const NAMED = [...new Set([].concat(...BIOME_POOLS.map(z => z.named), [KRINO]))];   // v62: 크리노는 심연 풀 밖(연습·러시)에서도 네임드
+const NAMED = [...new Set([].concat(...BIOME_POOLS.map(z => z.named)))];   // named는 번호 하나 또는 목록(v62 심연: 루미나·크리노)
 const isNamed = (t) => NAMED.indexOf(t) >= 0;
 const NAMED_HP = 5;
 let bossBag = { zone: -1, used: [] };

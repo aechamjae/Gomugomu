@@ -2839,7 +2839,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   // 심연 해역 · 보스 풀
   ok("무한 모드 6000m부터 네 번째 해역 '심연'", a.biome(6500) === 3 && a.biome(1000) === 0 && a.biome(8100) === 0);
   const ab = a.pools()[3];
-  ok("심연 보스 풀(v50) — 아귀 등불·톱니턱·작살잡이 / 네임드 해파리 여왕", !ab.random && ab.mid.join() === "16,9,1" && ab.named === 17);
+  ok("심연 보스 풀(v62) — 아귀 등불·거울 갑오징어·닻발 거미게 / 네임드 해파리 여왕·바다나리", !ab.random && ab.mid.join() === "16,22,21" && ab.named.join() === "17,23");
   T().setDist(6500);
   const picks = new Set(); for(let i=0;i<60;i++) picks.add(T().pickMid());
   ok("심연에선 그 셋만 나온다", picks.size === 3 && [...picks].every(t => ab.mid.indexOf(t) >= 0), [...picks].join(","));
@@ -4323,7 +4323,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   {
     let err = null; try{ E("bossWaterLip(100, 400, 1); bossWaterLip(0, 10, 2, 0.5); drawFaded(0.4, () => { ctx.fillRect(0, 0, 10, 10); }); drawFaded(1, () => {}); drawFaded(0, () => { throw new Error('안 그려야 한다'); })"); }catch(e){ err = e.message; }
     ok("v60 bosses: 경계 — 물마루(bossWaterLip)·반투명 한 장(drawFaded)이 오류 없이 그려지고, 투명도 0이면 아예 안 그린다", !err, err);
-    ok("v61: 버전 — GAME_VER v61", E("GAME_VER") === "v61");
+    ok("v62: 버전 — GAME_VER v62", E("GAME_VER") === "v62");
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
@@ -4479,6 +4479,22 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     err = null; try{ stepN(2400, () => { a.hold(true); T().setFusen(9); }); }catch(e){ err = e.stack; }
     ok("v62 abyss: 크리노 — 2400프레임 스윙 봇 오류 없음", !err, err);
     T().setBoss(null);
+  }
+  /* --- 해역 풀·러시·칭호 --- */
+  {
+    T().setDist(6500);
+    const picks = new Set(); for(let i=0;i<80;i++) picks.add(T().pickMid());
+    ok("v62 abyss: 심연 일반 보스는 아귀·미라주·타란뿐(다른 해역에서 빌려 오지 않는다)", [...picks].sort().join() === "16,21,22", [...picks].join());
+    const nm = new Set();
+    for(let i=0;i<60;i++){ const t = E("(() => { const nm = zonePool().named; return Array.isArray(nm) ? nm[Math.floor(Math.random() * nm.length)] : nm; })()"); nm.add(t); }
+    ok("v62 abyss: 심연 네임드 자리는 루미나·크리노 중 무작위, 둘 다 네임드", [...nm].sort().join() === "17,23" && E("isNamed(17) && isNamed(23) && !isNamed(21) && !isNamed(22)"), [...nm].join());
+    const R = a.rush();
+    ok("v62 abyss: 보스 러시 풀 — 타란·미라주는 일반, 크리노는 네임드", R.pool.mid.indexOf(21) >= 0 && R.pool.mid.indexOf(22) >= 0 && R.pool.named.indexOf(23) >= 0 && R.cls(21) === "mid" && R.cls(22) === "mid" && R.cls(23) === "named");
+    ok("v62 abyss: 연습 목록 끝에 셋", E("PRACTICE_OPTIONS.slice(-3).map(o => o.bossType).join()") === "21,22,23");
+    const L = a.title().list, ids = ["boss21", "boss22", "boss23"];
+    ok("v62 abyss: 첫 격파 칭호 셋 — 사냥 범주 끝, 저장 코드 단어에 들어 있다", ids.every(id => { const d = L.find(t => t.id === id); return d && d.cat === "hunt"; }) && L.filter(t => t.cat === "hunt").slice(-3).map(t => t.id).join() === ids.join() && ids.every(id => E("CODE2_WORDS.indexOf('" + id + "') >= 0")));
+    ok("v62 abyss: 도감에 격침 기록이 있으면 칭호를 딴다", ids.every((id, i) => L.find(t => t.id === id).need({ dex: { ["boss" + (21 + i)]: 1 } }) && !L.find(t => t.id === id).need({ dex: {} })));
+    T().setDist(0);
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
