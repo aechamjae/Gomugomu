@@ -4630,6 +4630,37 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v2.1.0 입문 안내 · 휘청 별 완화 --- */
+{
+  const a = A(), E = (x) => T().ev(x);
+  ok("v2.1.0 별: 스토리에 '휘청 0번' 조건이 없다", E("STORY_ALL.every(q => q.stars.every(c => !(c.k === 'stun' && c.max === 0)))"));
+  ok("v2.1.0 별: 앞쪽(P-2·1-2·2-2)은 휘청 2번 이하, 뒤쪽(3-3·4-2·5-1·5-2·F-2)은 1번 이하",
+     E("['P-2','1-2','2-2'].every(id => STORY_ALL.find(q => q.id === id).stars.some(c => c.k === 'stun' && c.max === 2))") &&
+     E("['3-3','4-2','5-1','5-2','F-2'].every(id => STORY_ALL.find(q => q.id === id).stars.some(c => c.k === 'stun' && c.max === 1))"));
+  a.toMenu();
+  ok("v2.1.0 입문: 메인 메뉴 버튼마다 한 줄 설명", a.rows().every(r => r.note));
+  a.rows().find(r => /도전/.test(r.label)).action();
+  ok("v2.1.0 입문: 도전 화면 버튼마다 한 줄 설명", a.rows().filter(r => !r.back).every(r => r.note));
+  a.toMenu();
+  const runs0 = E("lifeLog.runs");
+  E("lifeLog.runs = 0;");
+  const st0 = E("storyStarTotal()");
+  ok("v2.1.0 입문: 처음 온 사람이면 스토리 버튼이 반짝인다", st0 > 0 || a.rows()[0].glow === true);
+  E("lifeLog.runs = 50;");
+  ok("v2.1.0 입문: 여러 판 한 사람에겐 안 반짝인다", !a.rows()[0].glow);
+  // 새 힌트 — 정의가 다 있고, 처음 만날 때 한 번 뜬다
+  ok("v2.1.0 입문: 새 코치 힌트가 다 정의돼 있다", E("['grab','combo','gold','king','kingC','fish','gull','jelly','barrel','stun','arm','navy','rival','port','floe','geyser','whirl','fusen'].every(k => typeof HINTS[k] === 'string')"));
+  a.startMain(); H.step(); E("state = STATE.PLAY; hintsSeen = new Set(); hintNow = null; rope = null; dist = 0;");
+  E("updateHints(1)");
+  ok("v2.1.0 입문: 출발하자마자 '누르고 있으면 팔이 걸린다'", E("hintNow && hintNow.text === HINTS.grab"));
+  E("lifeLog.runs = 1; deathReason = '바다'; practiceMode = null; storyMode = null; classicMode = false;");
+  ok("v2.1.0 입문: 처음 몇 판은 결과 화면에 다음 걸음", /그네/.test(E("nextStepTip()")));
+  E("lifeLog.runs = 20;");
+  ok("v2.1.0 입문: 여러 판 하면 결과 화면 팁은 없다", E("nextStepTip()") === "");
+  E("lifeLog.runs = " + runs0 + "; hintNow = null;");
+  a.toMenu();
+}
+
 /* --- v2.1.0 클래식 모드 --- */
 {
   const a = A(), E = (x) => T().ev(x);

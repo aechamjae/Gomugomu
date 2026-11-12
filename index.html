@@ -1031,13 +1031,32 @@ const HINTS = {
   boss:    "보스는 빠른 속도로 약점(빨간 원)에 부딪쳐야 맞는다",
   meat:    "고기를 먹으면 바다에 빠져도 한 번 튕겨 오른다",
   sling:   "새총 — 누르고 있으면 뒤로 당겨지고, 떼면 두 고리 사이로 튀어 나간다",
-  slingok: "앞쪽 고리가 닿는다 — F(터치 '새총')를 눌러 양팔 새총!"
+  slingok: "앞쪽 고리가 닿는다 — F(터치 '새총')를 눌러 양팔 새총!",
+  // v2.1.0 처음 만나는 것마다 한 번씩 — 무엇이고 어떻게 대하는지
+  grab:    "화면을 누르고 있으면(Space·팔 버튼) 앞 고리에 팔이 걸린다 — 떼면 놓는다",
+  combo:   "고리를 연달아 이으면 콤보 — 보물 배율이 오른다(최대 ×" + CHAIN_CAP + ")",
+  gold:    "황금 고리 — 잡으면 보물과 기어 게이지가 크게 오른다",
+  king:    "해왕류 접근! 닿으면 크게 휘청 — W 근거리 기술로 물리치거나 높이 날아 넘어라",
+  kingC:   "해왕류 접근! 클래식에선 닿으면 끝 — 높이 날아 넘어라",
+  fish:    "식인 물고기 — 지나가면 물 밖으로 튀어오른다 · 높이 지나가면 안전",
+  gull:    "폭탄 갈매기 — 폭탄을 떨어뜨린다 · Q로 쏘아 떨어뜨리면 보물",
+  jelly:   "해파리 — 위에서 밟으면 크게 튕겨 오른다(옆으로 부딪히면 쏘인다)",
+  barrel:  "보물 통 — 몸으로 부딪히거나 기술로 부수면 금화가 쏟아진다",
+  stun:    "휘청! 잠깐 팔을 못 쓴다 — 보호막·선의·기어가 막아 주거나 줄여 준다",
+  arm:     "팔 부상 — 붉은 링이 다 줄 때까지 고리를 못 잡는다",
+  navy:    "해군 추격 — 뒤에서 밀어붙인다. 붙잡히지 말고 앞으로! 버티면 따돌린다",
+  rival:   "라이벌 경주 — 결승선까지 먼저 가면 판돈과 보상 카드",
+  port:    "항구 돛대(부두) — 잡으면 정박해서 이번 판 보물로 고기·보호막·보급을 산다",
+  floe:    "빙하 해역 — 유빙 위로 떨어지면 미끄러지듯 튕겨 오른다",
+  geyser:  "화산 해역 — 수면에 기포가 끓으면 곧 용암이 치솟는다",
+  whirl:   "심연 — 보랏빛 소용돌이가 빨아들인다 · 고리에 매달려 있으면 버틴다",
+  fusen:   "풍선이 있다 — 바다에 닿는 순간 한 번 튕겨 오른다"
 };
 let hintsSeen = new Set(), hintNow = null;
 function hint(id){
   if(hintsSeen.has(id) || hintNow || practiceMode || state !== STATE.PLAY) return;
   hintsSeen.add(id);
-  hintNow = { text: HINTS[id], t: 200 };
+  hintNow = { text: HINTS[id], t: 230 };
   try{ if(window.localStorage) localStorage.setItem("swing:hints", JSON.stringify([...hintsSeen])); }catch(e){}
 }
 function loadHints(){
@@ -1045,7 +1064,25 @@ function loadHints(){
 }
 function updateHints(dt){
   if(hintNow){ hintNow.t -= dt; if(hintNow.t <= 0) hintNow = null; return; }
+  if(!rope && dist < 15 && !hintsSeen.has("swing")) hint("grab");
   if(rope) hint("swing");
+  if(chain >= 2) hint("combo");
+  if(stun > 0 && !boss) hint("stun");
+  if(armHurt > 0) hint("arm");
+  if(fusen > 0 && dist > 40) hint("fusen");
+  const ahead = (x, r) => x > p.x && x - p.x < (r || 520);
+  if(mobs.some(m => m.kind === 1 && m.phase === 1)) hint(classicMode ? "kingC" : "king");
+  if(mobs.some(m => m.kind === 0 && m.air && ahead(m.x, 360))) hint("fish");
+  if(gulls.some(g => !g.gone && ahead(g.x))) hint("gull");
+  if(jellies.some(j => ahead(j.x, 420))) hint("jelly");
+  if(barrels.some(b => !b.gone && ahead(b.x, 420))) hint("barrel");
+  if(anchors.some(a => a.gold && !a.broken && ahead(a.x, 420))) hint("gold");
+  if(anchors.some(a => a.port && !a.portUsed && ahead(a.x, 600))) hint("port");
+  if(navy) hint("navy");
+  if(rival) hint("rival");
+  if(floes.some(q => ahead(q.x, 520))) hint("floe");
+  if(geysers.some(g => ahead(g.x, 520))) hint("geyser");
+  if(whirls.some(w => ahead(w.x, 520))) hint("whirl");
   if(!rope && airTime > 40 && hintsSeen.has("swing")) hint("air");
   if(releaseGrade() === 2) hint("perfect");
   if(!rope && p.y > SEA - 110 && p.vy > 3) hint("sea");
@@ -1057,7 +1094,7 @@ function updateHints(dt){
 }
 function drawHint(){
   if(!hintNow) return;
-  const a = Math.min(1, hintNow.t / 25, (200 - hintNow.t) / 12);
+  const a = Math.min(1, hintNow.t / 25, (230 - hintNow.t) / 12);
   ctx.save();
   ctx.globalAlpha = a;
   ctx.font = "600 14px 'Gowun Batang', 'Pretendard', serif";
@@ -1301,7 +1338,7 @@ const STORY_CH = [
            ["할아버지 메모", "당길 땐 뒤로, 놓을 땐 앞으로. 돛대 줄부터 익혀라."]],
       post:[["고무팔", "좋아, 팔이 제법 말을 듣는다!"]] },
     { id:"P-2", name:"섬을 떠나며", biome:0, sky:"day", goal:{ type:"dist", m:400 }, mods:{}, reward:300,
-      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"coin", min:30, text:"금화 30개" }],
+      stars:[{ k:"stun", max:2, text:"휘청 2번 이하" }, { k:"coin", min:30, text:"금화 30개" }],
       pre:[["고무팔", "가자. 조각은 수평선 너머에 있어."],
            ["할아버지 메모", "물고기 떼가 길을 막거든 주먹(Q)을 날려라."]],
       post:[["고무팔", "저기 붉은 섬들… 노을 군도다!"],
@@ -1314,7 +1351,7 @@ const STORY_CH = [
            ["고무팔", "바람 타고 군도를 건너자. 하늘길이 지름길이래. 새총(F)도 써 봐야지."]],
       post:[["고무팔", "어? 저 앞에서 누가 날 노려보는데."]] },
     { id:"1-2", name:"갈고리 잭", biome:0, sky:"dusk", goal:{ type:"race", rival:0 }, mods:{}, reward:600,
-      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"lead", min:60, text:"60m 넘게 앞서 결승" }],
+      stars:[{ k:"stun", max:2, text:"휘청 2번 이하" }, { k:"lead", min:60, text:"60m 넘게 앞서 결승" }],
       pre:[["갈고리 잭", "그 조각은 이 갈고리 잭 님이 먼저 찜했다, 고무 꼬맹이."],
            ["갈고리 잭", "결승 부표에 먼저 닿는 놈이 임자다. 지면 군말 없이 꺼져!"]],
       post:[["갈고리 잭", "쳇… 문어 소굴은 저 섬 뒤다. 다음엔 안 진다."],
@@ -1341,7 +1378,7 @@ const STORY_CH = [
            ["고무팔", "얼음 밑에서 뭐가 올라온다! 해왕류는 주먹이 튕기니까 근거리(W)로!"]],
       post:[["음악가", "노래가 맞았네요… 조심해서 가요."]] },
     { id:"2-2", name:"해군의 추격", biome:1, sky:"day", goal:{ type:"navy", n:1, m:500 }, mods:{}, reward:900,
-      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"time", max:120, text:"2분 안에" }],
+      stars:[{ k:"stun", max:2, text:"휘청 2번 이하" }, { k:"time", max:120, text:"2분 안에" }],
       pre:[["드레이크 대장", "도주는 허락하지 않는다. 전 함, 전속 전진!"],
            ["고무팔", "잡히면 끝이야. 12초만 버티자!"]],
       post:[["고무팔", "얼음 협곡에서 따돌렸다!"]] },
@@ -1373,7 +1410,7 @@ const STORY_CH = [
            ["고무팔", "폭풍까지 겹쳤네… 꽉 잡아!"]],
       post:[["돌풍술사", "바람이… 멎었다…"]] },
     { id:"3-3", name:"불새의 둥지", biome:2, sky:"night", goal:{ type:"boss", boss:14 }, mods:{}, reward:1200,
-      stars:[{ k:"time", max:60, text:"60초 안에" }, { k:"stun", max:0, text:"휘청 0번" }],
+      stars:[{ k:"time", max:60, text:"60초 안에" }, { k:"stun", max:1, text:"휘청 1번 이하" }],
       pre:[["음악가", "대장간 불씨를 지키는 새래요. 한 바퀴 돌고 와서 숨을 고를 때 불꽃이 사그라들어요!"]],
       post:[["고무팔", "불씨가 약해졌다. 지금이야!"]] },
     { id:"3-4", name:"불의 대장간", biome:2, sky:"night", goal:{ type:"boss", boss:13 }, mods:{}, reward:3600, crew:"wright", art:"redhawk",
@@ -1392,7 +1429,7 @@ const STORY_CH = [
            ["고무팔", "안개 때문에 앞이 하나도 안 보여…"]],
       post:[["고무팔", "누가 따라온다!"]] },
     { id:"4-2", name:"쌍칼 메이", biome:0, sky:"night", goal:{ type:"race", rival:1 }, mods:{ weather:"fog" }, reward:1500,
-      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"lead", min:80, text:"80m 넘게 앞서 결승" }],
+      stars:[{ k:"stun", max:1, text:"휘청 1번 이하" }, { k:"lead", min:80, text:"80m 넘게 앞서 결승" }],
       pre:[["쌍칼 메이", "유령선 보물은 내 거야! 비켜!"],
            ["쌍칼 메이", "잭이 그러더라, 너한테 진 뒤로 잠이 안 온대. 난 안 져."]],
       post:[["쌍칼 메이", "흥. 팁 하나 줄게. 유령 선원은 노래를 들으면 잠깐 실체가 돼."],
@@ -1414,11 +1451,11 @@ const STORY_CH = [
   ]},
   { id:"5", name:"5장", sub:"해군 본진 — 정의의 바다", stages:[
     { id:"5-1", name:"포격 해역", biome:1, sky:"day", goal:{ type:"dist", m:1000 }, mods:{ barrage:2 }, reward:1800,
-      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"treasure", min:3000, text:"보물 3000" }],
+      stars:[{ k:"stun", max:1, text:"휘청 1번 이하" }, { k:"treasure", min:3000, text:"보물 3000" }],
       pre:[["드레이크 대장", "조각을 가져오면 항해를 허가한다. 불응하면 포격한다!"]],
       post:[["저격수", "(망루에서) …저 녀석, 피하는 솜씨가 제법인데."]] },
     { id:"5-2", name:"포위망", biome:1, sky:"day", goal:{ type:"navy", n:2, m:900 }, mods:{ navySpd:1.1 }, reward:1800,
-      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"fusen", max:0, text:"풍선 안 씀" }],
+      stars:[{ k:"stun", max:1, text:"휘청 1번 이하" }, { k:"fusen", max:0, text:"풍선 안 씀" }],
       pre:[["드레이크 대장", "포위망을 좁혀라! 두 척으로 막는다!"]],
       post:[["고무팔", "포위망을 뚫었다!"]] },
     { id:"5-3", name:"해군 용병", biome:1, sky:"night", goal:{ type:"boss", boss:9 }, mods:{}, reward:1800,
@@ -1441,7 +1478,7 @@ const STORY_CH = [
            ["음악가", "바다가… 갈라져요!"]],
       post:[["고무팔", "돌아가긴. 저 앞이 심연 입구야."]] },
     { id:"F-2", name:"외눈 바론", biome:3, sky:"night", goal:{ type:"race", rival:2 }, mods:{ rivalSpd:1.1 }, reward:2500, crew:"jack",
-      stars:[{ k:"stun", max:0, text:"휘청 0번" }, { k:"lead", min:100, text:"100m 넘게 앞서 결승" }],
+      stars:[{ k:"stun", max:1, text:"휘청 1번 이하" }, { k:"lead", min:100, text:"100m 넘게 앞서 결승" }],
       pre:[["외눈 바론", "완성된 해도는 이 몸이 가져간다. 경주로 정하지!"],
            ["갈고리 잭", "(멀리서) …빚 갚을 때가 됐군."]],
       post:[["갈고리 잭", "이번만은 같은 배다, 고무 꼬맹이. 떨어지면 갈고리로 건져 주지."],
@@ -2618,6 +2655,17 @@ function navBack(){
   if(prev.id === "log"){ titlePage = 0; dexPage = false; guidePage = null; }
   if(prev.id === "menu"){ shopPage = 0; practicePage = 0; }
 }
+// v2.1.0 처음 온 사람 — 스토리 별이 하나도 없고 판을 거의 안 했으면 메뉴에서 스토리를 짚어 주고, 결과 화면에 다음 걸음을 알려 준다
+const newbie = () => storyStarTotal() === 0 && (lifeLog.runs || 0) < 3;
+// 결과 화면 '다음 걸음' — 처음 몇 판(8판까지)만. 지금 막힌 데에 맞춰 하나
+function nextStepTip(){
+  if((lifeLog.runs || 0) > 8 || practiceMode || (storyMode && storyResult && storyResult.win)) return "";
+  if(deathReason === "바다" && !classicMode) return "바다가 가까우면 → 로 그네를 밀어 높이를 벌어라 · 고기를 먹으면 한 번 튕겨 오른다";
+  if(deathReason === "해왕류" || deathReason === "정체" || deathReason === "") return "막히면 메뉴 5) 항해 일지 → 안내서 — 조작·보스 공략·수치";
+  if(bank >= UPGRADES[0].cost[0] && !upLv("reach")) return "창고(메뉴 4) → 단련에서 모은 보물로 팔 길이를 늘릴 수 있다";
+  if(storyStarTotal() === 0 && !storyMode) return "스토리 모드에서 별을 모으면 동료와 비기가 열린다";
+  return "막히면 메뉴 5) 항해 일지 → 안내서 — 조작·보스 공략·수치";
+}
 const backRow = (key) => Object.assign({ key, back: true, label: "← 이전", icon: "back", action: navBack }, BACK_BTN);
 // MENU/PRACTICE_SELECT 화면의 선택지 — 그리기와 클릭·숫자키 판정이 이 배열 하나를 같이 본다
 function menuRows(){
@@ -2630,25 +2678,25 @@ function menuRowsRaw(){
     const medals = MINIS.reduce((a, q) => a + (miniMedals[q.id] || 0), 0);
     const ICON = ["map", "anchor", "skull", "chest", "compass", "cog", "person", "jelly"];
     return btnRows([
-      { y: top,        label: "1) 📜 스토리 모드 — ★" + storyStarTotal() + "/" + STORY_STAR_MAX, action: openStoryMap, story: true },
-      { y: top + rh,   label: "2) 무한 모드" + (diffSel !== "normal" ? " — " + DIFFS[diffSel].name : "") + (best ? " — 최고 " + Math.floor(best) + "m" : ""), action: startMainGame },
-      { y: top + rh*2, label: "3) 도전 — 오늘의 항해 · 60초 사냥 · 보스 러시 · 클래식 · 연습" + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: () => { state = STATE.CHALLENGE; } },
-      { y: top + rh*3, label: "4) 보물 창고" + (crewNewsCount() ? "  ✉ 새 동료 소식 " + crewNewsCount() : ""), glow: crewNewsCount() > 0,
+      { y: top,        label: "1) 📜 스토리 모드 ★" + storyStarTotal() + "/" + STORY_STAR_MAX, note: newbie() ? "처음이라면 여기부터 — 조작을 하나씩 배운다" : "장마다 보스를 꺾으면 동료·비기가 열린다", action: openStoryMap, story: true, glow: newbie() },
+      { y: top + rh,   label: "2) 무한 모드" + (diffSel !== "normal" ? " " + DIFFS[diffSel].name : "") + (best ? " · " + Math.floor(best) + "m" : ""), note: "끝없이 멀리 — 보스·해군·라이벌이 다 나온다", action: startMainGame },
+      { y: top + rh*2, label: "3) 도전" + (streakNow() ? " 🔥" + streakNow() + "일" : ""), note: "오늘의 항해 · 60초 사냥 · 보스 러시 · 클래식 · 연습", action: () => { state = STATE.CHALLENGE; } },
+      { y: top + rh*3, label: "4) 보물 창고" + (crewNewsCount() ? " ✉ 새 동료 소식 " + crewNewsCount() : ""), note: "모은 보물로 단련·기술·선원·두건", glow: crewNewsCount() > 0,
         action: () => { state = STATE.SHOP; shopMsg = null; shopPage = crewNewsCount() ? 4 : 0; crewStory = null; } },
-      { y: top + rh*4, label: "5) 항해 일지 · 안내서 — 조작·기술·보스 수치", action: () => { state = STATE.LOG; titlePage = 0; dexPage = false; guidePage = null; } },
-      { y: top + rh*5, label: "6) 설정", action: () => { state = STATE.SETTINGS; } },
-      { y: top + rh*6, label: "7) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount, acct: true },
-      { key: 0, y: top + rh*7, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
+      { y: top + rh*4, label: "5) 항해 일지", note: "기록·칭호·도감 · 안내서(조작·기술·보스 수치)", action: () => { state = STATE.LOG; titlePage = 0; dexPage = false; guidePage = null; } },
+      { y: top + rh*5, label: "6) 설정", note: "흔들림·번쩍임·그래픽 품질 · 힌트 다시 보기", action: () => { state = STATE.SETTINGS; } },
+      { y: top + rh*6, label: "7) 계정 — " + (account ? "👤 " + account : "게스트"), note: "로그인·새 계정 · 저장 코드로 기기 옮기기", action: openAccount, acct: true },
+      { key: 0, y: top + rh*7, label: "0) 🪼 미니게임" + (medals ? " 🏅" + medals + "/9" : ""), note: "해파리 트램펄린 외 2종 — 가볍게 한 판", action: () => { state = STATE.MINI_SELECT; }, mini: true }
     ].map((r, i) => Object.assign(r, { icon: ICON[i] })), 500, 35);
   }
   if(state === STATE.CHALLENGE){
     const top = H/2 - 92, rh = 44;
     return btnRows([
-      { y: top,        label: "1) 오늘의 항해" + (dailyBestToday() ? " — 오늘 최고 " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: startDaily },
-      { y: top + rh,   label: "2) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝 (내일 다시)" : "") + (blitzBest ? " — 최고 " + Math.floor(blitzBest) : ""), action: startBlitz },
-      { y: top + rh*2, label: "3) 보스 러시 — 무작위 5연전" + (rushBest ? " · 최단 " + fmtTime(rushBest) : rushBest9 ? " · 옛 9연전 " + fmtTime(rushBest9) : ""), action: startRush },
-      { y: top + rh*3, label: "4) 클래식 — 돛대와 해왕류만 · 닿으면 끝" + (classicBest ? " · 최고 " + Math.floor(classicBest) + "m" : ""), action: startClassic },
-      { y: top + rh*4, label: "5) 연습 모드", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
+      { y: top,        label: "1) 오늘의 항해" + (dailyBestToday() ? " · " + Math.floor(dailyBestToday()) + "m" : "") + (streakNow() ? " 🔥" + streakNow() + "일" : ""), note: "하루 동안 모두 같은 바다 · 매일 하면 연속 보상", action: startDaily },
+      { y: top + rh,   label: "2) 60초 보물 사냥" + (blitzDoneToday() ? " — 오늘은 끝" : "") + (blitzBest ? " · " + Math.floor(blitzBest) : ""), note: "보스 없이 보물만 · 하루 한 판", action: startBlitz },
+      { y: top + rh*2, label: "3) 보스 러시" + (rushBest ? " · 최단 " + fmtTime(rushBest) : rushBest9 ? " · 옛 9연전 " + fmtTime(rushBest9) : ""), note: "무작위 보스 5연전 — 완주 시간 기록", action: startRush },
+      { y: top + rh*3, label: "4) 클래식" + (classicBest ? " · " + Math.floor(classicBest) + "m" : ""), note: "돛대와 해왕류만 · 닿으면 끝 · 단순 조작", action: startClassic },
+      { y: top + rh*4, label: "5) 연습 모드", note: "보스 하나를 골라 반복 · 기록은 안 남는다", action: () => { state = STATE.PRACTICE_SELECT; practicePage = 0; } },
       backRow(9)
     ], 480, 36);
   }
@@ -16508,6 +16556,16 @@ function drawBrassBtn(r, font){
     ctx.strokeText(s, tx, yy, mw); ctx.fillStyle = cc; ctx.fillText(s, tx, yy, mw);
   };
   if(r.sub){ txt(label, y + h/2 - 8, f, col); txt(r.sub, y + h/2 + 11, UIF(600, 11), r.dim ? "rgba(226,206,160,.5)" : "rgba(244,232,205,.82)"); }
+  else if(r.note){
+    // v2.1.0 한 줄 설명 — 이름 옆에 작고 옅게(처음 온 사람이 버튼이 뭘 하는지 알 수 있게)
+    const nf = UIF(500, 12), gap = 12, avail = w - (r.icon ? Math.min(h*0.72, 30) + 30 : 20);
+    ctx.font = f; const lw = Math.min(ctx.measureText(label).width, avail * 0.62);
+    ctx.font = nf; const nw = Math.min(ctx.measureText(r.note).width, avail - lw - gap);
+    const x0 = (r.icon ? tx + (Math.min(h*0.72, 30) + 26) / 2 - 8 : tx) - (lw + gap + nw) / 2, yy = y + h/2 + 1;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(10,5,2,.85)"; ctx.lineWidth = 3;
+    ctx.font = f; ctx.strokeText(label, x0, yy, lw); ctx.fillStyle = col; ctx.fillText(label, x0, yy, lw);
+    ctx.font = nf; ctx.strokeText(r.note, x0 + lw + gap, yy + 1, nw); ctx.fillStyle = r.dim ? "rgba(226,206,160,.45)" : "rgba(244,232,205,.66)"; ctx.fillText(r.note, x0 + lw + gap, yy + 1, nw);
+  }
   else txt(label, y + h/2 + 1, f, col);
   ctx.restore();
   paperUI = pu;
@@ -17342,6 +17400,8 @@ function drawFrame(){
       line(reasonText, "700 " + sz + "px 'Gowun Batang', 'Pretendard', serif", "#f4ecd9", 40);
     }
     line(Math.floor(dist) + "m · 보물 " + bigNum(treasure), "700 19px 'Gowun Batang', serif", "#d9b877", 26);
+    { const nt = nextStepTip(), tf = "600 13px 'Gowun Batang', 'Pretendard', serif";
+      if(nt) wrapLines("💡 " + nt, W/2 + 220 - lx, tf, 2).forEach((ln, i, arr) => line(ln, tf, "#9fe0a0", i === arr.length - 1 ? 24 : 18)); }   // 오른쪽 등급 도장과 안 겹치게 폭을 잘라 줄을 나눈다
     if(storyMode && storyResult && storyResult.win){
       const s = storyStage(), r = storyResult;
       // 별은 하나씩 도장 찍히듯(0.25초 간격), 새로 딴 별엔 반짝임. 그 뒤 줄들은 차례로 떠오른다
@@ -17420,6 +17480,7 @@ function drawFrame(){
       row.col = row.mini ? "#efb8f6" : row.story ? "#ffd76a" : row.acct ? "#9ee0e2" : row.glow ? "#efb8f6" : "#f6c27a";
       slideIn(i, fx.menuT, () => drawBtn(row, UIF(700, 16)));
     });
+    if(newbie()) centerText("처음 오셨나요? 1) 스토리의 '첫 고리'부터 — 조작을 하나씩 알려 준다 · 막히면 5) 항해 일지 → 안내서", H - 40, "700 13px 'Gowun Batang', 'Pretendard', serif", "#ffd76a", 0.75 + 0.25 * Math.sin(fx.clock / 18));
     centerText("숫자 키 또는 클릭으로 선택", H - 16, "400 13px 'Gowun Batang', 'Pretendard', serif", "rgba(244,236,217,.6)");
     drawVersion();
   } else if(state === STATE.SETTINGS){
