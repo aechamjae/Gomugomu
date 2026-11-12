@@ -4024,8 +4024,8 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("v57: 보스마다 제한 시간이 있다(시간 초과면 달아난다)", src.includes("function bossFlee") && src.includes("b.tLeft -= dt"));
   ok("직전과 같은 중간보스 종류도 다시 나올 수 있다 (lastBossType 필터 제거)", !src.includes("lastBossType"));
   ok("베리어/돌진 스킬 코드 없음", !/fireBarrier|fireDash|BARRIER_CD|DASH_CD/.test(src));
-  const ver = (src.match(/const GAME_VER = "v(\d+)"/) || [])[1];
-  const cache = (require("fs").readFileSync(require("path").join(__dirname, "..", "sw.js"), "utf8").match(/gomupal-v(\d+)/) || [])[1];
+  const ver = (src.match(/const GAME_VER = "v(\d+\.\d+\.\d+)"/) || [])[1];
+  const cache = (require("fs").readFileSync(require("path").join(__dirname, "..", "sw.js"), "utf8").match(/gomupal-v(\d+\.\d+\.\d+)/) || [])[1];
   ok("화면 버전(GAME_VER)과 sw.js 캐시 버전이 같다", ver && ver === cache, "GAME_VER=v" + ver + " 캐시=v" + cache);
 }
 
@@ -4323,7 +4323,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   {
     let err = null; try{ E("bossWaterLip(100, 400, 1); bossWaterLip(0, 10, 2, 0.5); drawFaded(0.4, () => { ctx.fillRect(0, 0, 10, 10); }); drawFaded(1, () => {}); drawFaded(0, () => { throw new Error('안 그려야 한다'); })"); }catch(e){ err = e.message; }
     ok("v60 bosses: 경계 — 물마루(bossWaterLip)·반투명 한 장(drawFaded)이 오류 없이 그려지고, 투명도 0이면 아예 안 그린다", !err, err);
-    ok("v65: 버전 — GAME_VER v65", E("GAME_VER") === "v65");
+    ok("버전 이름은 vMAJOR.MINOR.PATCH(2.0.0부터)", /^v\d+\.\d+\.\d+$/.test(E("GAME_VER")), E("GAME_VER"));
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
