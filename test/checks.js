@@ -2100,7 +2100,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 바다 도감 --- */
 {
   const a = A(), X = () => a.dex();
-  ok("도감은 51종 — 생물·보스 22종(그롬·v62 심연 보스)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 51 && X().list.filter(e => e.cat === "boss").length === 22);
+  ok("도감은 52종 — 생물·보스 23종(그롬·v62 심연 보스)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 52 && X().list.filter(e => e.cat === "boss").length === 23);
   a.startMain(); H.step(); a.hold(true); H.step();
   ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
   delete X().book.wind;
@@ -4397,6 +4397,51 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     err = null; try{ stepN(2400, () => { a.hold(true); T().setFusen(9); }); }catch(e){ err = e.stack; }
     ok("v62 abyss: 타란 — 2400프레임 스윙 봇 오류 없음", !err, err);
     T().setBoss(null);
+  }
+  /* --- 거울 갑오징어 미라주(22) --- */
+  {
+    let K = fresh(22); K.stT = 1e9;
+    ok("v62 abyss: 미라주 — 일반 보스, 이름·체력", !K.named && !K.big && E("BOSSES[22].name") === "거울 갑오징어 미라주" && K.hp === 3);
+    // 가짜 고리 — 잡으면 손이 미끄러진다(줄 없음·휘청 없음), 진짜 고리는 그대로 잡힌다
+    const P = T().P();
+    E("stun = 0; iframes = 0; grabCd = 0; armHurt = 0; rope = null; holding = false");
+    for(const q of T().anchors()) q.cut = 50;
+    const F = { x: P.x + 60, y: P.y - 90, kind: 0, fake: true, life: 300 };
+    T().anchors().push(F);
+    a.hold(false); a.hold(true);
+    ok("v62 abyss: 미라주 가짜 고리 — 잡으면 손이 미끄러진다(줄 없음·휘청 없음, 고리는 깨진다)", !a.peek().rope && a.peek().stun <= 0 && T().anchors().indexOf(F) < 0 && E("grabCd") > 0);
+    E("grabCd = 0"); a.hold(false);
+    const R = { x: P.x + 60, y: P.y - 90, kind: 0 }; T().anchors().push(R); a.hold(true);
+    ok("v62 abyss: 미라주 — 진짜 고리는 그대로 잡힌다", a.peek().rope && a.peek().rope.a === R);
+    for(const q of T().anchors()) q.cut = 0;
+    // 공정성 — 가짜는 꼼짝 않고, 진짜는 미라주와 싸우는 동안 눈에 띄게 출렁인다(그림 위치 drawY)
+    const ys = [], yr = [];
+    const F2 = { x: P.x, y: 100, kind: 0, fake: true }, R2 = { x: P.x, y: 100, kind: 0 };
+    for(let i=0;i<20;i++){ E("time += 3"); E("cam.x = " + (P.x - 300)); T().ev("drawMast")(F2, false); T().ev("drawMast")(R2, false); ys.push(F2.drawY); yr.push(R2.drawY); }
+    ok("v62 abyss: 미라주 — 가짜 고리는 움직이지 않고 진짜 고리는 출렁인다(가려낼 수 있다)", Math.max(...ys) - Math.min(...ys) < 0.01 && Math.max(...yr) - Math.min(...yr) > 3, (Math.max(...yr) - Math.min(...yr)).toFixed(1));
+    // 분신 — 기술이 닿으면 유리처럼 깨지고 체력은 그대로
+    K.st = "split"; K.stT = 1; K.stT0 = 50; K.clones = [{ slot: 0, x: K.x, y: K.y }, { slot: 2, x: K.x, y: K.y }];
+    stepN(2);
+    const cl = K.clones.find(c => !c.broken), hp0 = K.hp;
+    E("strikeArea((x, y, r) => Math.hypot(x - " + cl.x + ", y - " + cl.y + ") < 5 + r && Math.hypot(x - boss.x, y - boss.y) > 40, '채찍', 1)");
+    ok("v62 abyss: 미라주 분신 — 맞으면 깨지고 체력은 그대로", cl.broken && K.hp === hp0);
+    ok("v62 abyss: 미라주 — 분신이 남아 있는 동안 진짜의 맥박 무늬가 약점", a.weak().some(w => w.mark === "맥박 무늬"));
+    // 섬광 — 예고 ≥ 45프레임, 번쩍임 설정이 꺼져 있으면 화면을 덮지 않는다
+    ok("v62 abyss: 미라주 — 섬광 예고 45프레임 이상", E("MR_FLASH_WARN * 0.85") >= 45 && E("MR_FAKE_WARN") >= 45 && E("MR_CLONE_WARN") >= 45);
+    K.burstT = 10; let n = 0; const c0 = E("ctx"), fr = c0.fillRect; c0.fillRect = () => { n++; };
+    const f0 = a.settings.flash; a.settings.flash = false; E("drawMirageFlash()"); const off = n;
+    a.settings.flash = true; a.settings.calm = false; E("drawMirageFlash()"); const on = n - off;
+    a.settings.calm = true; E("drawMirageFlash()"); const calmN = n - off - on;
+    c0.fillRect = fr; a.settings.flash = f0; a.settings.calm = false;
+    ok("v62 abyss: 미라주 섬광 — '번쩍임' 끄기·'연출 줄이기'면 화면을 덮지 않는다", off === 0 && on === 1 && calmN === 0, off + "/" + on + "/" + calmN);
+    let err = null;
+    try{ for(const st of ["idle", "fakeWarn", "split", "flashWarn", "dim"]){ K.st = st; K.stT = 20; K.stT0 = 50; K.beams = [{ x: K.x - 200, y: 100, kind: 0 }]; K.burstT = 5; E("drawBoss()"); } }catch(e){ err = e.message; }
+    ok("v62 abyss: 미라주 — 모든 상태를 그려도 오류가 없다", !err, err);
+    K = fresh(22);
+    err = null; try{ stepN(2400, () => { a.hold(true); T().setFusen(9); }); }catch(e){ err = e.stack; }
+    ok("v62 abyss: 미라주 — 2400프레임 스윙 봇 오류 없음", !err, err);
+    T().setBoss(null);
+    ok("v62 abyss: 미라주가 사라지면 거울 고리도 걷힌다", (E("generate()"), !T().anchors().some(q => q.fake)));
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
