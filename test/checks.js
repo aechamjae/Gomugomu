@@ -4323,8 +4323,35 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   {
     let err = null; try{ E("bossWaterLip(100, 400, 1); bossWaterLip(0, 10, 2, 0.5); drawFaded(0.4, () => { ctx.fillRect(0, 0, 10, 10); }); drawFaded(1, () => {}); drawFaded(0, () => { throw new Error('안 그려야 한다'); })"); }catch(e){ err = e.message; }
     ok("v60 bosses: 경계 — 물마루(bossWaterLip)·반투명 한 장(drawFaded)이 오류 없이 그려지고, 투명도 0이면 아예 안 그린다", !err, err);
-    ok("v60: 버전 — GAME_VER v60", E("GAME_VER") === "v60");
+    ok("v61: 버전 — GAME_VER v61", E("GAME_VER") === "v61");
   }
+  E("boss = null"); T().setBoss(null); a.toMenu();
+}
+
+/* v61 — 그래픽 품질(랙 대책) */
+{
+  const a = A(), E = (x) => T().ev(x);
+  ok("v61: 그래픽 품질 기본은 자동", a.settings.gfx === "auto");
+  E("state = STATE.SETTINGS");
+  const row = () => a.rows().find(r => /그래픽 품질/.test(r.label));
+  ok("v61: 설정에 '그래픽 품질' 줄이 있다(자동 — 지금 단계 표시)", row() && /자동/.test(row().label), row() && row().label);
+  const seen = [];
+  for(let i=0;i<5;i++){ row().action(); seen.push(a.settings.gfx + ":" + E("gfxLv")); }
+  ok("v61: 누를 때마다 높음 → 보통 → 낮음 → 최저 → 자동으로 돈다", seen.join(",") === "high:0,mid:1,low:2,min:3,auto:0", seen.join(","));
+  E("settings.gfx = 'min'; gfxApply()");
+  a.startMain(); H.step(); a.hold(true);
+  const B = a.spawnBoss(false, 17); B.invul = 0;
+  let err = null; try{ for(let i=0;i<120;i++) H.step(); E("draw()"); }catch(e){ err = e.message; }
+  ok("v61: 최저 — 잉크 레이어를 거치지 않고 그려도 오류가 없다", !err && !E("inkLayerBegin()") && (E("inkLayerEnd()"), E("ctx === mainCtx")), err);
+  E("settings.gfx = 'auto'; gfxApply()");
+  E("gfxWatch.n = 0; gfxWatch.slow = 0; gfxWatch.cool = 0; state = STATE.PLAY");
+  for(let i=0;i<120;i++) E("gfxTick(40)");
+  ok("v61: 자동 — 느린 프레임이 이어지면 한 단계 내린다", E("gfxLv") === 1, E("gfxLv"));
+  for(let i=0;i<40;i++) E("gfxTick(40)");
+  ok("v61: 내린 직후엔 3초 동안 다시 재지 않는다", E("gfxLv") === 1);
+  E("gfxApply()");
+  for(let i=0;i<120;i++) E("gfxTick(16)");
+  ok("v61: 빠르면 그대로", E("gfxLv") === 0);
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 

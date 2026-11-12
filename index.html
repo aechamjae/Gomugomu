@@ -133,7 +133,6 @@
       box-shadow:inset 0 0 0 2px rgba(201,154,58,.55), 0 2px 6px rgba(40,25,10,.3);
       color:#3b2a1e;font-family:inherit;font-weight:700;text-shadow:0 0 3px rgba(250,242,222,.95);
       display:flex;align-items:center;justify-content:center;
-      backdrop-filter:blur(2px);
     }
     .tb{border-radius:50%;white-space:nowrap;letter-spacing:-.5px;}
     .tb:active,.tpause:active{background:rgba(217,184,119,.75);}
@@ -329,7 +328,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v60";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v61";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -853,8 +852,15 @@ const styleEl = document.getElementById("style");
 const bestEl = document.getElementById("best");
 const pauseBtn = document.getElementById("pauseBtn");
 
+/* v61 그래픽 품질 — 랙 대책.
+   그리기 비용은 화면 픽셀 수에 비례하는데, 잉크 테두리 레이어(inkLayerEnd)가 매 프레임 화면 전체를 여러 번 덧그려 가장 무겁다.
+   gfxLv 0 높음(해상도 ×2까지) · 1 보통(×1.5) · 2 낮음(×1) · 3 최저(×1, 잉크 테두리·종이 결 끔). 설정 '그래픽 품질'의 자동이면
+   실제 프레임 간격을 보고 느리면 한 단계씩 내린다(gfxWatch). 물리·판정과는 관계없다 */
+const GFX_DPR = [2, 1.5, 1, 1];
+let gfxLv = 0;
+const gfxLow = () => gfxLv >= 3;
 function fit(){
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const dpr = Math.min(window.devicePixelRatio || 1, GFX_DPR[gfxLv] || 2);
   canvas.width = Math.round(W*dpr);
   canvas.height = Math.round(H*dpr);
   mainCtx.setTransform(dpr,0,0,dpr,0,0);
@@ -867,7 +873,9 @@ function fit(){
     }
     if(inkLayer){ inkLayer.width = inkTint.width = canvas.width; inkLayer.height = inkTint.height = canvas.height; }
   }
+  paperCache = null;
 }
+let paperCache = null;
 fit();
 window.addEventListener("resize", fit);
 
@@ -875,7 +883,7 @@ const STATE = { READY:0, PLAY:1, OVER:2, PAUSE:3, MENU:4, PRACTICE_SELECT:5, SHO
 const inMenu = () => state === STATE.MENU || state === STATE.PRACTICE_SELECT || state === STATE.SHOP || state === STATE.LOG || state === STATE.SETTINGS || state === STATE.MINI_SELECT || state === STATE.STORY_MAP || state === STATE.CHALLENGE;
 
 /* 설정 — 멀미·광과민을 위한 연출 끄기. 기기에 저장 */
-const settings = { shake: true, flash: true, lines: true, calm: false };   // calm = '연출 줄이기'(v59) — 흔들림·잔상·멈칫·번쩍임을 한꺼번에 줄인다
+const settings = { shake: true, flash: true, lines: true, calm: false, gfx: "auto" };   // gfx(v61): auto · high · mid · low · min   // calm = '연출 줄이기'(v59) — 흔들림·잔상·멈칫·번쩍임을 한꺼번에 줄인다
 try{ if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) settings.calm = true; }catch(e){}
 function loadSettings(){
   try{ const v = window.localStorage && localStorage.getItem("swing:settings"); if(v) Object.assign(settings, JSON.parse(v)); }catch(e){}
@@ -2630,6 +2638,7 @@ function menuRowsRaw(){
       { y: H/2 - 26, label: "2) 번쩍임(번개·섬광) — " + onoff(settings.flash), action: () => { settings.flash = !settings.flash; saveSettings(); } },
       { y: H/2 + 18, label: "3) 속도선·잔상 — " + onoff(settings.lines), action: () => { settings.lines = !settings.lines; saveSettings(); } },
       { y: H/2 + 62, label: "4) 연출 줄이기(흔들림·잔상·멈칫) — " + onoff(settings.calm), action: () => { settings.calm = !settings.calm; saveSettings(); } },
+      { y: H/2 + 150, key: 7, label: "7) 그래픽 품질 — " + gfxLabel(), action: gfxCycle },
       { y: H/2 + 106, label: "5) 코치 힌트 처음부터 다시 보기", action: () => {
           hintsSeen = new Set();
           try{ if(window.localStorage) localStorage.removeItem("swing:hints"); }catch(e){}
@@ -8506,6 +8515,18 @@ function inkTube(path, w, col, hi){
 }
 // 종이 한 장 — 바깥 장면 위에 결과 가장자리 그늘을 덮는다
 function drawPaper(){
+  if(gfxLow()) return;
+  if(inkLayer && typeof ctx.getTransform === "function"){
+    if(!paperCache){
+      const c = document.createElement("canvas"); c.width = canvas.width; c.height = canvas.height;
+      const k = c.getContext("2d"), prev = ctx;
+      if(k){ k.setTransform(inkDpr, 0, 0, inkDpr, 0, 0); ctx = k; try{ drawPaperRaw(); } finally { ctx = prev; } paperCache = c; }
+    }
+    if(paperCache){ ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(paperCache, 0, 0); ctx.restore(); return; }
+  }
+  drawPaperRaw();
+}
+function drawPaperRaw(){
   if(paperPat){ ctx.fillStyle = paperPat; ctx.fillRect(0, 0, W, H); }
   const vg = ctx.createRadialGradient(W/2, H*0.48, H*0.42, W/2, H*0.5, H*0.95);
   vg.addColorStop(0, "rgba(80,50,20,0)"); vg.addColorStop(1, "rgba(80,50,20,.22)");
@@ -8625,7 +8646,7 @@ function onPaper(x, y){
 })();
 // 잉크 레이어 — 시작하면 붓(ctx)이 레이어로 바뀌고, 끝나면 잉크 테두리를 둘러 본 화면에 붙인다
 function inkLayerBegin(){
-  if(!inkLayer) return false;
+  if(!inkLayer || gfxLow()) return false;
   inkLayerCtx.setTransform(1, 0, 0, 1, 0, 0);
   inkLayerCtx.clearRect(0, 0, inkLayer.width, inkLayer.height);
   inkLayerCtx.setTransform(mainCtx.getTransform());
@@ -8633,6 +8654,7 @@ function inkLayerBegin(){
   return true;
 }
 function inkLayerEnd(){
+  if(ctx !== inkLayerCtx){ ctx = mainCtx; return; }
   ctx = mainCtx;
   if(!inkLayer) return;
   const tc = inkTintCtx;
@@ -12424,7 +12446,7 @@ function drawFaded(alpha, fn){
   if(alpha >= 0.995){ fn(); return; }
   if(alpha <= 0.005) return;
   const prev = ctx;
-  if(!inkLayer || typeof prev.getTransform !== "function"){ prev.save(); prev.globalAlpha *= alpha; fn(); prev.restore(); return; }
+  if(!inkLayer || gfxLow() || typeof prev.getTransform !== "function"){ prev.save(); prev.globalAlpha *= alpha; fn(); prev.restore(); return; }
   if(!fadeLayer){ fadeLayer = document.createElement("canvas"); fadeLayerCtx = fadeLayer.getContext("2d"); }
   if(fadeLayer.width !== inkLayer.width || fadeLayer.height !== inkLayer.height){ fadeLayer.width = inkLayer.width; fadeLayer.height = inkLayer.height; }
   const fc = fadeLayerCtx;
@@ -15853,8 +15875,27 @@ function drawFrame(){
 
 /* ---------- 루프 ---------- */
 let last = performance.now();
+const GFX_NAMES = ["높음", "보통", "낮음", "최저"], GFX_KEYS = ["high", "mid", "low", "min"];
+function gfxLabel(){ return settings.gfx === "auto" ? "자동(지금 " + GFX_NAMES[gfxLv] + ")" : GFX_NAMES[Math.max(0, GFX_KEYS.indexOf(settings.gfx))]; }
+function gfxSet(lv){ lv = Math.max(0, Math.min(3, lv)); if(lv === gfxLv) return; gfxLv = lv; fit(); }
+function gfxApply(){ const i = GFX_KEYS.indexOf(settings.gfx); gfxWatch.n = 0; gfxWatch.cool = 0; gfxSet(i >= 0 ? i : 0); }
+function gfxCycle(){ const order = ["auto", "high", "mid", "low", "min"]; settings.gfx = order[(order.indexOf(settings.gfx) + 1) % order.length]; saveSettings(); gfxApply(); }
+// 자동 — 플레이 중 실제 프레임 간격(ms)을 모아, 느린 프레임(> 22ms, 45fps 밑)이 절반을 넘으면 한 단계 내린다. 내린 뒤 3초는 다시 재지 않는다
+const gfxWatch = { n: 0, slow: 0, cool: 0 };
+function gfxTick(ms){
+  if(settings.gfx !== "auto" || gfxLv >= 3 || document.hidden) return;
+  if(state !== STATE.PLAY && !inMenu()) return;
+  if(ms > 250) return;                                  // 탭 전환·멈춤 직후의 긴 간격은 세지 않는다
+  if(gfxWatch.cool > 0){ gfxWatch.cool -= ms; return; }
+  gfxWatch.n++; if(ms > 22) gfxWatch.slow++;
+  if(gfxWatch.n >= 120){
+    if(gfxWatch.slow > 60){ gfxSet(gfxLv + 1); gfxWatch.cool = 3000; }
+    gfxWatch.n = 0; gfxWatch.slow = 0;
+  }
+}
 function loop(now){
   let dt = (now - last) / (1000/60);
+  gfxTick(now - last);
   last = now;
   if(dt > 3) dt = 3;
   const real = dt;
@@ -16775,6 +16816,7 @@ loadTitles();
 loadShop();
 loadHints();
 loadSettings();
+gfxApply();
 makeArtTex();
 loadDaily();
 loadLog();
