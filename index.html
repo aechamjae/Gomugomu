@@ -2580,10 +2580,10 @@ function drawStoryHud(){
 const BACK_BTN = { x: 16, y: 16, w: 96, h: 34 };
 let navStack = [];
 const navId = () => state === STATE.MENU ? "menu" : state === STATE.CHALLENGE ? "challenge" : state === STATE.PRACTICE_SELECT ? "practice"
-  : state === STATE.SHOP ? (crewStory ? "shop/story" : "shop") : state === STATE.LOG ? (dexPage ? "log/dex" : titlePage ? "log/title" : "log")
+  : state === STATE.SHOP ? (crewStory ? "shop/story" : "shop") : state === STATE.LOG ? (guidePage !== null ? "log/guide" : dexPage ? "log/dex" : titlePage ? "log/title" : "log")
   : state === STATE.SETTINGS ? "settings" : state === STATE.MINI_SELECT ? "mini" : state === STATE.STORY_MAP ? "map" : null;
 const navSnap = (id) => ({ id, state, shopPage, techCat, practicePage, titlePage, storyCh });
-const NAV_PARENT = { practice: "challenge", "shop/story": "shop", "log/title": "log", "log/dex": "log" };
+const NAV_PARENT = { practice: "challenge", "shop/story": "shop", "log/title": "log", "log/dex": "log", "log/guide": "log" };
 const NAV_STATE = { menu: STATE.MENU, challenge: STATE.CHALLENGE, shop: STATE.SHOP, log: STATE.LOG };
 function navSync(){
   const id = navId();
@@ -2609,12 +2609,13 @@ function navBack(){
   if(cur.id === "shop/story") crewStory = null;
   if(cur.id === "log/title") closeTitles();
   if(cur.id === "log/dex") dexPage = false;
+  if(cur.id === "log/guide") guidePage = null;
   if(cur.id === "practice") practicePage = 0;
   // 돌아갈 화면 — 떠날 때의 탭·페이지 그대로
   state = prev.state;
   if(prev.id === "shop" && prev.shopPage !== undefined){ shopPage = prev.shopPage; techCat = prev.techCat; }
   if(prev.id === "practice" && prev.practicePage !== undefined) practicePage = prev.practicePage;
-  if(prev.id === "log"){ titlePage = 0; dexPage = false; }
+  if(prev.id === "log"){ titlePage = 0; dexPage = false; guidePage = null; }
   if(prev.id === "menu"){ shopPage = 0; practicePage = 0; }
 }
 const backRow = (key) => Object.assign({ key, back: true, label: "← 이전", icon: "back", action: navBack }, BACK_BTN);
@@ -2634,7 +2635,7 @@ function menuRowsRaw(){
       { y: top + rh*2, label: "3) 도전 — 오늘의 항해 · 60초 사냥 · 보스 러시 · 클래식 · 연습" + (streakNow() ? "  🔥" + streakNow() + "일" : ""), action: () => { state = STATE.CHALLENGE; } },
       { y: top + rh*3, label: "4) 보물 창고" + (crewNewsCount() ? "  ✉ 새 동료 소식 " + crewNewsCount() : ""), glow: crewNewsCount() > 0,
         action: () => { state = STATE.SHOP; shopMsg = null; shopPage = crewNewsCount() ? 4 : 0; crewStory = null; } },
-      { y: top + rh*4, label: "5) 항해 일지", action: () => { state = STATE.LOG; titlePage = 0; dexPage = false; } },
+      { y: top + rh*4, label: "5) 항해 일지 · 안내서 — 조작·기술·보스 수치", action: () => { state = STATE.LOG; titlePage = 0; dexPage = false; guidePage = null; } },
       { y: top + rh*5, label: "6) 설정", action: () => { state = STATE.SETTINGS; } },
       { y: top + rh*6, label: "7) 계정 — " + (account ? "👤 " + account : "게스트 (로그인·새 계정)"), action: openAccount, acct: true },
       { key: 0, y: top + rh*7, label: "0) 🪼 미니게임 — 해파리 트램펄린 외 2종" + (medals ? "  🏅" + medals + "/9" : ""), action: () => { state = STATE.MINI_SELECT; }, mini: true }
@@ -2679,6 +2680,7 @@ function menuRowsRaw(){
       backRow(6)
     ], 460, 36);
   }
+  if(state === STATE.LOG && guidePage !== null) return guideRows();
   if(state === STATE.LOG && dexPage){
     return [backRow(9)];
   }
@@ -2690,6 +2692,7 @@ function menuRowsRaw(){
     else rows.push({ y: H - 74, label: "앵무새 동료 — 보스 누적 " + PARROT_UNLOCK + "마리 격파 시 합류 (" + lifeBossKills + "/" + PARROT_UNLOCK + ")", action: () => {} });
     rows.push({ key: 3, y: 236, label: "3) 칭호 보기·고르기 (" + unlockedTitles.size + "/" + TITLES.length + ") →" + (titleFresh.size ? "  ★ 새 칭호 " + titleFresh.size : ""), action: openTitles });
     rows.push({ key: 4, y: 260, label: "4) 바다 도감 (" + dexFound() + "/" + DEX.length + ") →", action: () => { dexPage = true; } });
+    rows.push({ key: 5, y: 284, label: "5) 항해 안내서 — 조작·기술·기어·보스·동료·바다·모드, 수치까지 →", action: () => { guidePage = 0; guideSub = 0; } });
     return rows;
   }
   if(state === STATE.SHOP) return shopUI().rows;
@@ -3473,6 +3476,180 @@ function drawDex(){
   for(const row of menuRows()) drawBtn(row, UIF(700, 14));
 }
 
+/* ---------- v2.1.0 항해 안내서 — 조작·기술·기어와 비기·보스·동료·바다·모드를 수치까지 ----------
+   항해 일지(메뉴 5) → 5) 항해 안내서. 수치는 게임 상수에서 바로 읽는다(밸런스를 바꾸면 안내서도 따라간다).
+   guidePage: null이면 닫힘, 아니면 탭 번호 · guideSub: 그 탭의 쪽. 내용은 칸(제목 + 줄들)을 두 단에 채우고 넘치면 다음 쪽으로 */
+let guidePage = null, guideSub = 0;
+const GUIDE_TABS = ["조작", "기술", "기어·비기", "보스", "동료", "바다", "모드"];
+const GUIDE_TOP = 108, GUIDE_BOT = H - 54, GUIDE_X = 18, GUIDE_GAP = 12, GUIDE_W = (W - 36 - 12) / 2;
+const sec = (fr) => { const v = fr / 60; return (Math.abs(v - Math.round(v)) < 0.05 ? Math.round(v) : v.toFixed(1)) + "초"; };
+const pct = (v) => Math.round(v * 100) + "%";
+function guideTier(t){ return BIG_BOSSES.indexOf(t) >= 0 || t === ADMIRAL || t === AWAKEN ? "big" : isNamed(t) || t === MAGELLAN ? "named" : "mid"; }
+function guideWhere(t){
+  if(t === AWAKEN) return "대형 자리에 크라켄이 뽑히면 " + pct(AWAKEN_CHANCE) + " 확률로 대신 · 스토리 최종장";
+  if(t === ADMIRAL) return "두 번째 해군 추격 자리";
+  if(t === MAGELLAN) return "해군에게 " + NAVY_JAIL + "번째 붙잡히면 해저 감옥에서";
+  if(BIG_BOSSES.indexOf(t) >= 0) return "대형 자리(" + BIOME_LEN + "m마다, 해역 끝)";
+  const z = BIOME_POOLS.findIndex(q => q.mid.indexOf(t) >= 0 || [].concat(q.named).indexOf(t) >= 0);
+  return z >= 0 ? BIOMES[z].name + (isNamed(t) ? " 네임드(대형 보스 바로 앞 자리)" : " 일반") : "—";
+}
+function guideEntries(tab){
+  const E = [], add = (title, lines, col) => E.push({ title, lines, col: col || "#ffd76a" });
+  if(tab === 0){
+    add("팔 걸기 — 누르고 있기(마우스·Space·팔 버튼)", [
+      "앞쪽에서 가장 가까운 고리에 팔이 걸린다. 떼면 놓는다",
+      "팔 길이 " + Math.round(reach()) + "px (기본 " + REACH + " · 고무 단련 단계당 +6%) · 다시 걸기까지 " + GRAB_CD + "프레임",
+      "오래 날다 걸수록 몸이 당겨 올라간다(체공 보너스) — 놓자마자 다시 걸면 거의 안 당겨진다"]);
+    add("그네·공중 조작 — 방향키(터치 ◀ ▶ ▲ ▼)", [
+      "← → 매달렸을 땐 그네 펌핑, 공중에선 방향 조절",
+      "↓ 매달렸을 땐 줄 감아 오르기, 공중에선 급강하",
+      "↑ 도약하며 놓기 · 최고 속도 " + MAXV + " — 아주 빠르면 몸에 불꽃이 붙는다"]);
+    add("기술·기어 키", [
+      "Q 원거리 기술 · W 근거리 기술 · E 기어 발동(게이지가 차면)",
+      "G 비기(스토리 장 보스를 깨면) · F 새총(두 고리 사이에서 당겼다 놓기, " + sec(SLING_CD) + ")",
+      "출항 화면: 2~5 기어 고르기 · C 선원 · V 난이도 · G 비기"]);
+    add("콤보·PERFECT", [
+      "고리를 연달아 이으면 콤보 — 보물 배율 최대 ×" + CHAIN_CAP,
+      sec(CHAIN_DECAY_T) + " 안에 다음 고리를 못 걸면 끊긴다",
+      "그네 가장 높은 곳 근처에서 놓으면 PERFECT — 기어 게이지 +" + GEAR_GAIN.perfect]);
+    add("풍선·휘청", [
+      "풍선(최대 " + FUSEN_MAX + "개)이 있으면 바다에 닿는 순간 튕겨 오른다 — 고기를 먹으면 하나",
+      "휘청: 보통 " + sec(STUN_FRAMES) + " · 해왕류 " + sec(STUN_STRONG) + " · 식인 물고기 " + sec(STUN_MOB) + " — 기어 방어력만큼 줄고, 아무리 줄어도 " + pct(STUN_FLOOR) + "는 남는다",
+      "보호막이 있으면 한 번 대신 막는다"]);
+    add("기타", ["P / Esc 일시정지 · R 다시 시작 · M 메뉴로 · 메뉴는 숫자 키로도 고른다", "창을 벗어나면 자동으로 멈춘다"]);
+  } else if(tab === 1){
+    for(const cat of ["ranged", "melee"]){
+      const C = TECH_CATS[cat];
+      for(const t of TECHS.filter(q => q.cat === cat)){
+        const lv = tlv(t.id), on = t.id === eqRanged || t.id === eqMelee;
+        const cdNow = cat === "ranged" && on ? rangedCd() : cat === "melee" && on ? meleeCd() : t.cd * techCdMult(t.id);
+        add(t.name + " (" + (cat === "ranged" ? "Q" : "W") + ")" + (on ? " · 장착 중" : ""), [
+          t.desc,
+          "재충전 기본 " + sec(t.cd) + (lv ? " · 지금 " + sec(cdNow) + " (Lv." + lv + ")" : " · 아직 없음") + (t.base ? " · 기본 기술" : "")], C.col);
+      }
+    }
+    add("특성(기어를 돕는다 — 갖고만 있으면 늘 적용)", TECHS.filter(q => q.cat === "gear").map(t => t.name + " Lv." + tlv(t.id) + " — " + t.desc), TECH_CATS.gear.col);
+    add("뽑기·강화", [
+      "팩 값 — 근거리·원거리 " + commas(TECH_CATS.melee.price) + " · 특성 " + commas(TECH_CATS.gear.price) + " · 기술이 나올 확률 " + pct(TECH_CHANCE) + "(아니면 비급)",
+      "강화 비급 — Lv.2부터 " + TECH_UP.slice(1).join(" · ") + "개 · 최고 Lv." + TECH_MAX + " · 레벨당 재충전 -6%",
+      "단련: " + UPGRADES.map(u => u.name + "(" + u.desc + ")").join(" · ")]);
+  } else if(tab === 2){
+    for(const n of [2, 3, 4, 5]){
+      const g = GEARS[n], open = n <= gearUnlocked;
+      add(g.name + (gearSel === n ? " · 선택됨" : open ? "" : " · 🔒 " + commas(g.cost)), [
+        g.desc,
+        "게이지 " + g.max + " · " + (n === 3 ? "즉발" : "지속 " + sec(g.t)) + (n === 3 ? " · 범위 " + GIANT_R + "px · 약점 피해 " + GIANT_DMG
+          : " · 방어 " + pct(g.def) + " · 공격 ×" + g.atk + " · 속도 ×" + g.spd)], g.col);
+    }
+    add("기어 게이지 채우기", ["PERFECT +" + GEAR_GAIN.perfect + " · 아슬아슬 피하기 +" + GEAR_GAIN.near + " · 황금 고리 +" + GEAR_GAIN.gold + " · 수면 스치기 +" + GEAR_GAIN.skim,
+      "좋은 착지 +" + GEAR_GAIN.good + " · 처치 +" + GEAR_GAIN.kill + " · 콤보 +" + GEAR_GAIN.chain], "#ff8fa0");
+    for(const a of ARTS){
+      const lv = artLv(a.id);
+      add("비기 · " + a.name + (lv ? " Lv." + lv : " · 🔒 스토리 " + ART_STAGE[a.id]), [a.desc,
+        "재사용 " + sec(a.cd) + (a.t ? " · 지속 " + sec(a.t) : "") + " · 그 장 별이 8개·12개면 Lv.2·3(재사용 -15%씩)"], "#ff8f70");
+    }
+    add("강화 카드(보스를 꺾으면 셋 중 하나 — 이번 판만)", PERKS.map(q => q.name + " — " + q.desc + " (최대 " + q.max + ")"), "#ffb070");
+  } else if(tab === 3){
+    BOSSES.forEach((bo, t) => {
+      const tier = guideTier(t), sunk = (dexBook()["boss" + t] || 0);
+      const time = bossTimeOf({ type: t, big: tier === "big", named: tier === "named" }) / 60;
+      const bounty = tier === "big" || t === MAGELLAN ? 600 : tier === "named" ? 350 : 150;
+      add(bo.name + "  " + (tier === "big" ? "[대형]" : tier === "named" ? "[네임드]" : "[일반]"), [
+        "체력 " + (BOSS_HP[t] || (tier === "big" ? 8 : 2)) + " · 제한 " + time + "초 · 현상금 " + bounty + "+(빨리 잡으면 1초당 +" + BOSS_QUICK[tier === "big" ? "big" : tier] + ") · " + (sunk ? "격침 " + sunk + "번" : "격침 기록 없음"),
+        guideWhere(t) + " — " + bo.tag], tier === "big" ? "#d9a8f0" : tier === "named" ? "#ffd76a" : "#f4ecd9");
+    });
+  } else if(tab === 4){
+    for(const c of CREW){
+      const own = crewOwned.indexOf(c.id) >= 0, lv = crewLv(c.id);
+      const how = isStoryCrew(c) ? "이야기 선원 — 스토리 " + c.stage + "을(를) 깨면 합류" : "고용 " + commas(c.cost);
+      const sk = CREW_SKILL[c.id] ? " · ★ 재사용 " + sec(CREW_SKILL[c.id] * (own ? crewCdMul(c.id) : 1)) : c.id === "sword" ? " · 베기 간격 " + sec(CREW_SWORD_CD) : c.id === "jack" ? " · ★ 18초마다" : "";
+      add(c.name + (crewSel === c.id ? " · 동행 중" : own ? " · Lv." + lv : ""), [c.desc, how + sk], c.col);
+    }
+    add("선원 레벨", ["같이 항해한 거리로 오른다 — Lv.2~5: " + CREW_LV_XP.slice(1).map(v => commas(v) + "m").join(" · "),
+      "레벨마다 ★ 재사용 -8% · 수치 효과도 조금씩 세진다 · 한 판에 한 명만 데려간다(출항 화면 C)"]);
+  } else if(tab === 5){
+    add("해역 — " + BIOME_LEN + "m마다 바뀐다", BIOMES.map((b, i) => b.name + " — " + ["기본 바다", "유빙(떨어져도 튕겨 오른다)", "용암 분수(기포 뒤 치솟는다)", "소용돌이(빨아들인다 — 매달리면 버틴다) · 유빙·분수도 조금"][i]), "#8fd6d8");
+    add("잡몹", [
+      "식인 물고기 — 90m부터 떼로 튀어오른다 · 스치면 가벼운 휘청",
+      "해왕류 — 520m부터 드물게 · 100m 앞부터 경고 배너 · 닿으면 크게 휘청(" + sec(STUN_STRONG) + ") · 근거리 기술(W)로 처치",
+      "폭탄 갈매기 — " + GULL_FROM + "m부터 · 격추하면 보물 · 해파리 — " + JELLY_FROM + "m부터 · 위에서 밟으면 크게 튕긴다"], "#f7a8a0");
+    add("보물·보급", [
+      "고기 — " + MEAT_FROM + "m부터 낮게 떠 있다 · 먹으면 풍선 +1 · 보물 통 — " + BARREL_FROM + "m부터 · 지도 조각 — " + MAP_FROM + "m부터",
+      "황금 고리 — 잡으면 보물·기어 게이지 · 처음 만난 것은 도감 등록 보물 +" + DEX_FIRST,
+      "보물섬 해역 — " + BONUS_FIRST + "m부터 " + BONUS_EVERY + "m마다 " + BONUS_LEN + "m · 잡몹 없이 금화가 쏟아진다"]);
+    add("항구 — " + PORT_FIRST + "m부터 " + PORT_EVERY + "m마다", PORT_ITEMS.map(it => it.name + " — " + it.desc + " · " + commas(Math.round(it.price * PORT_PRICE_K / 10) * 10) + "부터(항구마다 +30%)")
+      .concat(["한 항구에서 " + PORT_MAX_BUY + "개까지 · 이번 판에 모은 보물로 산다"]), "#d9b877");
+    add("해군 추격 — " + NAVY_FIRST + "m부터", NAVY_RANKS.map(r => r.rank + " " + r.name + " — 버티면 +" + r.reward + " · 잡히면 " + r.punishText)
+      .concat([sec(NAVY_T) + " 버티면 따돌린다 · " + NAVY_JAIL + "번째 잡히면 해저 감옥"]), "#7fa8e0");
+    add("이벤트", [
+      "라이벌 경주 — " + RIVAL_FIRST + "m부터 " + RIVAL_EVERY.join("~") + "m마다 · 판돈 " + RIVAL_REWARD + "(경주마다 +200) · 이기면 카드, 지면 풍선 하나",
+      "적 해적선 포격 — " + BARRAGE_EVERY.join("~") + "m마다 · 붉은 표식을 피하면 +150(맞으면 +60)",
+      "갈림길 — " + ROUTE_EVERY.join("~") + "m마다 · 하늘길(황금 고리·갈매기) / 바닷길(금화 2배·물고기) · 한쪽을 끝까지 타면 +" + ROUTE_REWARD,
+      "날씨 — 폭풍·안개·순풍 · 보스가 뜨면 걷힌다 · 낮과 밤은 " + DAY_LEN + "m마다 한 바퀴"], "#c9a0ff");
+    add("부활", ["바다에 빠졌을 때 창고 보물 " + commas(REVIVE_COST) + "으로 한 번 · 연습·오늘의 항해·60초·러시·클래식은 안 된다"]);
+  } else if(tab === 6){
+    add("스토리 모드", ["프롤로그부터 최종장까지 — 스테이지마다 목표와 별 셋", "장 보스를 깨면 이야기 선원이 합류하고 비기가 풀린다"], "#ffd76a");
+    add("무한 모드", Object.keys(DIFFS).map(k => DIFFS[k].name + " — " + DIFFS[k].desc + " · 네임드 확률 " + pct(DIFFS[k].named)).concat(["보스는 " + Math.round(500) + "m쯤마다, 대형은 " + BIOME_LEN + "m마다 · 기록은 난이도별로 따로"]));
+    add("오늘의 항해", ["하루 동안 모두 같은 바다 · 연속으로 하면 🔥 연속 보상(하루 100씩, 최대 700)"], "#8fd6d8");
+    add("60초 보물 사냥", ["보스 없이 60초 동안 보물을 최대한 · 하루 한 판 · 바다에 빠지면 끝"], "#8fd6d8");
+    add("보스 러시", ["무작위 5연전 — 일반·일반·네임드·(일반 또는 대형)·대형 · 보스 사이 " + RUSH_GAP + "m · 완주 시간 기록"], "#8fd6d8");
+    add("클래식", ["돛대를 건너 앞으로만 — 풍선·기술·기어·동료·이벤트·보물 없이 해왕류만",
+      "해왕류는 " + CLASSIC_KING_FROM + "m부터, 멀리 갈수록 자주 · 닿으면 그 자리에서 끝 · 기록은 따로"], "#8fd6d8");
+    add("연습", ["보스 하나를 골라 반복해서 · 해왕류 폭주 · 해군 계급별 추격 — 기록·보물은 안 남는다"], "#8fd6d8");
+    add("미니게임", MINIS.map(q => q.name + " — " + q.desc + " · 메달 " + q.medals.join("/") + q.unit), "#e6a8f0");
+  }
+  return E;
+}
+// 칸 높이를 재서 두 단으로 채우고, 넘치면 다음 쪽 — [[{e, x, y, h, lines}], …]
+function guideLayout(tab){
+  const pages = [[]], fT = UIF(800, 15), fL = UIF(500, 13), LH = 18, pad = 10;
+  let col = 0, y = GUIDE_TOP;
+  for(const e of guideEntries(tab)){
+    const lines = [].concat(...e.lines.map(t => wrapLines(t, GUIDE_W - 2*pad - 6, fL)));
+    const h = pad + 20 + lines.length * LH + pad - 4;
+    if(y + h > GUIDE_BOT && y > GUIDE_TOP){
+      if(col === 0){ col = 1; y = GUIDE_TOP; }
+      else { pages.push([]); col = 0; y = GUIDE_TOP; }
+    }
+    pages[pages.length - 1].push({ e, lines, x: GUIDE_X + col * (GUIDE_W + GUIDE_GAP), y, h, fT, fL, LH, pad });
+    y += h + 8;
+  }
+  return pages;
+}
+function guideRows(){
+  const rows = [backRow(9)];
+  const tw = (W - 36 - 6*6 - 104) / GUIDE_TABS.length;
+  GUIDE_TABS.forEach((name, i) => rows.push({ key: i + 1, tab:true, x: 122 + i*(tw + 6), y: 58, w: tw, h: 34, label: (i + 1) + " " + name, sel: i === guidePage,
+    col: i === guidePage ? "#ffd76a" : "rgba(217,184,119,.75)", fill: i === guidePage ? "rgba(90,70,30,.7)" : undefined, action: () => { guidePage = i; guideSub = 0; } }));
+  const n = guideLayout(guidePage).length;
+  if(guideSub >= n) guideSub = n - 1;
+  if(n > 1){
+    rows.push({ key: -1, x: W - 18 - 200, y: H - 46, w: 96, h: 32, label: "◀ 앞 쪽", dim: guideSub === 0, action: () => { guideSub = Math.max(0, guideSub - 1); } });
+    rows.push({ key: -1, x: W - 18 - 96, y: H - 46, w: 96, h: 32, label: "다음 쪽 ▶", dim: guideSub >= n - 1, action: () => { guideSub = Math.min(n - 1, guideSub + 1); } });
+  }
+  return rows;
+}
+function guideKey(k){
+  if(k === "ArrowLeft" || k === "ArrowRight"){ guidePage = (guidePage + (k === "ArrowRight" ? 1 : GUIDE_TABS.length - 1)) % GUIDE_TABS.length; guideSub = 0; return true; }
+  if(k === "ArrowUp" || k === "ArrowDown" || k === "PageUp" || k === "PageDown"){
+    const n = guideLayout(guidePage).length, d = k === "ArrowDown" || k === "PageDown" ? 1 : -1;
+    guideSub = Math.max(0, Math.min(n - 1, guideSub + d)); return true;
+  }
+  return false;
+}
+function drawGuide(){
+  drawMenuBg(0.88);
+  drawHeading("항해 안내서", 30, 22);
+  const pages = guideLayout(guidePage), page = pages[Math.min(guideSub, pages.length - 1)] || [];
+  for(const c of page){
+    drawPanel({ x: c.x, y: c.y, w: GUIDE_W, h: c.h, fill: "rgba(30,40,52,.9)" }, 8);
+    uiText(c.e.title, c.x + c.pad, c.y + c.pad + 8, c.fT, c.e.col);
+    c.lines.forEach((ln, i) => uiText(ln, c.x + c.pad + 4, c.y + c.pad + 28 + i * c.LH, c.fL, "rgba(244,236,217,.86)"));
+  }
+  for(const r of guideRows()) drawBtn(r, r.tab ? UIF(800, 13) : UIF(700, 13));
+  centerText((pages.length > 1 ? "쪽 " + (guideSub + 1) + "/" + pages.length + " · ↑ ↓ 쪽 넘기기 · " : "") + "← → 탭 · 숫자 키 1~7 · 수치는 지금 게임 값 그대로", H - 16, UIF(400, 12), "rgba(244,236,217,.55)");
+}
+
 /* ---------- 항로 갈림길 ---------- */
 // 본게임·오늘의 항해에만. 보물섬 해역이나 항구 바로 앞에선 갈라지지 않는다(항구는 한 줄짜리 돛대라야 잡기 쉽다)
 function routeStarts(m){
@@ -4034,6 +4211,7 @@ window.addEventListener("keydown", (e)=>{
       if(state !== STATE.MENU) navBack();       // 한 단계 위로 — 화면의 '← 이전' 버튼과 같은 동작(v60)
       return;
     }
+    if(state === STATE.LOG && guidePage !== null && guideKey(k)){ e.preventDefault(); return; }
     if(state === STATE.LOG && titlePage && (k === "ArrowLeft" || k === "ArrowRight")){
       e.preventDefault();
       titleTab(titlePage - 1 + (k === "ArrowRight" ? 1 : -1));
@@ -17258,6 +17436,8 @@ function drawFrame(){
       centerText(shopMsg.text, H/2 + 204, "700 14px 'Gowun Batang', 'Pretendard', serif", "#9fe0a0", Math.min(1, shopMsg.t/20));
       if(shopMsg.t <= 0) shopMsg = null;
     }
+  } else if(state === STATE.LOG && guidePage !== null){
+    drawGuide();
   } else if(state === STATE.LOG && dexPage){
     drawDex();
   } else if(state === STATE.LOG && titlePage){
@@ -17295,7 +17475,7 @@ function drawFrame(){
     menuRows().forEach((row, i) => {
       if(row.w !== undefined){ drawBtn(row, UIF(700, 14)); return; }
       centerText(row.label, row.y, row.key === 3 ? "600 16px 'Gowun Batang', 'Pretendard', serif" : "500 14px 'Gowun Batang', 'Pretendard', serif",
-                 row.key === 3 ? "#ffd76a" : row.key === 4 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)");
+                 row.key === 3 ? "#ffd76a" : row.key === 4 || row.key === 5 ? "#8fd6d8" : parrotUnlocked() ? "#3fae5a" : "rgba(244,236,217,.45)");
     });
   } else if(state === STATE.SHOP){
     drawShop();

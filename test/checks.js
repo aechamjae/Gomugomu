@@ -4600,6 +4600,36 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("boss = null; shots = [];");
 }
 
+/* --- v2.1.0 항해 안내서 --- */
+{
+  const a = A(), E = (x) => T().ev(x);
+  a.toMenu();
+  a.rows().find(r => /항해 일지/.test(r.label)).action();
+  const row = a.rows().find(r => /항해 안내서/.test(r.label));
+  ok("v2.1.0 안내서: 항해 일지에 안내서가 있다", !!row);
+  row.action();
+  ok("v2.1.0 안내서: 열면 조작 탭부터", E("guidePage") === 0 && E("navId()") === "log/guide");
+  const tabs = E("GUIDE_TABS.length");
+  let allOk = true, bossN = 0;
+  for(let t=0;t<tabs;t++){
+    const n = E("guideEntries(" + t + ").length"), pages = E("guideLayout(" + t + ").length");
+    if(!(n > 0 && pages >= 1)) allOk = false;
+    if(t === 3) bossN = n;
+  }
+  ok("v2.1.0 안내서: 일곱 탭 모두 내용이 있다", tabs === 7 && allOk);
+  ok("v2.1.0 안내서: 보스 탭에 보스가 전부", bossN === E("BOSSES.length"));
+  ok("v2.1.0 안내서: 수치는 게임 상수를 그대로 읽는다", E("guideEntries(0)[0].lines.join(' ').indexOf(String(REACH)) >= 0 && guideEntries(3)[0].lines[0].indexOf('체력 ' + BOSS_HP[0]) === 0"));
+  a.rows().find(r => r.tab && /보스/.test(r.label)).action();
+  ok("v2.1.0 안내서: 탭을 누르면 바뀐다", E("guidePage") === 3);
+  E("guideKey('ArrowDown')");
+  ok("v2.1.0 안내서: ↓ 로 다음 쪽", E("guideSub") === 1);
+  E("guideKey('ArrowRight')");
+  ok("v2.1.0 안내서: → 로 다음 탭(쪽은 처음으로)", E("guidePage") === 4 && E("guideSub") === 0);
+  E("navBack()");
+  ok("v2.1.0 안내서: 이전을 누르면 항해 일지로", E("guidePage") === null && a.peek().state === 7);
+  a.toMenu();
+}
+
 /* --- v2.1.0 클래식 모드 --- */
 {
   const a = A(), E = (x) => T().ev(x);
@@ -4623,7 +4653,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("v2.1.0 클래식: 보스·해군·포격·날씨·라이벌이 없다", !st.boss && !E("navy") && !st.barrage && !st.weather && !E("rival"));
   ok("v2.1.0 클래식: 금화·고기·통·갈매기·해파리가 없다", st.coins.length === 0 && st.meats.length === 0 && st.barrels.length === 0 && st.gulls.length === 0 && st.jellies.length === 0);
   ok("v2.1.0 클래식: 잡몹은 해왕류만", st.mobs.every(m => m.kind === 1));
-  ok("v2.1.0 클래식: 해왕류는 나온다", E("(() => { const n = mobs.length; for(let k=0;k<6;k++){ lastKingX = -1e9; spawnMobs(p.x + 400 + k*900, p.x + 1300 + k*900); } return mobs.filter(m => m.kind === 1).length > n; })()"));
+  ok("v2.1.0 클래식: 해왕류는 나온다", E("(() => { const n = mobs.length; for(let k=0;k<40;k++){ lastKingX = -1e9; spawnMobs(p.x + 400 + k*900, p.x + 1300 + k*900); } return mobs.filter(m => m.kind === 1).length > n; })()"));
   // 해왕류에 닿으면 즉사
   E("iframes = 0; stun = 0; fire = 0; knockKing();");
   ok("v2.1.0 클래식: 해왕류에 닿으면 즉사", a.peek().state === 2 && a.peek().deathReason === "해왕류", "state=" + a.peek().state + " " + a.peek().deathReason);
