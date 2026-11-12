@@ -1,8 +1,8 @@
-const CACHE = "gomupal-v2.1.0";
-const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png", "./icon-maskable-512.png"];
+const CACHE = "gomupal-v2.1.1";
+const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png?v=3", "./icon-512.png?v=3", "./icon-180.png?v=3", "./icon-maskable-512.png?v=3"];   // 아이콘은 주소에 ?v=를 붙인다 — 그림을 바꾸면 숫자를 올릴 것(사파리·홈 화면 캐시가 같은 주소면 옛 그림을 쓴다)
 
 self.addEventListener("install", (e)=>{
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(()=> self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" })))).then(()=> self.skipWaiting()));   // 브라우저 HTTP 캐시를 거치지 않고 새로 받는다
 });
 self.addEventListener("activate", (e)=>{
   e.waitUntil(caches.keys().then(ks =>
