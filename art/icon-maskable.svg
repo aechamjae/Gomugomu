@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141a36"/>
+      <stop offset="0.38" stop-color="#4a2c55"/>
+      <stop offset="0.66" stop-color="#c2565a"/>
+      <stop offset="0.82" stop-color="#f3a24c"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff2c4"/>
+      <stop offset="0.55" stop-color="#ffd27a"/>
+      <stop offset="1" stop-color="#ffb554"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd890" stop-opacity=".75"/>
+      <stop offset="1" stop-color="#ffb060" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d5a68"/>
+      <stop offset="1" stop-color="#0a2430"/>
+    </linearGradient>
+    <linearGradient id="arm" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#e9a77a"/>
+      <stop offset="1" stop-color="#f6c49a"/>
+    </linearGradient>
+    <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .25  0 0 0 0 .12  0 0 0 .09 0"/></filter>
+  </defs>
+<rect width="512" height="512" fill="url(#sky)"/><rect y="374.4" width="512" height="138" fill="url(#sea)"/>
+<g transform="translate(51.2 51.2) scale(.8)">
+  
+  <!-- 별 -->
+  <g fill="#fff6dc" opacity=".8"><circle cx="70" cy="62" r="2.4"/><circle cx="150" cy="38" r="1.6"/><circle cx="250" cy="70" r="2"/><circle cx="440" cy="54" r="2.2"/><circle cx="36" cy="140" r="1.4"/></g>
+  <!-- 해 -->
+  <circle cx="300" cy="352" r="170" fill="url(#glow)"/>
+  <circle cx="300" cy="352" r="92" fill="url(#sun)"/>
+  <!-- 먼 섬 -->
+  <path d="M-10 404 L60 350 L104 376 L160 326 L238 404 Z" fill="#2a1a34" opacity=".55" stroke="#3b2a1e" stroke-opacity=".4" stroke-width="2"/>
+  <!-- 바다 -->
+  
+  <rect x="-80" y="404" width="680" height="200" fill="url(#sea)"/><path d="M-80 404 H600" stroke="#3b2a1e" stroke-opacity=".5" stroke-width="3"/>
+  <g stroke-linecap="round" fill="none" stroke-width="5">
+    <path d="M40 432 q22 -6 44 0 M150 446 q26 -7 52 0 M300 428 q30 -7 60 0 M420 450 q24 -6 48 0" stroke="#d7f2ec" stroke-opacity=".45"/>
+    <path d="M90 470 q26 -6 52 0 M240 476 q30 -7 60 0 M380 482 q22 -5 44 0" stroke="#0a2a38" stroke-opacity=".6"/>
+    <path d="M230 412 q40 -5 140 0" stroke="#ffd690" stroke-opacity=".55"/>
+  </g>
+  <!-- 돛대 -->
+  <g stroke="#3b2a1e" stroke-width="7" stroke-linejoin="round">
+    <rect x="384" y="150" width="22" height="270" fill="#8a5a34"/>
+    <path d="M330 222 H460 L452 236 H338 Z" fill="#6e4426"/>
+    <path d="M342 238 Q395 330 448 238 Z" fill="#efe2c4"/>
+    <path d="M406 160 L470 178 L406 196 Z" fill="#c23b36"/>
+  </g>
+  <!-- 놋쇠 고리 -->
+  <circle cx="395" cy="118" r="36" fill="none" stroke="#3b2a1e" stroke-width="26"/>
+  <circle cx="395" cy="118" r="36" fill="none" stroke="#e4b85a" stroke-width="15"/>
+  <path d="M368 100 A36 36 0 0 1 410 86" fill="none" stroke="#fff3c2" stroke-width="5" stroke-linecap="round"/>
+  <!-- 속도선 -->
+  <g stroke="#fff3d8" stroke-opacity=".7" stroke-linecap="round" stroke-width="6">
+    <path d="M28 268 H96"/><path d="M14 306 H78"/><path d="M40 344 H90"/>
+  </g>
+  <!-- 망토 -->
+  <path d="M150 270 Q96 262 62 300 Q100 300 118 318 Q96 330 84 354 Q140 340 170 310 Z" fill="#b8332f" stroke="#3b2a1e" stroke-width="7" stroke-linejoin="round"/>
+  <!-- 늘어난 팔 -->
+  <path d="M190 258 Q270 150 382 128" fill="none" stroke="#3b2a1e" stroke-width="34" stroke-linecap="round"/>
+  <path d="M190 258 Q270 150 382 128" fill="none" stroke="url(#arm)" stroke-width="22" stroke-linecap="round"/>
+  <path d="M210 226 Q262 162 330 140" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="5" stroke-linecap="round"/>
+  <!-- 주먹(고리를 움켜쥔) -->
+  <circle cx="386" cy="132" r="24" fill="#f3bd92" stroke="#3b2a1e" stroke-width="7"/>
+  <path d="M374 124 q10 -4 20 2 M372 136 q10 -3 20 2" stroke="#3b2a1e" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- 다리 -->
+  <g stroke="#3b2a1e" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M150 326 L120 372 L138 380 L168 338 Z" fill="#33496b"/>
+    <path d="M176 330 L178 384 L198 384 L198 330 Z" fill="#33496b"/>
+    <path d="M112 374 Q108 392 132 390 L142 380 Z" fill="#4a2e1c"/>
+    <path d="M172 382 Q172 400 200 396 L200 382 Z" fill="#4a2e1c"/>
+  </g>
+  <!-- 몸통 -->
+  <path d="M140 262 Q170 236 206 256 L210 334 Q172 348 140 330 Z" fill="#f2e6cc" stroke="#3b2a1e" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M141 300 Q175 310 209 298 L210 316 Q174 328 141 318 Z" fill="#c23b36" stroke="#3b2a1e" stroke-width="4"/>
+  <!-- 머리 -->
+  <circle cx="186" cy="214" r="40" fill="#f3bd92" stroke="#3b2a1e" stroke-width="7"/>
+  <path d="M146 210 Q150 168 192 172 Q228 176 228 208 Q190 192 146 210 Z" fill="#c23b36" stroke="#3b2a1e" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M150 202 Q126 196 112 210 Q128 214 140 224 Z" fill="#c23b36" stroke="#3b2a1e" stroke-width="6" stroke-linejoin="round"/>
+  <g fill="#fff3d0"><circle cx="176" cy="186" r="4"/><circle cx="198" cy="182" r="4"/><circle cx="214" cy="194" r="3.5"/></g>
+  <!-- 얼굴: 웃는 눈 + 입 -->
+  <path d="M196 214 q7 -8 14 0" stroke="#3b2a1e" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M178 230 q14 16 32 4" stroke="#3b2a1e" stroke-width="5" fill="#8a2a24" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="172" cy="226" r="7" fill="#ee8a74" opacity=".6"/>
+  <!-- 종이 결 -->
+  
+</g><rect width="512" height="512" filter="url(#paper)"/></svg>
