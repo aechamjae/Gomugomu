@@ -2736,9 +2736,9 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   // 보스 스테이지 — 그 보스만, 카드 없이 클리어
   ["P-1","P-2","1-1","1-2"].forEach(id => ST().setBits(id, 1));
   ST().start(1, 2); go(); T().setFusen(9);
-  T().teleport(140 * 22); stepN(4, () => a.hold(true));
+  T().teleport(280 * 22); stepN(4, () => a.hold(true));
   const bb = a.boss();
-  ok("1-3: 120m에서 밧줄 끊는 자가 나온다", bb && bb.type === 3, bb && bb.type);
+  ok("1-3: 260m에서 밧줄 끊는 자가 나온다(v63 — 예전 120m)", bb && bb.type === 3, bb && bb.type);
   ok("보스 스테이지엔 잡몹이 없다", a.peek().mobs.length === 0);
   bb.hp = 1; bb.invul = 0; T().dmg(true, "t");
   stepN(60, () => a.hold(true)); skipTalk();
@@ -2747,7 +2747,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.crew().owned.length = 0;
   ST().setBits("1-3", 1);
   ST().start(1, 3); go(); T().setFusen(9);
-  T().teleport(140 * 22); stepN(4, () => a.hold(true));
+  T().teleport(280 * 22); stepN(4, () => a.hold(true));
   const oc = a.boss();
   ok("1-4: 먹물 장군 문어", oc && oc.type === 6);
   oc.hp = 1; oc.invul = 0; T().dmg(true, "t");
@@ -4301,7 +4301,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     E("boss = null"); T().setBoss(null); a.toMenu();
     const ci = ST().ch.findIndex(c => c.stages.some(sg => sg.id === "5-4")), si = ST().ch[ci].stages.findIndex(sg => sg.id === "5-4");
     ST().start(ci, si); { let n = 0; while(ST().talk && n++ < 50) ST().talkNext(true); } H.step(); a.hold(true); H.step(); T().setFusen(9);
-    T().teleport(140 * 22); for(let i=0;i<4;i++){ a.hold(true); H.step(); }
+    T().teleport(280 * 22); for(let i=0;i<4;i++){ a.hold(true); H.step(); }
     const sb = a.boss();
     ok("v60 bosses: 대장 — 스토리 5-4에서도 드레이크가 직접 나와 싸운다", !!sb && sb.type === 8 && !!sb.dk, sb && sb.type);
     for(const k of Object.keys(ST().stars)) delete ST().stars[k]; Object.assign(ST().stars, stars0);
@@ -4323,7 +4323,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   {
     let err = null; try{ E("bossWaterLip(100, 400, 1); bossWaterLip(0, 10, 2, 0.5); drawFaded(0.4, () => { ctx.fillRect(0, 0, 10, 10); }); drawFaded(1, () => {}); drawFaded(0, () => { throw new Error('안 그려야 한다'); })"); }catch(e){ err = e.message; }
     ok("v60 bosses: 경계 — 물마루(bossWaterLip)·반투명 한 장(drawFaded)이 오류 없이 그려지고, 투명도 0이면 아예 안 그린다", !err, err);
-    ok("v62: 버전 — GAME_VER v62", E("GAME_VER") === "v62");
+    ok("v63: 버전 — GAME_VER v63", E("GAME_VER") === "v63");
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
@@ -4419,13 +4419,22 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     const F2 = { x: P.x, y: 100, kind: 0, fake: true }, R2 = { x: P.x, y: 100, kind: 0 };
     for(let i=0;i<20;i++){ E("time += 3"); E("cam.x = " + (P.x - 300)); T().ev("drawMast")(F2, false); T().ev("drawMast")(R2, false); ys.push(F2.drawY); yr.push(R2.drawY); }
     ok("v62 abyss: 미라주 — 가짜 고리는 움직이지 않고 진짜 고리는 출렁인다(가려낼 수 있다)", Math.max(...ys) - Math.min(...ys) < 0.01 && Math.max(...yr) - Math.min(...yr) > 3, (Math.max(...yr) - Math.min(...yr)).toFixed(1));
-    // 분신 — 기술이 닿으면 유리처럼 깨지고 체력은 그대로
+    // v63: 분신 — 기술로는 못 깨고, 진짜 몸도 기술엔 안 맞는다. 몸으로 부딪혀야 한다
     K.st = "split"; K.stT = 1; K.stT0 = 50; K.clones = [{ slot: 0, x: K.x, y: K.y }, { slot: 2, x: K.x, y: K.y }];
     stepN(2);
     const cl = K.clones.find(c => !c.broken), hp0 = K.hp;
     E("strikeArea((x, y, r) => Math.hypot(x - " + cl.x + ", y - " + cl.y + ") < 5 + r && Math.hypot(x - boss.x, y - boss.y) > 40, '채찍', 1)");
-    ok("v62 abyss: 미라주 분신 — 맞으면 깨지고 체력은 그대로", cl.broken && K.hp === hp0);
-    ok("v62 abyss: 미라주 — 분신이 남아 있는 동안 진짜의 맥박 무늬가 약점", a.weak().some(w => w.mark === "맥박 무늬"));
+    ok("v63: 미라주 분신 — 기술로는 깨지지 않는다(자동 조준이 대신 골라 주지 않는다)", !cl.broken && K.hp === hp0);
+    K.invul = 0; T().dmg(true, "t");
+    ok("v63: 미라주 — 진짜 몸도 기술엔 피해가 없다(거울 비늘이 튕겨 낸다)", K.hp === hp0 && K.reflected >= 1);
+    ok("v63: 미라주 — 분신이 남아 있는 동안 진짜의 맥박 무늬가 약점", a.weak().some(w => w.mark === "맥박 무늬"));
+    K.invul = 0; T().dmg(false, "맥박 무늬");
+    ok("v63: 미라주 — 몸으로 부딪히면 맞는다", K.hp === hp0 - 1, K.hp + "/" + hp0);
+    E("stun = 0; iframes = 0; armHurt = 0; rope = null");
+    T().P().x = cl.x; T().P().y = cl.y; T().P().vx = 2; T().P().vy = 0;
+    stepN(1);
+    ok("v63: 미라주 분신에 부딪히면 깨지고 가볍게 휘청한다", cl.broken && a.peek().stun > 0, "stun=" + a.peek().stun);
+    E("stun = 0; iframes = 0");
     // 섬광 — 예고 ≥ 45프레임, 번쩍임 설정이 꺼져 있으면 화면을 덮지 않는다
     ok("v62 abyss: 미라주 — 섬광 예고 45프레임 이상", E("MR_FLASH_WARN * 0.85") >= 45 && E("MR_FAKE_WARN") >= 45 && E("MR_CLONE_WARN") >= 45);
     K.burstT = 10; let n = 0; const c0 = E("ctx"), fr = c0.fillRect; c0.fillRect = () => { n++; };
@@ -4497,6 +4506,21 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     T().setDist(0);
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
+}
+
+/* v63 — 스토리 보스 간격 */
+{
+  const a = A(), E = (x) => T().ev(x), ST = () => a.story ? a.story() : null;
+  E("for(const s of STORY_ALL) storyStars[s.id] = 1");
+  const idx = (id) => { for(let c=0;c<E("STORY_CH.length");c++){ const j = E("STORY_CH[" + c + "].stages.findIndex(s => s.id === '" + id + "')"); if(j >= 0) return [c, j]; } return null; };
+  let [c1, j1] = idx("1-3");
+  E("startStory(" + c1 + ", " + j1 + "); storyTalk = null; state = STATE.PLAY");
+  ok("v63: 스토리 보스 스테이지 — 출발하고 " + E("STORY_BOSS_AT") + "m 뒤에 보스가 나온다(바로 덮치지 않는다)", E("nextBossAt") === E("STORY_BOSS_AT") && E("STORY_BOSS_AT") >= 200);
+  [c1, j1] = idx("F-3");
+  E("startStory(" + c1 + ", " + j1 + "); storyTalk = null; state = STATE.PLAY");
+  E("dist = 500; storyBossKilled({ type: storyStage().goal.list[0] })");
+  ok("v63: 스토리 연전 — 하나를 잡으면 " + E("STORY_RUSH_GAP") + "m 숨 돌릴 거리 뒤에 다음 보스", E("nextBossAt") === 500 + E("STORY_RUSH_GAP") && E("STORY_RUSH_GAP") >= 120 && !E("storyRun.win"));
+  E("storyMode = null; storyRun = null"); a.toMenu();
 }
 
 console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");

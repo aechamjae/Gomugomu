@@ -328,7 +328,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v62";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v63";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -1271,7 +1271,8 @@ function startPractice(idx){
    프롤로그 + 1~5장 + 최종장, 27스테이지. 스테이지마다 해역·시간·목표·별 조건이 정해져 있다.
    장 보스를 깨면 이야기 선원이 합류하고 비기(G)가 풀린다. 진행은 swing:shop의 story에 저장(스테이지별 별 비트 1·2·4 — 1은 클리어).
    storyMode는 practiceMode처럼 reset()이 지우지 않는다 — R로 같은 스테이지를 다시 한다 */
-const STORY_SKY = { dusk:0, night:1, dawn:2, day:3 };     // SKY_KEYS 순서
+const STORY_SKY = { dusk:0, night:1, dawn:2, day:3 };
+const STORY_BOSS_AT = 260, STORY_RUSH_GAP = 160;   // v63 — 스토리 보스가 나오기까지의 거리 · 연전 사이 거리(m)     // SKY_KEYS 순서
 const AWAKEN = 15;                                           // 최종 보스 — 각성한 크라켄
 const STORY_CH = [
   { id:"P", name:"프롤로그", sub:"바람개비 섬", stages:[
@@ -1711,8 +1712,9 @@ function storySetup(){
                kingDone:false, prevStun:0, prevArm:0, prevElec:0, prevHook:null, prevDaze:0, barrages:0 };
   storyResult = null;
   nextBossAt = Infinity; nextBigAt = Infinity;
-  if(g.type === "boss"){ if(isBigType(g.boss)) nextBigAt = 120; else nextBossAt = 120; }
-  if(g.type === "rush") nextBossAt = 100;
+  // v63: 출발하자마자 보스가 덮치지 않게 — 몸을 풀 거리(STORY_BOSS_AT)를 두고 나온다
+  if(g.type === "boss"){ if(isBigType(g.boss)) nextBigAt = STORY_BOSS_AT; else nextBossAt = STORY_BOSS_AT; }
+  if(g.type === "rush") nextBossAt = STORY_BOSS_AT;
   nextNavyAt = g.type === "navy" ? 80 : Infinity;
   nextRivalAt = g.type === "race" ? 50 : Infinity;
   if(g.type === "race") rivalRaces = g.rival;              // RIVALS[rivalRaces]가 이번 상대
@@ -1735,7 +1737,12 @@ function storyBossKilled(b){
   if(g.type === "rush"){
     storyRun.rushIdx++;
     if(storyRun.rushIdx >= g.list.length) storyRun.win = true;
-    else nextBossAt = dist + 40;
+    else {
+      // v63: 연전 사이 숨 돌릴 거리 — 잡자마자 다음 보스가 덮치지 않게. 다음 상대는 미리 알려 준다
+      nextBossAt = dist + STORY_RUSH_GAP;
+      const nx = BOSSES[g.list[storyRun.rushIdx]];
+      pops.push({ x: p.x + 120, y: p.y - 110, t: 200, text: "숨을 돌려라 — " + STORY_RUSH_GAP + "m 앞에 " + nx.name + "이(가) 기다린다", color: "#d9b877" });
+    }
   } else if(g.type === "boss" && b.type === g.boss) storyRun.win = true;
 }
 // 매 프레임 — 별 카운터를 세고, 목표를 이뤘는지 본다
@@ -4299,7 +4306,7 @@ const BOSSES = [
   { name:"해룡 군주 요르문",    tag:"뼈 사이 틈으로 아치를 빠져나가며 심장석을 — 박힌 머리도 노려라", big:true },
   { name:"간수장 그롬",         tag:"열쇠로 수갑을 풀고 쇠창살은 틈으로 — 숨 고를 때 열린 자물쇠를 쳐라", named:true },
   { name:"닻발 거미게 타란",    tag:"닻발 기둥을 피하고 그물은 Q·W로 끊어라 — 빛나는 관절을 꺾으면 주저앉는다(그때 등딱지를)" },
-  { name:"거울 갑오징어 미라주", tag:"가짜 고리는 꼼짝 않는다(진짜는 출렁인다) — 분신을 깨고 섬광 뒤 맥박 무늬를 쳐라" },
+  { name:"거울 갑오징어 미라주", tag:"기술은 거울에 튕긴다 — 눈이 따라보는 진짜를 골라 몸으로 부딪혀라(분신은 가볍게 휘청) · 가짜 고리는 꼼짝 않는다" },
   { name:"백 팔의 바다나리 크리노", tag:"감긴 고리는 못 잡는다 — 깃털 팔을 Q·W로 끊어라, 많이 끊을수록 입(초록 핵)이 오래 열린다", named:true }
 ];
 const ANGLER = 16, JELLYQ = 17, WHALE = 18, SERPENT = 19, MAGELLAN = 20;   // 간수장 그롬(v60에 이름·능력 교체 — 상수 이름만 예전 그대로) — 해저 감옥 탈옥전에만 나온다
@@ -4353,7 +4360,8 @@ const bossBounty = (b) => b.big || b.type === MAGELLAN ? (600 + bossKills*80) : 
 //   빨리 잡을수록 남은 1초마다 BOSS_QUICK만큼 '빠른 격침' 보물을 더 준다
 const BOSS_TIME = { mid: 60, named: 100, big: 120 }, BOSS_TIME_MG = 100, BOSS_TIME_AW = 150, BOSS_TIME_ADM = 140, BOSS_QUICK = { mid: 4, named: 6, big: 8 };
 const bossTier = (b) => b.big ? "big" : b.named ? "named" : "mid";
-const bossTimeOf = (b) => (b.type === MAGELLAN ? BOSS_TIME_MG : b.type === AWAKEN ? BOSS_TIME_AW : b.type === ADMIRAL ? BOSS_TIME_ADM : BOSS_TIME[bossTier(b)]) * 60;   // v60: 해군 대장은 대장이 직접 싸워 틈이 짧아 140초
+const BOSS_TIME_MR = 80;   // v63: 미라주는 몸으로만 맞아 일반보다 20초 더
+const bossTimeOf = (b) => (b.type === MAGELLAN ? BOSS_TIME_MG : b.type === AWAKEN ? BOSS_TIME_AW : b.type === ADMIRAL ? BOSS_TIME_ADM : b.type === MIRAGE ? BOSS_TIME_MR : BOSS_TIME[bossTier(b)]) * 60;   // v60: 해군 대장은 대장이 직접 싸워 틈이 짧아 140초
 // 팔 부상 — 남은 프레임 동안 고리를 못 건다. 밧줄 끊는 자는 줄을 잘라서, 톱니턱은 팔을 물어서
 const ARM_CUT = 26, ARM_BITE = 34, ARM_HURT_MAX = 34;
 const RC_LEAP = 38, RC_SAW = 40, RC_HOP = 30, RC_AHEAD = 280;
@@ -5116,7 +5124,8 @@ function knockKing(){
 function damageBoss(ranged, mark, power){
   const b = boss;
   // 기어 강화 중엔 공격력 배율이 붙는다(기어 3 거대 주먹은 자체 공격력 4)
-  if(b.type === TARAN && b.st !== "down"){ taranLegHit(b, ranged); return; }   // v62: 서 있는 타란은 관절을 맞으면 다리가 꺾인다(체력은 주저앉았을 때만)
+  if(b.type === TARAN && b.st !== "down"){ taranLegHit(b, ranged); return; }
+  if(b.type === MIRAGE && ranged){ mirageReflect(b, mark); return; }   // v63: 거울 비늘은 기술·저격·되던지기를 비춰 튕겨 낸다 — 몸으로 부딪혀야 맞는다   // v62: 서 있는 타란은 관절을 맞으면 다리가 꺾인다(체력은 주저앉았을 때만)
   const amt = (power || 1) * (buff() ? buff().atk : 1) + (artOn("redhawk") ? 1 : 0);
   if(b.type === AWAKEN && b.assistT > 0) storyCount("assist");
   if(b.type === AWAKEN || b.type === 5) awakenStruck(b, mark);
@@ -12906,9 +12915,11 @@ function updateTaran(b, dt){
    - 가짜 고리(b.beams → 고리 a.fake): 몸에서 빛줄기가 뻗어 나가 고리가 생길 자리를 비춘다(MR_FAKE_WARN, 점선 고리) → 진짜 고리 사이 빈자리에 거울 고리(MR_FAKE_T 동안).
      잡으면 손이 미끄러져 떨어진다(mirageSlip — 휘청은 없다). 진짜 고리는 늘 미세하게 출렁이고(drawMast의 bob), 가짜는 꼼짝 않고 비스듬한 빛이 흐른다.
    - 거울 분신(b.clones): 몸이 셋으로 갈라져(MR_CLONE_WARN) 세로로 늘어선 채 MR_SHUFFLE마다 자리를 바꾼다. 분신은 무늬가 멈춰 있고 눈이 플레이어를 안 따라본다 —
-     진짜만 맥박 무늬가 물결친다(약점). 분신은 주먹·기술·몸통 박치기에 유리처럼 깨진다(bossCuts). 원거리 조준은 분신도 노린다(가까운 쪽).
+     진짜만 맥박 무늬가 물결친다(약점). v63: 기술·저격·되던지기는 거울 비늘에 튕긴다(mirageReflect, 피해 없음) — 진짜를 골라 몸으로 부딪혀야 맞는다.
+     분신에 부딪히면 깨지지만 유리 파편에 가볍게 휘청한다(틀린 선택의 대가). 분신은 기술로 못 깬다(mirageCuts는 빈 목록).
    - 섬광(b.flash): 먹물 대신 빛을 모았다가(MR_FLASH_WARN, 커지는 점선 원) 반경 MR_FLASH_R 안을 터뜨린다(보통 휘청). 남은 분신도 같이 터진다.
      터뜨린 뒤 빛을 다 쓴 몸(MR_DIM)은 맥박 무늬가 드러난다(약점). 화면 번쩍임은 설정 '번쩍임'이 켜져 있고 '연출 줄이기'가 꺼져 있을 때만. */
+const MR_NEAR = 150;   // v63
 const MR_Y = 168, MR_CD = 96, MR_FAKE_WARN = 52, MR_FAKE_T = 520, MR_CLONE_WARN = 50, MR_CLONE_T = 430, MR_SHUFFLE = 140, MR_FLASH_WARN = 56, MR_FLASH_R = 170, MR_DIM = 100, MR_SLOTS = [-118, 0, 118];
 function mrStart(b){
   b.y = MR_Y; b.st = "idle"; b.stT = 70; b.last = null; b.beams = []; b.clones = []; b.flash = null; b.shards = []; b.slot = 1; b.shufT = MR_SHUFFLE; b.burstT = 0; b.eye = sv(); b.skin = 0;
@@ -12955,11 +12966,18 @@ function mrBreakClone(b, c, how){
   storyCount("clone");
   pops.push({ x: c.x, y: c.y - 50, t: 70, text: (how ? how + " — " : "") + "거울 분신이 깨졌다 +15", color: "#cfe0ff" });
 }
-function mirageCuts(b){
-  return b.clones.filter(c => !c.broken && b.st !== "split").map(c => ({ x: c.x, y: c.y, r: 46, vx: 0, pri: 0, cut: (how) => mrBreakClone(b, c, how) }));
+// v63: 분신은 기술로 못 깬다(자동 조준이 대신 골라 주면 분신이 의미가 없다) — 직접 몸으로 골라 부딪혀야 한다
+function mirageCuts(b){ return []; }
+// 기술이 거울 비늘에 맞았다 — 피해 없이 튕겨 나간다(한 번 알려 준 뒤로는 짧게)
+function mirageReflect(b, mark){
+  b.invul = Math.max(b.invul || 0, 12);
+  mrShatter(b, b.x, b.y, 6);
+  for(let k=0;k<8;k++) spark(b.x, b.y, k % 2 ? "#e8f0ff" : "#b9a8ff");
+  const first = !b.reflected; b.reflected = (b.reflected || 0) + 1;
+  pops.push({ x: b.x, y: b.y - 70, t: first ? 130 : 60, text: first ? "거울 비늘이 기술을 튕겨 냈다 — 진짜를 골라 몸으로 부딪혀라!" : "튕겨 냈다", color: "#cfe0ff" });
 }
 function mirageWeak(b, out){
-  if(b.st === "dim" || (mrReal(b) && b.st !== "split")) out.push({ x: b.x + 10, y: b.y - 2, r: b.st === "dim" ? 36 : 30, mark: "맥박 무늬" });
+  if(b.st === "dim" || (mrReal(b) && b.st !== "split")) out.push({ x: b.x + 10, y: b.y - 2, r: b.st === "dim" ? 46 : 38, mark: "맥박 무늬" });   // v63: 몸으로만 맞으니 판정을 넉넉히
 }
 function mrBurst(b, x, y){
   addShake(6, 14);
@@ -12971,7 +12989,9 @@ function mrBurst(b, x, y){
 function updateMirage(b, dt){
   if(!b.clones) mrStart(b);
   const rage = b.hp <= 1 ? 0.8 : 1;
-  keepFront(b, 340, dt);
+  // v63: 몸으로만 맞으니, 분신을 띄운 동안·빛을 다 쓴 동안엔 고리 길 가까이(MR_NEAR) 느리게 따라온다 — 스윙으로 따라잡아 부딪칠 수 있게
+  const open = b.st === "dim" || (b.clones.some(c => !c.broken) && b.st !== "split");
+  keepFront(b, open ? MR_NEAR : 340, dt, open ? 0.025 : 0.05);
   b.skin += dt * (b.st === "dim" ? 0.02 : 0.06);
   spring(b.eye, Math.max(-1, Math.min(1, (p.y - b.y) / 220)), 0.1, 0.4, dt);
   // 분신 — 칸을 바꿔 가며 같이 떠 있다
@@ -12994,7 +13014,7 @@ function updateMirage(b, dt){
     c.x = b.x + (tx - b.x) * k; c.y = b.y + (ty - b.y) * k;
     if(b.st === "split") continue;
     // 몸통 박치기로도 깨진다
-    if(state === STATE.PLAY && Math.hypot(p.x - c.x, p.y - c.y) < 50 && Math.hypot(p.vx, p.vy) >= 8 && stun <= 0) mrBreakClone(b, c, "몸통 박치기");
+    if(state === STATE.PLAY && Math.hypot(p.x - c.x, p.y - c.y) < 50 && stun <= 0 && iframes <= 0){ mrBreakClone(b, c, "가짜였다"); knock(false, true); }   // v63: 분신에 부딪히면 깨지지만 유리 파편에 휘청(가볍게)
   }
   b.clones = b.clones.filter(c => !c.broken || c.bt < 4);
   if(b.cloneT > 0){ b.cloneT -= dt; if(b.cloneT <= 0){ for(const c of b.clones) if(!c.broken){ c.broken = true; c.bt = 0; mrShatter(b, c.x, c.y, 10); } } }
