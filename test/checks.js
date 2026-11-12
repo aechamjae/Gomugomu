@@ -4323,7 +4323,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   {
     let err = null; try{ E("bossWaterLip(100, 400, 1); bossWaterLip(0, 10, 2, 0.5); drawFaded(0.4, () => { ctx.fillRect(0, 0, 10, 10); }); drawFaded(1, () => {}); drawFaded(0, () => { throw new Error('안 그려야 한다'); })"); }catch(e){ err = e.message; }
     ok("v60 bosses: 경계 — 물마루(bossWaterLip)·반투명 한 장(drawFaded)이 오류 없이 그려지고, 투명도 0이면 아예 안 그린다", !err, err);
-    ok("v64: 버전 — GAME_VER v64", E("GAME_VER") === "v64");
+    ok("v65: 버전 — GAME_VER v65", E("GAME_VER") === "v65");
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
@@ -4534,6 +4534,23 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("v64: 만렙 — 동료 전원·기술 최고 레벨·기어 5", E("crewOwned.length") === E("CREW.length") && E("TECHS.every(t => techLv[t.id] === TECH_MAX)") && E("gearUnlocked") === 5);
   ok("v64: 만렙 — 칭호 전부·도감 전부·비기 전부", E("unlockedTitles.size") === E("TITLES.length") && E("dexFound()") === E("DEX.length") && E("ARTS.every(q => artOwned(q.id))"));
   E("resetProfile(); devMaxOn = false"); a.toMenu();
+}
+
+/* v65 — 스토리 보스를 잡은 뒤 같은 보스가 다시 나오지 않는다 */
+{
+  const a = A(), E = (x) => T().ev(x);
+  E("for(const s of STORY_ALL) storyStars[s.id] = 1");
+  const go = (id) => { let ci = -1, si = -1; E("STORY_CH").forEach((c, i) => c.stages.forEach((s, j) => { if(s.id === id){ ci = i; si = j; } })); E("startStory(" + ci + "," + si + "); storyTalk = null; state = STATE.PLAY"); };
+  for(const id of ["1-3", "5-4"]){
+    go(id);
+    E("dist = STORY_BOSS_AT + 1"); a.hold(true); H.step(); H.step();
+    const b = a.boss();
+    let spawns = b ? 1 : 0, last = b;
+    if(b){ b.hp = 1; b.invul = 0; E("bossIntro = null"); T().dmg(true, "t"); }
+    for(let i=0;i<200 && a.peek().state === 1;i++){ a.hold(true); H.step(); const nb = a.boss(); if(nb && nb !== last){ spawns++; last = nb; } }
+    ok("v65: " + id + " — 보스를 잡으면 클리어로 넘어가고 같은 보스가 다시 나오지 않는다", spawns === 1 && E("storyRun") && E("storyRun.win"), "출현 " + spawns + "번");
+    E("storyMode = null; storyRun = null; storyTalk = null; storyResult = null; boss = null"); a.toMenu();
+  }
 }
 
 console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");

@@ -328,7 +328,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v64";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v65";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -1744,6 +1744,9 @@ function storyBossKilled(b){
       pops.push({ x: p.x + 120, y: p.y - 110, t: 200, text: "숨을 돌려라 — " + STORY_RUSH_GAP + "m 앞에 " + nx.name + "이(가) 기다린다", color: "#d9b877" });
     }
   } else if(g.type === "boss" && b.type === g.boss) storyRun.win = true;
+  // v65: 이겼으면 더는 보스를 부르지 않는다 — 예전엔 출현 거리가 그대로라 격침 슬로모션 동안 같은 보스가 그 자리에서 다시 나왔다
+  if(storyRun.win){ nextBossAt = Infinity; nextBigAt = Infinity; }
+  else if(g.type !== "rush"){ nextBossAt = Infinity; nextBigAt = Infinity; }
 }
 // 매 프레임 — 별 카운터를 세고, 목표를 이뤘는지 본다
 function storyUpdate(dt){
