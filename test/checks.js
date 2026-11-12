@@ -4323,7 +4323,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   {
     let err = null; try{ E("bossWaterLip(100, 400, 1); bossWaterLip(0, 10, 2, 0.5); drawFaded(0.4, () => { ctx.fillRect(0, 0, 10, 10); }); drawFaded(1, () => {}); drawFaded(0, () => { throw new Error('안 그려야 한다'); })"); }catch(e){ err = e.message; }
     ok("v60 bosses: 경계 — 물마루(bossWaterLip)·반투명 한 장(drawFaded)이 오류 없이 그려지고, 투명도 0이면 아예 안 그린다", !err, err);
-    ok("v63: 버전 — GAME_VER v63", E("GAME_VER") === "v63");
+    ok("v64: 버전 — GAME_VER v64", E("GAME_VER") === "v64");
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
@@ -4521,6 +4521,19 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("dist = 500; storyBossKilled({ type: storyStage().goal.list[0] })");
   ok("v63: 스토리 연전 — 하나를 잡으면 " + E("STORY_RUSH_GAP") + "m 숨 돌릴 거리 뒤에 다음 보스", E("nextBossAt") === 500 + E("STORY_RUSH_GAP") && E("STORY_RUSH_GAP") >= 120 && !E("storyRun.win"));
   E("storyMode = null; storyRun = null"); a.toMenu();
+}
+
+/* v64 — 테스트용 만렙 계정(?max, 미리보기 주소에서만) */
+{
+  const a = A(), E = (x) => T().ev(x);
+  ok("v64: 배포 주소에선 ?max가 아무 일도 안 한다", E("devMaxWanted('aechamjae.github.io', '?max')") === false);
+  ok("v64: 미리보기 주소 + ?max 면 켠다", E("devMaxWanted('raw.githack.com', '?max')") === true && E("devMaxWanted('raw.githack.com', '?a=1&max=1')") === true);
+  ok("v64: ?max 가 없으면 끈다", E("devMaxWanted('raw.githack.com', '')") === false && E("devMaxWanted('raw.githack.com', '?maxi')") === false);
+  E("devMaxApply()");
+  ok("v64: 만렙 — 스토리 별 전부·엔딩", E("storyStarTotal()") === E("STORY_STAR_MAX") && E("storyEnd") >= 1);
+  ok("v64: 만렙 — 동료 전원·기술 최고 레벨·기어 5", E("crewOwned.length") === E("CREW.length") && E("TECHS.every(t => techLv[t.id] === TECH_MAX)") && E("gearUnlocked") === 5);
+  ok("v64: 만렙 — 칭호 전부·도감 전부·비기 전부", E("unlockedTitles.size") === E("TITLES.length") && E("dexFound()") === E("DEX.length") && E("ARTS.every(q => artOwned(q.id))"));
+  E("resetProfile(); devMaxOn = false"); a.toMenu();
 }
 
 console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");

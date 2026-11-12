@@ -328,7 +328,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v63";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
+const GAME_VER = "v64";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vN)과 항상 같이 올린다
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -15538,7 +15538,7 @@ function drawShareButton(){
 
 // 메뉴·일시정지 화면 왼쪽 아래 구석의 버전 표시 — 업데이트가 들어왔는지 확인용
 function drawVersion(){
-  leftText("버전 " + GAME_VER, 12, H - 16, "700 15px 'Gowun Batang', serif", "rgba(244,236,217,.75)");
+  leftText("버전 " + GAME_VER + (devMaxOn ? "  · 테스트 만렙 계정" : ""), 12, H - 16, "700 15px 'Gowun Batang', serif", devMaxOn ? "rgba(255,215,106,.9)" : "rgba(244,236,217,.75)");
 }
 
 function leftText(t, x, y, font, color){
@@ -16962,6 +16962,39 @@ function drawFrame(){
 
 /* ---------- 루프 ---------- */
 let last = performance.now();
+/* v64 테스트용 만렙 계정 — 미리보기 주소(배포 주소 aechamjae.github.io가 아닌 곳)에서 주소 끝에 ?max 를 붙이면
+   스토리 전부 클리어(별 81)·동료·기술 Lv.최고·업그레이드·두건·칭호·도감·미니게임 금메달·보물을 채운 상태로 연다.
+   배포 주소에선 아무 일도 안 한다. 미리보기 주소의 저장 공간은 배포 주소와 따로라 진짜 기록과 섞이지 않는다 */
+const DEV_PROD_HOST = "aechamjae.github.io";
+let devMaxOn = false;
+function devMaxWanted(host, search){
+  try{
+    if(host === undefined){ host = location.hostname; search = location.search; }
+    return host !== DEV_PROD_HOST && /(^|[?&])max(=|&|$)/.test(String(search || "").replace(/^\?/, ""));
+  }catch(e){ return false; }
+}
+function devMaxApply(){
+  bank = 99999999; bestBounty = Math.max(bestBounty, 9999999);
+  upgrades = {}; for(const u of UPGRADES) upgrades[u.id] = u.cost.length;
+  ownedSkins = SKINS.map(k => k.id);
+  techLv = {}; for(const t of TECHS) techLv[t.id] = TECH_MAX;
+  mats = { melee: 999, ranged: 999, gear: 999 };
+  gearUnlocked = 5; gearSel = 5;
+  crewOwned = CREW.map(c => c.id); crewXp = {}; for(const c of CREW) crewXp[c.id] = CREW_LV_XP[CREW_LV_XP.length - 1];
+  storyStars = {}; for(const st of STORY_ALL) storyStars[st.id] = 7;
+  storySeen = [].concat(...STORY_ALL.map(st => [st.id, st.id + "+"])); storyEnd = Math.max(1, storyEnd);
+  miniMedals = { jelly: 3, cannon: 3, hop: 3 }; miniBest = Object.assign({ jelly: 999, cannon: 9999, hop: 999 }, miniBest);
+  mapsDone = Math.max(1, mapsDone);
+  best = Math.max(best, 9000); bestChain = Math.max(bestChain, 40);
+  lifeLog.xp = Math.max(lifeLog.xp || 0, 3000000); lifeLog.dist = Math.max(lifeLog.dist || 0, 500000); lifeLog.runs = Math.max(lifeLog.runs || 0, 500);
+  lifeLog.perfects = Math.max(lifeLog.perfects || 0, 500); lifeLog.gulls = Math.max(lifeLog.gulls || 0, 500);
+  lifeLog.dex = lifeLog.dex || {}; for(const d of DEX) lifeLog.dex[d.id] = Math.max(lifeLog.dex[d.id] || 0, 1);
+  lifeBossKills = Math.max(lifeBossKills, 150); lifeKrakenKills = Math.max(lifeKrakenKills, 12); lifeGhostKills = Math.max(lifeGhostKills, 12); lifeAdmiralKills = Math.max(lifeAdmiralKills, 2);
+  unlockedTitles = new Set(TITLES.map(t => t.id));
+  devMaxOn = true;
+  return saveProfile();
+}
+function devMaxCheck(){ if(devMaxWanted()) return devMaxApply().then(() => syncHUD()); }
 const GFX_NAMES = ["높음", "보통", "낮음", "최저"], GFX_KEYS = ["high", "mid", "low", "min"];
 function gfxLabel(){ return settings.gfx === "auto" ? "자동(지금 " + GFX_NAMES[gfxLv] + ")" : GFX_NAMES[Math.max(0, GFX_KEYS.indexOf(settings.gfx))]; }
 function gfxSet(lv){ lv = Math.max(0, Math.min(3, lv)); if(lv === gfxLv) return; gfxLv = lv; fit(); }
@@ -17907,6 +17940,7 @@ gfxApply();
 makeArtTex();
 loadDaily();
 loadLog();
+Promise.resolve().then(devMaxCheck);
 try{ canvas.focus({preventScroll:true}); }catch(e){}
 requestAnimationFrame(loop);
 
