@@ -2100,7 +2100,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 바다 도감 --- */
 {
   const a = A(), X = () => a.dex();
-  ok("도감은 50종 — 생물·보스 21종(그롬)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 50 && X().list.filter(e => e.cat === "boss").length === 21);
+  ok("도감은 51종 — 생물·보스 22종(그롬·v62 심연 보스)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 51 && X().list.filter(e => e.cat === "boss").length === 22);
   a.startMain(); H.step(); a.hold(true); H.step();
   ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
   delete X().book.wind;
@@ -3823,7 +3823,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   const saved = [...U], sel0 = TT().sel, dex0 = E("JSON.stringify(lifeLog.dex || {})"), rush0 = a.rush().best;
   const L = TT().list;
   const OLD = ["novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","voyage_end","star81","jail"];
-  ok("v60 칭호: 30~40개, id가 겹치지 않는다", L.length >= 30 && L.length <= 40 && new Set(L.map(t => t.id)).size === L.length, L.length + "개");
+  ok("v60 칭호: 30~45개(v62 심연 보스 첫 격파 칭호 포함), id가 겹치지 않는다", L.length >= 30 && L.length <= 45 && new Set(L.map(t => t.id)).size === L.length, L.length + "개");
   ok("v60 칭호: 예전 18개 id가 모두 남아 있다(저장 호환)", OLD.every(id => L.some(t => t.id === id)));
   ok("v60 칭호: 모두 등급(1~4)·범주(여섯 중 하나)·문장·설명이 있다", L.every(t => t.tier >= 1 && t.tier <= 4 && TT().cats.some(c => c.id === t.cat) && t.emb && t.desc && typeof t.need === "function"));
   ok("v60 칭호: 범주 여섯에 모두 칭호가 있고, 등급 넷이 다 쓰인다", TT().cats.length === 6 && TT().cats.every(c => L.some(t => t.cat === c.id)) && [1,2,3,4].every(k => L.some(t => t.tier === k)));
@@ -4352,6 +4352,52 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("gfxApply()");
   for(let i=0;i<120;i++) E("gfxTick(16)");
   ok("v61: 빠르면 그대로", E("gfxLv") === 0);
+  E("boss = null"); T().setBoss(null); a.toMenu();
+}
+
+
+/* v62 abyss: 심연 보스 3종 */
+{
+  const a = A(), E = (x) => T().ev(x);
+  const stepN = (n, fn) => { for(let i=0;i<n;i++){ if(fn) fn(); const st = a.peek().state; if(st === 9) a.decline(); if(st === 10) a.pickCard(0); if(st === 11) a.port().leave(); H.step(); } };
+  const fresh = (t) => { a.startMain(); H.step(); a.hold(true); H.step(); T().setFusen(9); const K = a.spawnBoss(false, t); K.tLeft = 1e6; return K; };
+  /* --- 닻발 거미게 타란(21) --- */
+  {
+    let K = fresh(21);
+    ok("v62 abyss: 타란 — 일반 보스, 이름·체력", !K.named && !K.big && E("BOSSES[21].name") === "닻발 거미게 타란" && K.hp === E("BOSS_HP[21]"));
+    // 그물 — 플레이어 앞에 두 고리를 세우고 그물을 친다 → 걸리면 팔을 못 뻗고, Q를 쓰면 끊긴다
+    const P = T().P(), A1 = { x: P.x + 40, y: P.y - 140, kind: 0 }, A2 = { x: P.x + 300, y: P.y - 140, kind: 0 };
+    T().anchors().push(A1, A2);
+    K.net = { a: A1, b: A2, t: E("TR_NET_WARN") + 1 }; K.atk = 1e9; K.pils = [];
+    E("stun = 0; iframes = 0; skillCd = 0; rope = null");
+    P.x = A1.x + 130; P.y = E("trNetY(boss.net, 0.5)") + 30; P.vx = 0; P.vy = 0;
+    stepN(1);
+    const tangled = !!K.tangle;
+    a.hold(false); a.hold(true);
+    ok("v62 abyss: 타란 그물 — 닿으면 걸리고 그동안 팔을 못 뻗는다", tangled && !a.peek().rope, "tangle " + tangled);
+    E("skillCd = 0; stun = 0"); a.fire();
+    ok("v62 abyss: 타란 그물 — Q를 쓰면 그물을 끊고 빠져나온다", !K.tangle && K.net && K.net.cutT > 0);
+    // 쳐 둔 그물은 주먹·기술이 닿아도 끊긴다(bossCuts)
+    K.net = { a: A1, b: A2, t: E("TR_NET_WARN") + 1 };
+    const c = E("bossCuts()");
+    E("strikeArea((x, y, r) => Math.hypot(x - " + c[1].x + ", y - " + c[1].y + ") < 10 + r, '채찍', 1, { noBoss: true })");
+    ok("v62 abyss: 타란 그물 — 범위 기술이 닿으면 끊긴다", K.net.cutT > 0);
+    // 관절 두 번 → 주저앉음, 그때만 체력이 준다
+    K = fresh(21); K.atk = 1e9;
+    const hp0 = K.hp;
+    K.st = "plant"; K.stT = 300;
+    for(let i=0;i<2;i++){ K.invul = 0; E("damageBoss(true, '다리 관절')"); }
+    ok("v62 abyss: 타란 — 관절을 두 번 꺾으면 주저앉고 체력은 그대로", K.st === "down" && K.hp === hp0 && K.broke === 2, K.st + " hp" + K.hp);
+    K.stT = 100; stepN(1); K.invul = 0;
+    ok("v62 abyss: 타란 — 주저앉으면 등딱지가 약점, 맞으면 체력이 준다", a.weak().some(w => w.mark === "등딱지") && (E("damageBoss(true, '등딱지')"), K.hp === hp0 - 1));
+    let err = null;
+    try{ for(const st of ["walk", "hoist", "slam", "plant", "down", "rise"]){ K.st = st; K.stT = 20; K.pils = [{ x: K.x - 200, t: 10 }, { x: K.x - 100, t: 80 }]; K.net = { a: A1, b: A2, t: 20 }; E("drawBoss()"); K.net.t = 200; E("drawBoss()"); } }catch(e){ err = e.message; }
+    ok("v62 abyss: 타란 — 모든 상태를 그려도 오류가 없다", !err, err);
+    K = fresh(21);
+    err = null; try{ stepN(2400, () => { a.hold(true); T().setFusen(9); }); }catch(e){ err = e.stack; }
+    ok("v62 abyss: 타란 — 2400프레임 스윙 봇 오류 없음", !err, err);
+    T().setBoss(null);
+  }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }
 
