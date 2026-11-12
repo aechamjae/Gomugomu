@@ -2018,11 +2018,11 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   // 고고학자 — 보물 통
   const barrelGain = (id) => { C.set(id); a.startMain(); H.step(); a.hold(true); H.step(); T().setTreasure(0); CT().barrel(); return a.peek().treasure; };
   const b0 = barrelGain(null), b1 = barrelGain("arch");
-  ok("고고학자 — 보물 통 보물 +50%", b1 === Math.round(b0 * 1.5), b0 + " → " + b1);
+  ok("v2.1.0 고고학자 — 보물 통 +50%는 뺐다(둘씩만)", b1 === b0, b0 + " → " + b1);
   // 조선공 — 항구 값·삭은 돛대
   C.set(null); a.startMain(); H.step(); CT().setPortIdx(1); const pr0 = CT().portPrice(0);
   C.set("wright"); a.startMain(); H.step(); CT().setPortIdx(1); const pr1 = CT().portPrice(0);
-  ok("조선공 — 항구 값 -20%", pr1 === Math.round(pr0 * 0.8 / 10) * 10, pr0 + " → " + pr1);
+  ok("v2.1.0 조선공 — 항구 값 할인은 뺐다", pr1 === pr0, pr0 + " → " + pr1);
   a.hold(true); H.step(); a.hold(false);
   const rot = CT().grabRot();
   ok("조선공 — 삭은 돛대가 2.5배 오래 버틴다(v60)", rot.creak === 180, "creak=" + rot.creak);
@@ -2035,13 +2035,13 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   const R = a.route(); const p0 = a.peek();
   R.list.push({ id: 991, x0: p0.x - 900, x1: p0.x - 10, up: 3, low: 0, done: false, shown: true });
   T().setTreasure(0); H.step();
-  ok("조타수 — 갈림길 보상 2배", a.peek().treasure >= 300, "보물 " + Math.floor(a.peek().treasure));
+  ok("v2.1.0 조타수 — 갈림길 2배는 뺐다", a.peek().treasure < 300, "보물 " + Math.floor(a.peek().treasure));
   a.rival().start(); a.rival().r.t = 0;
   const v1 = a.rival().speed();
   C.set(null); a.startMain(); H.step(); a.hold(true); H.step();
   a.rival().start(); a.rival().r.t = 0;
   const v0 = a.rival().speed();
-  ok("조타수 — 라이벌 해적이 8% 느려진다", Math.abs(v1 - v0 * 0.92) < 1e-6, v0.toFixed(2) + " → " + v1.toFixed(2));
+  ok("v2.1.0 조타수 — 라이벌 감속은 뺐다", Math.abs(v1 - v0) < 1e-6, v0.toFixed(2) + " → " + v1.toFixed(2));
   // 레벨이 오르면 효과가 세진다
   C.set("doctor"); a.crewLv().gain(4100);
   ok("선원 레벨이 오르면 효과도 세진다(선의 Lv.3 -38%)", Math.abs(CT().k("doctor", 0.3, 0.04) - 0.38) < 1e-9);
@@ -3116,7 +3116,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   go("doctor"); T().setShield(0); ready(); H.step();
   ok("선의 — 보호막이 없으면 다시 감아 준다", a.crewTest().shield() === 1);
   go("nav");
-  ok("항해사 — 해군 추격은 8초", Math.round(C().navyT / 60) === 8);
+  ok("v2.1.0 항해사 — 해군 추격 단축은 뺐다(12초)", Math.round(C().navyT / 60) === 12);
   T().P().vx = 8; ready(); H.step();
   ok("항해사 — 순풍을 불러온다", C().mate.wind > 0);
   go("sniper");
@@ -3133,7 +3133,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   go("arch");
   ok("고고학자 — 창고 보물 +20%", Math.abs(C().loot - 1.2) < 0.001 || C().loot > 1.2);
   go("music"); H.step();
-  ok("음악가 — 기어 게이지 40%를 채우고 출발", a.peek().gear > 0);
+  ok("v2.1.0 음악가 — 출항곡(게이지 채우고 출발)은 뺐다", a.peek().gear === 0);
   go("jack");
   C().set(sel0); C().owned.length = 0; owned0.forEach(id => C().owned.push(id));
   a.toMenu();
@@ -3760,7 +3760,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
      S.nav === 1080 && S.sniper === 840 && S.doctor === 1800 && S.wright === 840 && S.helm === 420 && K().JACK_CD === 1080 && S.cook === 3000);
   ok("v60 동료: 저격수 평타 3초 · 620px", K().SNIPE_CD === 180 && K().SNIPE_R === 620);
   const desc = (id) => K().list.find(c => c.id === id).desc;
-  ok("v60 동료: 검객·요리사 설명은 그대로", desc("sword") === "3초마다 곁의 물고기·갈매기를 벤다" && /고기가 2배로 자주/.test(desc("cook")) && /50초마다/.test(desc("cook")));
+  ok("v2.1.0 동료: 설명은 효과 둘씩(· 하나로 나뉜다)", ["cook","nav","sword","sniper","doctor","arch","wright","music","helm","jack"].every(id => desc(id).split(" · ").length <= 2) && /50초마다/.test(desc("cook")));
   ok("v60 동료: 나머지 여덟 명 설명에 ★ 능동 효과가 있고 옛 숫자가 남아 있지 않다",
      ["nav","sniper","doctor","arch","wright","music","helm","jack"].every(id => /★/.test(desc(id))) && !/25초마다 순풍|18초마다 보스|40초마다|20초마다\)|\(10초\)|25초마다\)/.test(K().list.map(c => c.desc).join(" ")));
   // 항해사
@@ -3775,7 +3775,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   // 선의 — 응급 처치
   go("doctor"); T().setShield(0); C().mate.skill = 9999; C().mate.aid = 0;
   E("stun = 40; iframes = 0"); H.step();
-  ok("v60 동료: 선의 — 크게 휘청이면 그 자리에서 깨운다(응급 처치)", a.peek().stun === 0 && C().mate.aid > 1800 && K().fx.some(f => f.kind === "aid"), "stun=" + a.peek().stun + " aid=" + Math.round(C().mate.aid));
+  ok("v2.1.0 동료: 선의 응급 처치는 뺐다 — 휘청이 그대로 간다", a.peek().stun > 0 && !(C().mate.aid > 0), "stun=" + a.peek().stun + " aid=" + Math.round(C().mate.aid));
   E("stun = 40; iframes = 0"); H.step();
   ok("v60 동료: 선의 — 응급 처치는 45초에 한 번", a.peek().stun > 30);
   E("stun = 0"); C().mate.aid = 0; E("stun = 12"); H.step();
@@ -3798,7 +3798,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   ok("v60 동료: 조선공 — 수면 230px 위부터 임시 돛대, 망치질 연출(build)", a.peek().anchors.some(an => an.temp && an.x > P.x) && K().fx.some(f => f.kind === "build") && Math.round(C().mate.skill) >= 830);
   // 음악가 — 앙코르
   go("music"); H.step();
-  ok("v60 동료: 음악가 — 기어 게이지 절반을 채우고 출발", a.peek().gear >= a.gearInfo().max * 0.49, Math.round(a.peek().gear) + "/" + a.gearInfo().max);
+  ok("v2.1.0 동료: 음악가 출항곡은 뺐다", a.peek().gear === 0, Math.round(a.peek().gear) + "/" + a.gearInfo().max);
   T().setChain(3);
   const m0 = K().mult();
   T().setGear(a.gearInfo().max); a.fireGear(); H.step(); T().setChain(3);
@@ -4551,6 +4551,88 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     ok("v65: " + id + " — 보스를 잡으면 클리어로 넘어가고 같은 보스가 다시 나오지 않는다", spawns === 1 && E("storyRun") && E("storyRun.win"), "출현 " + spawns + "번");
     E("storyMode = null; storyRun = null; storyTalk = null; storyResult = null; boss = null"); a.toMenu();
   }
+}
+
+/* --- v2.1.0 중간보스 리메이크 --- */
+{
+  const a = A(), E = (x) => T().ev(x);
+  const spawn = (type) => { a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false); T().teleport(22 * 300); E("boss = null; shots = []; spawnBoss(false, " + type + "); bossIntro = null; iframes = 1e9;"); };
+  // 곡예사 — 단검 결계 → 인사
+  spawn(0);
+  E("boss.krCd = 1; boss.acCd = 1e9; boss.dive = 0;");
+  let ring = false, fired = false, bow = false, bigWeak = false;
+  for(let i=0;i<200;i++){
+    E("p.y = 200; p.vy = 0; iframes = 1e9;"); H.step();
+    if(E("!!(boss && boss.kring)")) ring = true;
+    if(ring && E("shots.length") >= 8) fired = true;
+    if(E("boss && boss.bow > 0")){ bow = true; if(E("weakPoints(boss).some(w => w.mark === '곡예사' && w.r === 40)")) bigWeak = true; }
+  }
+  ok("v2.1.0 곡예사: 단검 결계가 뜨고 단검을 한꺼번에 던진다(빈 틈 둘)", ring && fired);
+  ok("v2.1.0 곡예사: 결계 뒤 인사하는 동안 곡예사 약점이 커진다", bow && bigWeak);
+  // 밧줄 끊는 자 — 가위 부메랑
+  spawn(3);
+  let thrown = false, cutN = 0, empty = false;
+  for(let i=0;i<400 && !(thrown && cutN && empty);i++){
+    E("p.y = 200; p.vy = 0; iframes = 1e9; rope = null;");
+    if(E("boss && boss.mode === 'perch' && boss.perch && !boss.shears && boss.shCd > 1")) E("boss.shCd = 1;");
+    H.step();
+    if(E("!!(boss && boss.shears && boss.shears.some(q => q.t >= 0))")){ thrown = true; if(E("weakPoints(boss).some(w => w.mark === '몸통' && w.r === 34)")) empty = true; }
+    cutN = Math.max(cutN, E("anchors.filter(q => q.cut >= 100).length"));
+  }
+  ok("v2.1.0 밧줄 끊는 자: 가위 부메랑을 던져 앞 고리를 끊는다", thrown && cutN > 0, "끊긴 고리 " + cutN);
+  ok("v2.1.0 밧줄 끊는 자: 가위를 던진 동안 빈손 몸통이 약점", empty);
+  // 돌풍술사 — 진공 구슬
+  spawn(4);
+  E("boss.voCd = 1; boss.gustCd = 1e9; boss.dive = 0;");
+  let orb = false, pulled = false, burst = false, chan = false;
+  for(let i=0;i<200 && !burst;i++){
+    E("if(!(boss && boss.orb && boss.orb.t > 40)){ p.y = 200; p.vy = 0; } iframes = 1e9;");
+    H.step();
+    if(E("!!(boss && boss.orb)")){
+      orb = true;
+      if(E("weakPoints(boss).some(w => w.mark === '돌풍술사' && w.r === 36)")) chan = true;
+      if(E("boss.orb.t > 40")){ E("p.y = boss.orb.y; p.x = boss.orb.x - 200; p.vx = 0; p.vy = 0; rope = null;"); H.step(); if(E("p.vx") > 0.01) pulled = true; }
+    }
+    if(orb && E("!!(boss && boss.burst)")) burst = true;
+  }
+  ok("v2.1.0 돌풍술사: 진공 구슬이 끌어당기다 터진다", orb && pulled && burst);
+  ok("v2.1.0 돌풍술사: 구슬에 힘을 쏟는 동안 몸이 크게 드러난다", chan);
+  E("boss = null; shots = [];");
+}
+
+/* --- v2.1.0 클래식 모드 --- */
+{
+  const a = A(), E = (x) => T().ev(x);
+  a.toMenu();
+  a.rows().find(r => /도전/.test(r.label)).action();
+  const row = a.rows().find(r => /클래식/.test(r.label));
+  ok("v2.1.0 클래식: 도전 화면에 클래식이 있다", !!row);
+  row.action(); H.step();
+  ok("v2.1.0 클래식: 고르면 클래식으로 출항 준비", E("classicMode") === true && a.peek().state === 0);
+  E("crewOwned = ['cook']; crewSel = 'cook'; fusen = 3; upgrades.reach = 3;");
+  a.hold(true); H.step(); a.hold(false);
+  // 기술·기어·풍선이 안 된다
+  a.fire(); a.fireGun(); E("gear = 999;"); a.fireGear(); H.step();
+  ok("v2.1.0 클래식: 기술·기어가 안 나간다", !a.peek().fist && !a.peek().gun && !E("buff()"));
+  ok("v2.1.0 클래식: 풍선·보호막·동료가 없다", a.peek().fusen === 0 && a.peek().shield === 0 && !E("crewOn('cook')"));
+  ok("v2.1.0 클래식: 팔 길이 강화를 안 탄다", E("reach() === REACH"));
+  // 멀리 가 봐도 보스·이벤트·보물·잡몹이 없다
+  T().teleport(22 * 3000); E("dist = 3000; distOffset = 0;");
+  for(let i=0;i<240;i++){ E("p.y = 150; p.vy = 0; iframes = 999;"); H.step(); }
+  const st = a.peek();
+  ok("v2.1.0 클래식: 보스·해군·포격·날씨·라이벌이 없다", !st.boss && !E("navy") && !st.barrage && !st.weather && !E("rival"));
+  ok("v2.1.0 클래식: 금화·고기·통·갈매기·해파리가 없다", st.coins.length === 0 && st.meats.length === 0 && st.barrels.length === 0 && st.gulls.length === 0 && st.jellies.length === 0);
+  ok("v2.1.0 클래식: 잡몹은 해왕류만", st.mobs.every(m => m.kind === 1));
+  ok("v2.1.0 클래식: 해왕류는 나온다", E("(() => { const n = mobs.length; for(let k=0;k<6;k++){ lastKingX = -1e9; spawnMobs(p.x + 400 + k*900, p.x + 1300 + k*900); } return mobs.filter(m => m.kind === 1).length > n; })()"));
+  // 해왕류에 닿으면 즉사
+  E("iframes = 0; stun = 0; fire = 0; knockKing();");
+  ok("v2.1.0 클래식: 해왕류에 닿으면 즉사", a.peek().state === 2 && a.peek().deathReason === "해왕류", "state=" + a.peek().state + " " + a.peek().deathReason);
+  ok("v2.1.0 클래식: 기록은 따로 — 무한 모드 최고 기록은 그대로", E("classicBest") >= 3000);
+  ok("v2.1.0 클래식: 저장에 classic이 들어간다", JSON.parse(E("recShop()")).classic >= 3000 && E("CODE2_WORDS.indexOf('classic') === CODE2_WORDS.length - 1"));
+  // 다른 모드로 가면 꺼진다
+  a.startMain(); H.step();
+  ok("v2.1.0 클래식: 무한 모드로 가면 꺼진다", E("classicMode") === false);
+  E("classicBest = 0; crewOwned = []; crewSel = null; upgrades.reach = 0;");
 }
 
 console.log(failed === 0 ? "\n전부 통과" : "\n실패 " + failed + "건");
