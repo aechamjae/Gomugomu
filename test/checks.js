@@ -2100,7 +2100,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
 /* --- v39: 바다 도감 --- */
 {
   const a = A(), X = () => a.dex();
-  ok("도감은 52종 — 생물·보스 23종(그롬·v62 심연 보스)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 52 && X().list.filter(e => e.cat === "boss").length === 23);
+  ok("도감은 53종 — 생물·보스 24종(그롬·v62 심연 보스 셋)·지형(소용돌이)·해역·사건(해군 계급 셋)", X().list.length === 53 && X().list.filter(e => e.cat === "boss").length === 24);
   a.startMain(); H.step(); a.hold(true); H.step();
   ok("출항하면 노을 군도가 등록된다", "biome0" in X().book);
   delete X().book.wind;
@@ -4442,6 +4442,43 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
     ok("v62 abyss: 미라주 — 2400프레임 스윙 봇 오류 없음", !err, err);
     T().setBoss(null);
     ok("v62 abyss: 미라주가 사라지면 거울 고리도 걷힌다", (E("generate()"), !T().anchors().some(q => q.fake)));
+  }
+  /* --- 백 팔의 바다나리 크리노(23, 네임드) --- */
+  {
+    let K = fresh(23); K.stT = 1e9;
+    ok("v62 abyss: 크리노 — 네임드, 체력 5", K.named && !K.big && K.hp === E("NAMED_HP") && E("BOSSES[23].name") === "백 팔의 바다나리 크리노");
+    // 고리 잠그기 — 감긴 고리는 못 잡고, 매달려 있었으면 손이 풀린다. 감은 팔을 끊으면 풀린다
+    const P = T().P();
+    for(const q of T().anchors()) q.cut = 50;
+    const R = { x: P.x + 60, y: P.y - 90, kind: 0 }; T().anchors().push(R);
+    E("stun = 0; iframes = 0; grabCd = 0; armHurt = 0; rope = null; holding = false");
+    a.hold(true);
+    const m = K.arms[0]; m.wrap = { a: R, t: E("KN_LOCK_WARN") - 1 };
+    stepN(2, () => a.hold(true));
+    ok("v62 abyss: 크리노 고리 잠그기 — 휘감는 순간 매달린 손이 풀린다(휘청 없음)", R.lock > 0 && !a.peek().rope && a.peek().stun <= 0, "lock " + R.lock);
+    E("grabCd = 0"); a.hold(false); a.hold(true);
+    ok("v62 abyss: 크리노 — 감긴 고리는 잡을 수 없다", !a.peek().rope);
+    const c = E("bossCuts()").find(q => Math.hypot(q.x - R.x, q.y - R.y) < 1);
+    E("strikeArea((x, y, r) => Math.hypot(x - " + R.x + ", y - " + R.y + ") < 5 + r && Math.hypot(x - boss.x, y - boss.y) > 40, '채찍', 1)");
+    a.hold(false); E("grabCd = 0; stun = 0"); a.hold(true);
+    ok("v62 abyss: 크리노 — 감은 팔을 끊으면 고리가 풀려 다시 잡힌다", !!c && !m.alive && !(R.lock > 0) && a.peek().rope && a.peek().rope.a === R);
+    for(const q of T().anchors()) q.cut = 0;
+    // 끊은 팔이 많을수록 입이 오래 열린다, 끊긴 팔은 다시 자란다(싸울수록 빨리)
+    const t0 = E("knOpenT(boss)");
+    K.arms[1].alive = false; K.arms[1].grow = 0; K.arms[2].alive = false; K.arms[2].grow = 0;
+    ok("v62 abyss: 크리노 — 끊은 팔이 많을수록 입이 오래 열린다", E("knOpenT(boss)") > t0, t0 + " → " + E("knOpenT(boss)"));
+    const g0 = E("knRegrowT(boss)"); K.t += 3600;
+    ok("v62 abyss: 크리노 — 팔이 자라는 속도가 점점 빨라진다", E("knRegrowT(boss)") < g0 && E("knRegrowT(boss)") >= E("KN_REGROW_MIN"));
+    K.st = "open"; K.stT = 100; K.open = 30;
+    ok("v62 abyss: 크리노 — 입을 벌리면 초록 핵(입)이 약점", a.weak().some(w => w.mark === "입"));
+    ok("v62 abyss: 크리노 — 예고 45프레임 이상", E("KN_LOCK_WARN") >= 45 && E("KN_SWEEP_WARN") >= 45 && E("KN_SPORE_T") >= 45);
+    let err = null;
+    try{ K.sweep = { t: 10, y: 200, d: 640, hit: false, spd: 30 }; K.spores = [{ x0: K.x, y0: K.y, x: K.x - 300, y: 200, t: 30, cloud: 0 }, { x0: K.x, y0: K.y, x: K.x - 200, y: 300, t: 90, cloud: 20 }]; for(const st of ["idle", "act", "open"]){ K.st = st; E("drawBoss()"); K.sweep.t = 80; K.sweep.d = 100; E("drawBoss()"); } }catch(e){ err = e.message; }
+    ok("v62 abyss: 크리노 — 모든 패턴을 그려도 오류가 없다", !err, err);
+    K = fresh(23);
+    err = null; try{ stepN(2400, () => { a.hold(true); T().setFusen(9); }); }catch(e){ err = e.stack; }
+    ok("v62 abyss: 크리노 — 2400프레임 스윙 봇 오류 없음", !err, err);
+    T().setBoss(null);
   }
   E("boss = null"); T().setBoss(null); a.toMenu();
 }

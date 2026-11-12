@@ -1184,7 +1184,7 @@ function startBlitz(){
 // 각성한 크라켄(15)·해저 감옥 간수장(20)은 전용 무대가 따로 있어 뺐다.
 // 기록: 예전 고정 9연전 최단 기록(swing:shop의 rush9)은 rushBest9에 그대로 두고 '옛 9연전 기록'으로만 보여 준다. 새 5연전 기록은 rush5(rushBest)
 const RUSH_N = 5;
-const RUSH_POOL = { mid:[0, 1, 2, 3, 4, 9, 10, 12, 14, 16, 21, 22], named:[6, 11, 13, 17], big:[5, 7, 8, 18, 19] };
+const RUSH_POOL = { mid:[0, 1, 2, 3, 4, 9, 10, 12, 14, 16, 21, 22], named:[6, 11, 13, 17, 23], big:[5, 7, 8, 18, 19] };
 const RUSH_LEGACY = [0, 1, 3, 4, 2, 6, 5, 7, 8];     // v59까지의 고정 순서(기록 설명용)
 const RUSH_GAP = 26;                                 // 보스 사이 쉬는 거리(m) — 예전 40
 let rushMode = false, rushBest = 0, rushBest9 = 0, rushList = null;
@@ -1236,7 +1236,8 @@ const PRACTICE_OPTIONS = [
   { type:"navy", rank:2, label:"해군 중장 추격 연습 (포격)" },
   { type:"boss", bossType:20, label:"간수장 그롬 연습 (네임드 · 해저 감옥)" },
   { type:"boss", bossType:21, label:"닻발 거미게 타란 연습 (심연)" },
-  { type:"boss", bossType:22, label:"거울 갑오징어 미라주 연습 (심연)" }
+  { type:"boss", bossType:22, label:"거울 갑오징어 미라주 연습 (심연)" },
+  { type:"boss", bossType:23, label:"백 팔의 바다나리 크리노 연습 (네임드 · 심연)" }
 ];
 
 function practiceLabel(){
@@ -3361,7 +3362,7 @@ const DEX_CATS = [
 const DEX = [
   { id:"fish",  cat:"life", name:"식인 물고기" }, { id:"king", cat:"life", name:"해왕류" },
   { id:"gull",  cat:"life", name:"폭탄 갈매기" }, { id:"jelly", cat:"life", name:"트램펄린 해파리" },
-  ...[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
+  ...[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23].map(t => ({ id:"boss" + t, cat:"boss", name:"" })),   // 이름은 BOSSES에서
   { id:"gold",  cat:"sea", name:"황금 고리" },  { id:"rot", cat:"sea", name:"삭은 돛대" },
   { id:"port",  cat:"sea", name:"항구" },       { id:"barrel", cat:"sea", name:"보물 통" },
   { id:"meat",  cat:"sea", name:"고기" },       { id:"map", cat:"sea", name:"보물 지도 조각" },
@@ -3814,7 +3815,7 @@ function pickAnchor(){
     if(d > reach()) continue;
     if(a.y > p.y + 130) continue;
     if(a.x < p.x - 100) continue;
-    if(a.cut || a.broken) continue;
+    if(a.cut || a.broken || a.lock > 0) continue;   // v62: 크리노가 휘감은 고리는 못 잡는다
     const ahead = p.vx >= 0 ? (dx + 60) : (60 - dx);
     const cost = d - Math.max(0, ahead) * 0.35;
     if(cost < bd){ bd = cost; pick = a; }
@@ -4298,7 +4299,8 @@ const BOSSES = [
   { name:"해룡 군주 요르문",    tag:"뼈 사이 틈으로 아치를 빠져나가며 심장석을 — 박힌 머리도 노려라", big:true },
   { name:"간수장 그롬",         tag:"열쇠로 수갑을 풀고 쇠창살은 틈으로 — 숨 고를 때 열린 자물쇠를 쳐라", named:true },
   { name:"닻발 거미게 타란",    tag:"닻발 기둥을 피하고 그물은 Q·W로 끊어라 — 빛나는 관절을 꺾으면 주저앉는다(그때 등딱지를)" },
-  { name:"거울 갑오징어 미라주", tag:"가짜 고리는 꼼짝 않는다(진짜는 출렁인다) — 분신을 깨고 섬광 뒤 맥박 무늬를 쳐라" }
+  { name:"거울 갑오징어 미라주", tag:"가짜 고리는 꼼짝 않는다(진짜는 출렁인다) — 분신을 깨고 섬광 뒤 맥박 무늬를 쳐라" },
+  { name:"백 팔의 바다나리 크리노", tag:"감긴 고리는 못 잡는다 — 깃털 팔을 Q·W로 끊어라, 많이 끊을수록 입(초록 핵)이 오래 열린다", named:true }
 ];
 const ANGLER = 16, JELLYQ = 17, WHALE = 18, SERPENT = 19, MAGELLAN = 20;   // 간수장 그롬(v60에 이름·능력 교체 — 상수 이름만 예전 그대로) — 해저 감옥 탈옥전에만 나온다
 const TARAN = 21, MIRAGE = 22, KRINO = 23;   // v62 심연 보스 — 닻발 거미게 타란(일반)·거울 갑오징어 미라주(일반)·백 팔의 바다나리 크리노(네임드)
@@ -4316,7 +4318,7 @@ const BIOME_POOLS = [
   { mid:[4, 10, FIREBIRD],  named:SMITH },    // 화산 — 돌풍술사·바이스·불새 / 용암 대장장이
   { mid:[ANGLER, SHARK, 1],  named:JELLYQ }    // 심연 — 아귀 등불·톱니턱·작살잡이 / 해파리 여왕 루미나
 ];
-const NAMED = [...new Set([].concat(...BIOME_POOLS.map(z => z.named)))];
+const NAMED = [...new Set([].concat(...BIOME_POOLS.map(z => z.named), [KRINO]))];   // v62: 크리노는 심연 풀 밖(연습·러시)에서도 네임드
 const isNamed = (t) => NAMED.indexOf(t) >= 0;
 const NAMED_HP = 5;
 let bossBag = { zone: -1, used: [] };
@@ -4343,7 +4345,7 @@ const CHASERS = [SHARK, VICE];
 // 대형 보스 — 따라붙는 거리, 기어 경계 주기(이 중 GUARD_ON 동안 약점을 감춘다), 강화 기어를 켰을 때 몸을 사리는 시간
 const BIG_FOLLOW = 220, GUARD_CYC = 130, GUARD_ON = 75, GUARD_BUFF = 120;
 // 네임드(문어·무상·대장장이)는 중간보스와 대형 사이 — 체력 5, 절반 아래로 떨어지면 2페이즈(b.p2)
-const BOSS_HP = { 0:3, 1:3, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:3, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9, 20:NAMED_HP, 21:2, 22:3 };
+const BOSS_HP = { 0:3, 1:3, 2:3, 3:3, 4:3, 5:9, 6:NAMED_HP, 7:7, 8:10, 9:2, 10:3, 11:NAMED_HP, 12:3, 13:NAMED_HP, 14:3, 15:15, 16:3, 17:NAMED_HP, 18:9, 19:9, 20:NAMED_HP, 21:2, 22:3, 23:NAMED_HP };
 // 격침 현상금 — 일반 150 · 네임드 350 · 대형(과 탈옥전 그롬) 600, 격파할수록 40·60·80씩 더 (v50 수천만 단위 현상금은 보물이 너무 많아 되돌렸다)
 const bossBounty = (b) => b.big || b.type === MAGELLAN ? (600 + bossKills*80) : b.named ? (350 + bossKills*60) : (150 + bossKills*40);
 // v57 보스 제한 시간(초) — 일반 60 · 네임드 100 · 대형 120 · 탈옥전 그롬 100. 등장 컷인이 끝난 뒤부터 잰다.
@@ -4535,6 +4537,7 @@ const TITLES = [
   { id:"allboss",   cat:"hunt", tier:4, emb:"scroll",   name:"현상수배첩을 덮은 자", desc:"보스 " + BOSSES.length + "종을 모두 한 번씩 격침", need:(s) => BOSSES.every((b, t) => bossSunk(s, t)) },
   { id:"boss21",    cat:"hunt", tier:2, emb:"crab",     name:"닻을 거둔 자",       desc:"닻을 다리로 삼은 거미게 — " + BOSSES[21].name + "을 꺾는다", need:(s) => bossSunk(s, 21) },
   { id:"boss22",    cat:"hunt", tier:2, emb:"mirror",   name:"거울을 깬 자",       desc:"없는 것을 보여 주는 갑오징어 — " + BOSSES[22].name + "를 꺾는다", need:(s) => bossSunk(s, 22) },
+  { id:"boss23",    cat:"hunt", tier:3, emb:"lily",     name:"심연의 거름망을 걷은 자", desc:"심연에 떨어지는 모든 것을 거르는 바다나리 — " + BOSSES[23].name + "를 꺾는다", need:(s) => bossSunk(s, 23) },
   // 항해
   { id:"best2000",  cat:"sail", tier:2, emb:"wave",     name:"먼바다의 그네꾼",   desc:"한 판에 2000m",           need:(s) => (s.best || 0) >= 2000 },
   { id:"dist10k",   cat:"sail", tier:2, emb:"ship",     name:"대항해자",          desc:"누적 항해 10000m",        need:(s) => (s.dist || 0) >= 10000 },
@@ -4699,7 +4702,7 @@ function drawTitleToast(){
 
 function clearCuts(){
   anchors = anchors.filter(a => !a.fake);
-  for(const a of anchors){ a.cut = 0; a.hot = 0; a.melt = 0; if(a.y0 !== undefined){ a.x = a.x0; a.y = a.y0; delete a.x0; delete a.y0; } }
+  for(const a of anchors){ a.cut = 0; a.hot = 0; a.melt = 0; a.lock = 0; if(a.y0 !== undefined){ a.x = a.x0; a.y = a.y0; delete a.x0; delete a.y0; } }
 }
 
 function spawnBoss(big, forceType){
@@ -4727,6 +4730,7 @@ function spawnBoss(big, forceType){
   if(type === 5 || type === AWAKEN){ boss.y = SEA - 40; boss.sub = 200; }
   if(type === TARAN){ boss.x = p.x + 520; trStart(boss); }
   if(type === MIRAGE){ boss.x = p.x + 520; mrStart(boss); }
+  if(type === KRINO){ boss.x = p.x + 560; knStart(boss); }
   if(type === ANGLER){ boss.x = p.x + 400; boss.y = SEA + 70; boss.st = "lure"; boss.stT = 140; boss.tx = p.x + 400; }
   if(type === JELLYQ){ boss.y = 104; boss.st = "idle"; boss.wait = 90; boss.jellies = []; boss.curtains = []; boss.spawnCd = 120; }
   if(type === WHALE){ boss.y = SEA - 26; boss.st = "rest"; boss.stT = 80; boss.next = "spout"; boss.spouts = []; boss.waves = []; boss.mast = { x: boss.x + WH_MAST_X, y: boss.y - WH_MAST_H, kind: 0, whale: true }; anchors.push(boss.mast); }
@@ -4774,7 +4778,7 @@ function drawRushHud(){
 }
 // 보스 러시 대진표 — 출항 화면에 카드 다섯 장이 차례로 뒤집히며 공개된다(fx.rushT, 그리기 전용)
 const RUSH_CLASS = { mid:{ name:"일반", col:"#e08a6a", tier:1 }, named:{ name:"네임드", col:"#ffd76a", tier:3 }, big:{ name:"대형", col:"#d9a8f0", tier:4 } };
-const BOSS_EMB = ["dagger","harpoon","cannon","rope","wind","tentacle","octo","ghost","anchor","fin","chain","sword","bolt","hammer","flame","eye","lantern","jelly","whale","serpent","key","crab","mirror"];
+const BOSS_EMB = ["dagger","harpoon","cannon","rope","wind","tentacle","octo","ghost","anchor","fin","chain","sword","bolt","hammer","flame","eye","lantern","jelly","whale","serpent","key","crab","mirror","lily"];
 const RUSH_FLIP0 = 18, RUSH_FLIP_GAP = 16, RUSH_FLIP_T = 20;
 function drawRushBracket(){
   const cw = 152, ch = 214, gap = 12, x0 = W/2 - (RUSH_N*cw + (RUSH_N - 1)*gap)/2, y0 = 104, calm = settings.calm;
@@ -4997,6 +5001,8 @@ function weakPoints(b){
     taranWeak(b, out);
   } else if(b.type === MIRAGE){
     mirageWeak(b, out);
+  } else if(b.type === KRINO){
+    krinoWeak(b, out);
   } else if(b.type === MAGELLAN){
     if(b.keyGot && b.st === "rest") out.push({ x:b.x, y:b.y + 6, r:32, mark:"몸통" });   // 수갑을 푼 뒤, 쇠창살을 내리고 숨을 고를 때만(가슴의 큰 자물쇠가 열린다)
   } else if(b.type === JELLYQ){
@@ -5394,6 +5400,8 @@ function updateBoss(dt){
     updateTaran(b, dt);
   } else if(b.type === MIRAGE){
     updateMirage(b, dt);
+  } else if(b.type === KRINO){
+    updateKrino(b, dt);
   } else if(b.type === ANGLER){
     updateAngler(b, dt);
   } else if(b.type === JELLYQ){
@@ -6982,7 +6990,7 @@ function updateJack(dt){
   if(rope || p.vy <= 0 || p.y < SEA - JACK_H || stun > 0) return;
   let best = null, bd = reach() * 1.3;
   for(const a of anchors){
-    if(a.cut || a.broken || a.fake || a.x < p.x - 40) continue;
+    if(a.cut || a.broken || a.fake || a.lock > 0 || a.x < p.x - 40) continue;
     const d = Math.hypot(a.x - p.x, a.y - p.y);
     if(d < bd){ bd = d; best = a; }
   }
@@ -7984,7 +7992,7 @@ const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","n
   "boss16","boss17","boss18","boss19","whirl","navy_col","navy_rear","navy_vice","boss20","jail",
   "rush5","top","comet",
   "hunt100","allboss","best2000","best5000","best8000","combo15","flawless","quick","duel","crewall","medals","rich","nofusen","rushfast",
-  "boss21","boss22"];
+  "boss21","boss22","boss23"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -12257,6 +12265,8 @@ function drawBossWarn(){
   else if(boss.type === TARAN && boss.pils.some(q => q.t < TR_PIL_WARN)){ text = "끓는 수면 — 닻발 기둥이 솟는다!"; left = Math.max(...boss.pils.map(q => TR_PIL_WARN - q.t)); col = "#8fd6d8"; }
   else if(boss.type === MIRAGE && boss.st === "flashWarn"){ text = "섬광이 터진다! 빛 고리 밖으로"; left = boss.stT; col = "#fff6c8"; }
   else if(boss.type === MIRAGE && boss.st === "fakeWarn"){ text = "빛이 비춘 자리에 가짜 고리 — 출렁이지 않는 고리는 잡지 마라"; left = boss.stT; col = "#cfe0ff"; }
+  else if(boss.type === KRINO && boss.sweep && boss.sweep.t < KN_SWEEP_WARN){ text = "깃털 팔이 이 높이를 쓴다! 띠 밖으로"; left = KN_SWEEP_WARN - boss.sweep.t; col = "#ffe08a"; }
+  else if(boss.type === KRINO && boss.locks.some(m => m.wrap && !m.wrap.on)){ text = "깃털 팔이 고리를 휘감는다! 다른 고리로 — 팔을 끊으면 풀린다"; left = Math.max(...boss.locks.map(m => m.wrap ? KN_LOCK_WARN - m.wrap.t : 0)); col = "#ffe08a"; }
   else if(boss.type === ANGLER && boss.st === "warn"){ text = "발밑에서 아귀가 솟는다! 원 밖으로·높이"; left = boss.stT; col = "#d6f0a0"; }
   else if(boss.type === MAGELLAN && boss.st === "warn"){ text = boss.gates.length > 1 ? "쇠창살 두 칸! 아래 틈 → 위로 넘어라" : "쇠창살이 내려온다! 아래 틈으로 빠져라"; left = boss.stT; col = "#c9a0ff"; }
   else if(boss.type === MAGELLAN && !boss.keyGot){ text = "해루석 수갑 — 떠다니는 열쇠를 낚아채라"; left = 0; col = "#ffd76a"; }
@@ -13157,6 +13167,283 @@ function drawMirageFlash(){
   ctx.fillStyle = "rgba(255,252,236," + (0.55 * q * q).toFixed(2) + ")"; ctx.fillRect(0, 0, W, H);
 }
 
+/* ---------- v62 심연 보스 (3) 백 팔의 바다나리 크리노 (KRINO, 네임드 · 체력 5) ----------
+   꽃처럼 보이지만 동물이다. 심연에 떨어지는 모든 것을 깃털 팔로 걸러 먹는다. 각성 크라켄 봉인의 뿌리를 감고 있다는 소문이 있다(줄기에 봉인 사슬이 감겨 있다).
+   줄기를 바닥에 끌며 앞쪽에 버티고 선다(keepFront). 깃털 팔 KN_ARMS개 — 기술(Q·W)이 닿으면 끊긴다(bossCuts). 끊긴 팔은 다시 자라는데 싸울수록 빨리 자란다(knRegrowT).
+   패턴(직전과 다른 것) → 끝나면 먹이를 삼키려 입을 연다(st "open", 약점 '입' — 끊어 둔 팔이 많을수록 오래, knOpenT):
+   - 고리 잠그기(b.locks): 팔 하나가 앞쪽 고리로 뻗어(KN_LOCK_WARN, 점선 고리) 휘감는다 → KN_LOCK_T 동안 그 고리는 못 잡는다(a.lock). 매달려 있었으면 손이 풀린다(휘청 없음).
+     감은 팔을 끊으면 바로 풀린다. 격노하면 둘.
+   - 깃털 휩쓸기(b.sweep): 높이 띠 예고(KN_SWEEP_WARN) → 거대한 깃털 팔이 앞에서 뒤로 쓸고 간다(끝 위치는 플레이어 기준 — 각성 크라켄 휩쓸기와 같은 방식). 띠를 벗어나면 된다.
+   - 독 포자(b.spores): 쏘는 순간부터 떨어질 자리(점선 원)가 보이고 KN_SPORE_T 뒤 독 구름(KN_CLOUD_T 동안, 반경 KN_SPORE_R) — 닿으면 휘청. */
+const KN_Y = 214, KN_ARMS = 8, KN_ARM_L = 158, KN_ANG = [-2.78, -2.32, -1.86, -1.4, -0.94, -0.5, 2.62, 0.52];
+const KN_IDLE = 50, KN_LOCK_WARN = 52, KN_LOCK_T = 300, KN_SWEEP_WARN = 56, KN_SWEEP_HALF = 34, KN_SWEEP_SPD = 30, KN_SPORE_T = 74, KN_SPORE_R = 50, KN_CLOUD_T = 84;
+const KN_OPEN = 100, KN_OPEN_PER = 32, KN_OPEN_MAX = 260, KN_REGROW = 560, KN_REGROW_MIN = 220;
+const knRegrowT = (b) => Math.max(KN_REGROW_MIN, KN_REGROW - b.t * 0.06);   // 싸울수록 빨리 자란다(약 1분 30초면 가장 빠르다)
+const knSevered = (b) => b.arms.filter(m => !m.alive).length;
+const knOpenT = (b) => Math.min(KN_OPEN_MAX, KN_OPEN + KN_OPEN_PER * knSevered(b));
+function knStart(b){
+  b.y = KN_Y; b.st = "idle"; b.stT = 90; b.last = null; b.locks = []; b.sweep = null; b.spores = []; b.open = 0; b.lag = sv(); b.eaten = 0;
+  b.arms = KN_ANG.map((a, i) => ({ a, alive: true, grow: 1, seed: i * 1.7 + 0.4, wrap: null, cutT: 0 }));
+}
+// 팔 하나의 끝(관절 셋) — 깃털 팔은 천천히 넘실거린다. 고리를 감은 팔은 그 고리까지 뻗는다
+function knArmPts(b, m){
+  const cx = b.x, cy = b.y, calm = settings.calm;
+  if(m.wrap){
+    const a = m.wrap.a, k = ease.outCubic(clamp01(m.wrap.t / KN_LOCK_WARN));
+    const bx = cx + Math.cos(m.a) * 40, by = cy + Math.sin(m.a) * 40;
+    const tx = bx + (a.x - bx) * k, ty = by + (a.y - by) * k;
+    return [[cx, cy], [bx, by], [(bx + tx) / 2, Math.min(by, ty) - 40 * k], [tx, ty]];
+  }
+  const L = KN_ARM_L * (m.alive ? 1 : Math.max(0.22, m.grow)), w = calm ? 0 : Math.sin(b.t * 0.03 + m.seed) * 0.12;
+  const fan = b.sweep && b.sweep.t < KN_SWEEP_WARN ? ease.outCubic(b.sweep.t / KN_SWEEP_WARN) * 0.25 : 0;
+  const a1 = m.a + w - Math.sign(Math.cos(m.a)) * fan, a2 = a1 + (Math.cos(m.a) < 0 ? -1 : 1) * (calm ? 0.35 : 0.35 + Math.sin(b.t * 0.04 + m.seed * 2) * 0.2);   // 끝이 바깥으로 휘어 내려간다
+  const p1 = [cx + Math.cos(m.a) * 36, cy + Math.sin(m.a) * 36];
+  const p2 = [p1[0] + Math.cos(a1) * L * 0.5, p1[1] + Math.sin(a1) * L * 0.5];
+  return [[cx, cy], p1, p2, [p2[0] + Math.cos(a2) * L * 0.5, p2[1] + Math.sin(a2) * L * 0.5]];
+}
+function knCutArm(b, m, how){
+  if(!m.alive) return;
+  m.alive = false; m.grow = 0; m.cutT = 1;
+  if(m.wrap){ m.wrap.a.lock = 0; m.wrap = null; pops.push({ x: p.x, y: p.y - 60, t: 60, text: "고리가 풀렸다!", color: "#ffe9a0" }); }
+  treasure += 20;
+  storyCount("arm");
+  const q = knArmPts(b, m)[2];
+  pops.push({ x: q[0], y: q[1] - 30, t: 70, text: (how ? how + " — " : "") + "깃털 팔을 끊었다 +20 (끊은 팔 " + knSevered(b) + ")", color: "#ffe08a" });
+  for(let i=0;i<14;i++) spark(q[0], q[1], i % 2 ? "#ffe08a" : "#9fe0a0");
+}
+function krinoCuts(b){
+  const out = [];
+  for(const m of b.arms){
+    if(!m.alive) continue;
+    if(m.wrap){ if(m.wrap.t >= KN_LOCK_WARN * 0.5) out.push({ x: m.wrap.a.x, y: m.wrap.a.y, r: 30, cut: (how) => knCutArm(b, m, how) }); continue; }
+    const P = knArmPts(b, m), u = 0.6;
+    out.push({ x: P[2][0] + (P[3][0] - P[2][0]) * u * 0.4, y: P[2][1] + (P[3][1] - P[2][1]) * u * 0.4, r: 24, vx: 0, cut: (how) => knCutArm(b, m, how) });
+  }
+  return out;
+}
+function krinoWeak(b, out){
+  if(b.st === "open" && b.open > 10) out.push({ x: b.x, y: b.y, r: 32, mark: "입" });
+}
+function knStartPattern(b){
+  const pool = ["lock", "sweep", "spores"].filter(k => k !== b.last);
+  let kind = pool[Math.floor(Math.random() * pool.length)];
+  const rage = b.p2 ? 0.8 : 1;
+  if(kind === "lock"){
+    const free = b.arms.filter(m => m.alive && !m.wrap);
+    const rings = anchors.filter(a => !a.fake && !a.sky && !a.whale && !a.broken && !(a.cut > 0) && !(a.lock > 0) && a.x > p.x + Math.min(520, 120 + Math.max(0, p.vx) * KN_LOCK_WARN * 0.85) && a.x < p.x + Math.min(520, 120 + Math.max(0, p.vx) * KN_LOCK_WARN * 0.85) + 420).sort((u, v) => u.x - v.x);   // 잠글 즈음 플레이어가 닿을 앞쪽 고리
+    const n = Math.min(b.p2 ? 2 : 1, free.length, rings.length);
+    if(!n) kind = b.last === "sweep" ? "spores" : "sweep";
+    else for(let i=0;i<n;i++){ const m = free.sort((u, v) => Math.abs(Math.cos(u.a) + 1) - Math.abs(Math.cos(v.a) + 1))[i]; m.wrap = { a: rings[i], t: 0 }; b.locks.push(m); }
+    if(n) pops.push({ x: b.x, y: b.y - 110, t: 60, text: "깃털 팔이 고리로 뻗는다!", color: "#ffe08a" });
+  }
+  b.last = kind;
+  if(kind === "sweep"){
+    b.sweep = { t: 0, y: Math.max(110, Math.min(SEA - 70, p.y)), d: 640, hit: false, spd: KN_SWEEP_SPD * (b.p2 ? 1.15 : 1) };
+    pops.push({ x: b.x, y: b.y - 110, t: 60, text: "깃털 팔이 부채처럼 펼쳐진다!", color: "#ffe08a" });
+  } else if(kind === "spores"){
+    const n = b.p2 ? 6 : 4;
+    for(let i=0;i<n;i++){
+      const tx = p.x + Math.max(0, p.vx) * KN_SPORE_T * 0.8 + (i - (n - 1) / 2) * 110 + (Math.random() - 0.5) * 40;
+      const ty = Math.max(90, Math.min(SEA - 50, p.y + (Math.random() - 0.5) * 120));
+      b.spores.push({ x0: b.x, y0: b.y - 20, x: tx, y: ty, t: -i * 4, cloud: 0, hit: false });
+    }
+    pops.push({ x: b.x, y: b.y - 110, t: 60, text: "독 포자를 흩뿌린다!", color: "#b8f08a" });
+  }
+  b.st = "act"; b.stT = (kind === "lock" ? KN_LOCK_WARN + 20 : kind === "sweep" ? KN_SWEEP_WARN + 50 : KN_SPORE_T + 20) * (kind === "sweep" ? 1 : rage);
+}
+function updateKrino(b, dt){
+  if(!b.arms) knStart(b);
+  const rage = b.p2 ? 0.8 : 1;
+  const px0 = b.x;
+  keepFront(b, b.st === "open" ? 250 : 330, dt);   // 입을 벌릴 땐 먹이(플레이어) 쪽으로 다가온다
+  spring(b.lag, Math.max(-60, Math.min(60, (b.x - px0) * 4)), 0.05, 0.25, dt);   // 줄기는 끌려오며 뒤로 휜다
+  b.y += (KN_Y + Math.sin(b.t * 0.025) * 8 + (b.st === "open" ? 14 : 0) - b.y) * 0.08 * dt;
+  b.open += ((b.st === "open" ? 1 : 0) * 30 - b.open) * 0.2 * dt;
+  // 팔 — 끊긴 팔은 다시 자란다(점점 빨리)
+  for(const m of b.arms){
+    if(m.cutT > 0){ m.cutT += dt; if(m.cutT > 30) m.cutT = 0; }
+    if(!m.alive){ m.grow += dt / knRegrowT(b); if(m.grow >= 1){ m.alive = true; m.grow = 1; } }
+    if(m.wrap){
+      m.wrap.t += dt;
+      const a = m.wrap.a;
+      if(anchors.indexOf(a) < 0){ m.wrap = null; continue; }
+      if(m.wrap.t >= KN_LOCK_WARN && !m.wrap.on){
+        m.wrap.on = true; a.lock = KN_LOCK_T * rage;
+        if(rope && rope.a === a){ rope = null; sling = null; pops.push({ x: p.x, y: p.y - 44, t: 60, text: "깃털 팔이 손을 떼어 냈다!", color: "#ffe08a" }); }
+        for(let i=0;i<10;i++) spark(a.x, a.y, "#ffe08a");
+      }
+      if(m.wrap && m.wrap.on && !(a.lock > 0)) m.wrap = null;
+    }
+  }
+  b.locks = b.locks.filter(m => m.wrap);
+  for(const a of anchors) if(a.lock > 0){ a.lock -= dt; if(a.lock <= 0) a.lock = 0; }
+  // 휩쓸기
+  const w = b.sweep;
+  if(w){
+    w.t += dt;
+    if(w.t >= KN_SWEEP_WARN){
+      const d0 = w.d; w.d -= w.spd * dt;
+      if(!w.hit && d0 > 0 && w.d <= 0 && state === STATE.PLAY && Math.abs(p.y - w.y) < KN_SWEEP_HALF + 12){
+        w.hit = true; const s0 = stun; knock(false);
+        if(stun > s0) pops.push({ x: p.x, y: p.y - 44, t: 60, text: "깃털 팔에 휩쓸렸다!", color: "#ffe08a" });
+      }
+      if(w.d < -520) b.sweep = null;
+    }
+  }
+  // 독 포자
+  for(let i=b.spores.length-1;i>=0;i--){
+    const s = b.spores[i];
+    s.t += dt;
+    if(s.t >= KN_SPORE_T){
+      if(!s.cloud){ s.cloud = 1; for(let k=0;k<8;k++) spark(s.x, s.y, "#b8f08a"); }
+      s.cloud += dt;
+      if(!s.hit && state === STATE.PLAY && stun <= 0 && iframes <= 0 && s.cloud < KN_CLOUD_T - 10 && Math.hypot(p.x - s.x, p.y - s.y) < KN_SPORE_R + 10){
+        s.hit = true; const s0 = stun; knock(false);
+        if(stun > s0) pops.push({ x: p.x, y: p.y - 44, t: 60, text: "독 포자를 마셨다!", color: "#b8f08a" });
+      }
+      if(s.cloud > KN_CLOUD_T) b.spores.splice(i, 1);
+    }
+  }
+  // 상태
+  if(b.st === "idle"){
+    b.stT -= dt;
+    if(b.stT <= 0) knStartPattern(b);
+  } else if(b.st === "act"){
+    b.stT -= dt;
+    if(b.stT <= 0){
+      b.st = "open"; b.stT = b.stT0 = knOpenT(b);
+      pops.push({ x: b.x, y: b.y - 80, t: 70, text: "입을 벌린다 — 초록 핵! (끊은 팔 " + knSevered(b) + ")", color: "#9fe0a0" });
+    }
+  } else if(b.st === "open"){
+    b.stT -= dt;
+    if(b.stT <= 0){ b.st = "idle"; b.stT = KN_IDLE * rage; }
+  }
+}
+// 깃털 팔 그리기 — 가운데 줄기(금빛) + 양옆 깃(가는 잔가지), 끝은 말려 있다
+function knFeather(P, k, hurt, seed, wide){
+  const col = hurt ? "#fff" : "#e8c35a", n = 10;
+  const bez = (u) => { const a = 1 - u; return [a*a*a*P[0][0] + 3*a*a*u*P[1][0] + 3*a*u*u*P[2][0] + u*u*u*P[3][0], a*a*a*P[0][1] + 3*a*a*u*P[1][1] + 3*a*u*u*P[2][1] + u*u*u*P[3][1]]; };
+  inkTube(() => { ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); ctx.bezierCurveTo(P[1][0], P[1][1], P[2][0], P[2][1], P[3][0], P[3][1]); }, 6.5 * (wide || 1), col, "rgba(255,246,200,.6)");
+  if(hurt) return;
+  ctx.strokeStyle = "rgba(246,220,140,.82)"; ctx.lineWidth = 2.2; ctx.lineCap = "round";
+  ctx.beginPath();
+  for(let i=2;i<=n;i++){
+    const u = i / n, q = bez(u), q2 = bez(Math.min(1, u + 0.02)), dx = q2[0] - q[0], dy = q2[1] - q[1], L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+    const len = (22 - u * 10) * (wide || 1) * k, sw = Math.sin(time * 0.08 + seed + i) * 2.5;
+    for(const sg of [1, -1]){ ctx.moveTo(q[0], q[1]); ctx.quadraticCurveTo(q[0] + nx * len * 0.6 * sg, q[1] + ny * len * 0.6 * sg, q[0] + nx * len * sg - dx / L * 10 + sw, q[1] + ny * len * sg - dy / L * 10); }
+  }
+  ctx.stroke();
+  // 말린 끝
+  const e = P[3]; ctx.strokeStyle = INK; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.arc(e[0], e[1] - 4, 4, Math.PI * 0.5, Math.PI * 2.1); ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.stroke();
+}
+function drawKrino(b, x, hurt){
+  if(!b.arms) return;
+  const calm = settings.calm, y = b.y, cx = x;
+  // 독 포자 — 날아가는 포자와 떨어질 자리, 터진 구름
+  for(const s of b.spores){
+    const sx = s.x - cam.x;
+    if(s.t < KN_SPORE_T){
+      const k = clamp01(s.t / KN_SPORE_T);
+      ctx.setLineDash([7, 6]); ctx.lineDashOffset = -time; ctx.strokeStyle = "rgba(184,240,138," + (0.4 + k * 0.5).toFixed(2) + ")"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(sx, s.y, KN_SPORE_R * (0.6 + 0.4 * k), 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(184,240,138," + (0.05 + k * 0.1).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(sx, s.y, KN_SPORE_R, 0, Math.PI*2); ctx.fill();
+      if(s.t > 0){ const fx2 = s.x0 + (s.x - s.x0) * k - cam.x, fy = s.y0 + (s.y - s.y0) * k - Math.sin(k * Math.PI) * 120;
+        inkShape(() => { ctx.beginPath(); ctx.arc(fx2, fy, 7, 0, Math.PI*2); }, "#a8d870", { pool:false, line:1.6 });
+        ctx.fillStyle = "rgba(240,255,200,.8)"; ctx.beginPath(); ctx.arc(fx2 - 2, fy - 2, 2.2, 0, Math.PI*2); ctx.fill(); }
+    } else {
+      const c = s.cloud / KN_CLOUD_T, a = c < 0.15 ? c / 0.15 : 1 - Math.max(0, c - 0.6) / 0.4;
+      for(let i=0;i<6;i++){ const an = i * 1.05 + s.x, rr = KN_SPORE_R * (0.45 + 0.25 * hash(i + s.x)), ox = Math.cos(an + time * 0.01) * KN_SPORE_R * 0.45, oy = Math.sin(an + time * 0.012) * KN_SPORE_R * 0.35;
+        ctx.fillStyle = "rgba(150,210,100," + (0.28 * a).toFixed(2) + ")"; ctx.beginPath(); ctx.arc(sx + ox, s.y + oy - c * 12, rr * (0.9 + c * 0.3), 0, Math.PI*2); ctx.fill(); }
+      ctx.fillStyle = "rgba(220,255,180," + (0.6 * a).toFixed(2) + ")";
+      for(let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(sx + Math.sin(time * 0.05 + i * 2) * 30, s.y + Math.cos(time * 0.04 + i) * 20 - c * 20, 2, 0, Math.PI*2); ctx.fill(); }
+    }
+  }
+  // 휩쓸기 예고 띠 · 휩쓰는 거대한 깃털 팔
+  const w = b.sweep;
+  if(w){
+    const k = clamp01(w.t / KN_SWEEP_WARN);
+    if(w.t < KN_SWEEP_WARN){
+      ctx.fillStyle = "rgba(255,224,138," + (0.06 + k * 0.12).toFixed(2) + ")"; ctx.save(); brushBand(-20, W / (cam.z || 1) + 20, w.y - KN_SWEEP_HALF, KN_SWEEP_HALF * 2, w.y); ctx.fill(); ctx.restore();
+      ctx.setLineDash([14, 10]); ctx.lineDashOffset = time * 2; ctx.strokeStyle = "rgba(255,224,138," + (0.45 + k * 0.5).toFixed(2) + ")"; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(0, w.y - KN_SWEEP_HALF); ctx.lineTo(W / (cam.z || 1), w.y - KN_SWEEP_HALF); ctx.moveTo(0, w.y + KN_SWEEP_HALF); ctx.lineTo(W / (cam.z || 1), w.y + KN_SWEEP_HALF); ctx.stroke(); ctx.setLineDash([]);
+      for(let i=0;i<3;i++){ const ax = W * 0.75 - i * 60 - ((time * 3) % 60); ctx.fillStyle = "rgba(255,224,138," + (0.4 + k * 0.4).toFixed(2) + ")"; ctx.beginPath(); ctx.moveTo(ax, w.y - 10); ctx.lineTo(ax - 18, w.y); ctx.lineTo(ax, w.y + 10); ctx.closePath(); ctx.fill(); }
+    } else if(w.d > -520){
+      const tx = p.x + w.d - cam.x, P = [[cx, y], [cx - 40, y + (w.y - y) * 0.2 - 30], [(cx + tx) / 2, w.y - 30], [tx, w.y]];
+      knFeather(P, 1, hurt, 7, 1.8);
+      if(!calm){ ctx.strokeStyle = "rgba(255,240,190,.5)"; ctx.lineWidth = 2; for(let i=0;i<3;i++){ ctx.beginPath(); ctx.moveTo(tx + 20 + i * 26, w.y - 18 + i * 14); ctx.lineTo(tx + 90 + i * 30, w.y - 18 + i * 14); ctx.stroke(); } }
+    }
+  }
+  // 줄기 — 바닥에 뿌리를 끌며 뒤로 휜다. 마디 고리·작은 갈고리(덩굴손), 녹슨 봉인 사슬이 감겨 있다
+  const lag = b.lag.x, sx0 = cx + 10, sy0 = y + 26, sx1 = cx + 40 + lag, sy1 = SEA + 40;
+  const stem = (u) => { const a = 1 - u; return [a*a*sx0 + 2*a*u*(cx + 26 + lag*0.4) + u*u*sx1, a*a*sy0 + 2*a*u*((sy0 + sy1)/2) + u*u*sy1]; };
+  inkTube(() => { ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.quadraticCurveTo(cx + 26 + lag*0.4, (sy0 + sy1)/2, sx1, sy1); }, 18, hurt ? "#fff" : "#5f9a78", "rgba(200,240,210,.35)");
+  if(!hurt){
+    ctx.strokeStyle = "rgba(30,50,40,.7)"; ctx.lineWidth = 2;
+    for(let i=1;i<12;i++){ const q = stem(i / 12), q2 = stem(i / 12 + 0.01), an = Math.atan2(q2[1] - q[1], q2[0] - q[0]) + Math.PI / 2; ctx.beginPath(); ctx.moveTo(q[0] - Math.cos(an) * 9, q[1] - Math.sin(an) * 9); ctx.lineTo(q[0] + Math.cos(an) * 9, q[1] + Math.sin(an) * 9); ctx.stroke(); }
+    ctx.strokeStyle = "#4f7f64"; ctx.lineWidth = 2.2;
+    for(let i=2;i<11;i+=2){ const q = stem(i / 12), s = i % 4 ? 1 : -1; ctx.beginPath(); ctx.moveTo(q[0] + s * 8, q[1]); ctx.quadraticCurveTo(q[0] + s * 20, q[1] - 2, q[0] + s * 18, q[1] + 8); ctx.stroke(); }
+    // 봉인 사슬 — 줄기를 휘감고 내려간다, 보랏빛 봉인 패
+    const c1 = stem(0.42), c2 = stem(0.58), c3 = stem(0.74);
+    awChain(c1[0] - 12, c1[1], c2[0] + 12, c2[1], 4); awChain(c2[0] + 12, c2[1], c3[0] - 12, c3[1], 4);
+    const pu = 0.5 + Math.sin(time * 0.07) * 0.25;
+    const sg = ctx.createRadialGradient(c2[0] + 14, c2[1] + 8, 2, c2[0] + 14, c2[1] + 8, 24); sg.addColorStop(0, "rgba(200,140,255," + pu.toFixed(2) + ")"); sg.addColorStop(1, "rgba(160,90,230,0)");
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(c2[0] + 14, c2[1] + 8, 24, 0, Math.PI*2); ctx.fill();
+    inkShape(() => { rrPath(c2[0] + 6, c2[1], 16, 20, 3); }, "#7a5a9a", { pool:false, line:1.6 });
+    ctx.strokeStyle = "rgba(240,220,255,.85)"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(c2[0] + 14, c2[1] + 10, 4, 0, Math.PI*2); ctx.moveTo(c2[0] + 14, c2[1] + 4); ctx.lineTo(c2[0] + 14, c2[1] + 16); ctx.stroke();
+  }
+  bossWaterLip(sx1 - 30, sx1 + 30, b.x * 0.01);
+  // 깃털 팔 — 뒤쪽(아래 둘) 먼저
+  const arms = b.arms.slice().sort((u, v) => (Math.sin(v.a) > 0.3 ? 1 : 0) - (Math.sin(u.a) > 0.3 ? 1 : 0));
+  for(const m of arms){
+    if(m.wrap) continue;
+    const P = knArmPts(b, m).map(q => [q[0] - b.x + cx, q[1]]);
+    if(!m.alive){
+      // 끊긴 자리 — 그루터기와 다시 자라는 연한 새 팔
+      const g = clamp01(m.grow);
+      if(g > 0.25){ ctx.save(); ctx.globalAlpha *= 0.55 + g * 0.45; knFeather(P, g, hurt, m.seed, 0.7); ctx.restore(); }
+      inkShape(() => { ctx.beginPath(); ctx.arc(P[1][0], P[1][1], 5, 0, Math.PI*2); }, "#9a7a3a", { pool:false, line:1.6 });
+      if(m.cutT > 0 && !calm){ const k = m.cutT / 30; ctx.fillStyle = "rgba(255,224,138," + (1 - k).toFixed(2) + ")"; for(let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(P[1][0] + Math.cos(i * 1.3 + m.seed) * 40 * k, P[1][1] + Math.sin(i * 1.3 + m.seed) * 40 * k + k * 30, 2.5, 0, Math.PI*2); ctx.fill(); } }
+      continue;
+    }
+    knFeather(P, 1, hurt, m.seed, 1);
+  }
+  // 고리를 감는 팔 — 고리까지 뻗어 휘감는다(예고 땐 점선 고리)
+  for(const m of b.arms){
+    if(!m.wrap) continue;
+    const P = knArmPts(b, m).map(q => [q[0] - b.x + cx, q[1]]), a = m.wrap.a, ax = a.x - cam.x, ay = a.drawY || a.y;
+    if(!m.wrap.on){
+      const k = clamp01(m.wrap.t / KN_LOCK_WARN);
+      ctx.setLineDash([6, 6]); ctx.lineDashOffset = -time; ctx.strokeStyle = "rgba(255,224,138," + (0.5 + k * 0.5).toFixed(2) + ")"; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.arc(ax, ay, 24 - k * 6, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    knFeather(P, 1, hurt, m.seed, 1);
+    if(m.wrap.on){
+      ctx.lineCap = "round";
+      for(let i=0;i<3;i++){ const ph = time * 0.05 + i * 2.1; ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.beginPath(); ctx.ellipse(ax, ay, 15, 6, ph, 0, Math.PI * 1.4); ctx.stroke(); ctx.strokeStyle = hurt ? "#fff" : "#e8c35a"; ctx.lineWidth = 3.4; ctx.stroke(); }
+      ctx.fillStyle = "rgba(255,224,138,.35)"; ctx.beginPath(); ctx.arc(ax, ay, 22, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  // 꽃받침(컵)과 가운데 입 — 입을 벌리면 판이 열리고 초록 핵이 드러난다
+  const open = clamp01(b.open / 30), beat = Math.pow(Math.max(0, Math.sin(time * 0.1)), 4);
+  if(open > 0.05 && !hurt){ const g = ctx.createRadialGradient(cx, y, 4, cx, y, 70); g.addColorStop(0, "rgba(140,255,170," + (0.6 * open).toFixed(2) + ")"); g.addColorStop(1, "rgba(80,220,140,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, y, 70, 0, Math.PI*2); ctx.fill(); }
+  inkShape(() => { ctx.beginPath(); ctx.moveTo(cx - 34, y - 4); ctx.quadraticCurveTo(cx - 30, y + 34, cx + 6, y + 36); ctx.quadraticCurveTo(cx + 36, y + 30, cx + 34, y - 4); ctx.closePath(); }, hurt ? "#fff" : "#b89a48",
+           { shade: () => { ctx.beginPath(); ctx.ellipse(cx + 16, y + 20, 22, 18, 0, 0, Math.PI*2); }, shadeCol: "rgba(80,50,10,.3)", pool: "rgba(60,40,8,.4)", poolW: 5, line: 2.4 });
+  inkShape(() => { ctx.beginPath(); ctx.ellipse(cx, y - 2, 30, 26, 0, 0, Math.PI*2); }, hurt ? "#fff" : "#d8bb60", { pool: "rgba(90,60,10,.35)", poolW: 5, line: 2.4 });
+  const coreR = 8 + open * 9 + beat * 2;
+  inkShape(() => { ctx.beginPath(); ctx.arc(cx, y - 2, coreR, 0, Math.PI*2); }, hurt ? "#fff" : open > 0.3 ? "#7dffa8" : "#5aa874", { pool: "rgba(20,80,40,.4)", poolW: 3, line: 1.8 });
+  if(!hurt){ ctx.fillStyle = "rgba(230,255,235,.85)"; ctx.beginPath(); ctx.arc(cx - coreR * 0.35, y - 2 - coreR * 0.35, coreR * 0.25, 0, Math.PI*2); ctx.fill(); }
+  // 입 덮개 판 다섯 — 닫혀 있으면 핵을 덮고, 열리면 바깥으로 젖혀진다
+  for(let i=0;i<5;i++){
+    const an = -Math.PI / 2 + i * Math.PI * 2 / 5, r0 = 4 + open * 16, ox = cx + Math.cos(an) * r0, oy = y - 2 + Math.sin(an) * r0;
+    ctx.save(); ctx.translate(ox, oy); ctx.rotate(an + Math.PI / 2);
+    inkShape(() => { ctx.beginPath(); ctx.moveTo(-8 + open * 2, 2); ctx.quadraticCurveTo(0, -14 + open * 6, 8 - open * 2, 2); ctx.closePath(); }, hurt ? "#fff" : "#c8a850", { pool:false, line:1.4 });
+    ctx.restore();
+  }
+  // 작은 눈 넷(몸 둘레 감각점)
+  if(!hurt) for(const [dx, dy] of [[-20, -18], [20, -18], [-24, 8], [24, 8]]){ ctx.fillStyle = "#3b2a1e"; ctx.beginPath(); ctx.arc(cx + dx, y + dy, 2.6, 0, Math.PI*2); ctx.fill(); }
+}
+
 // 걸려 있으면 팔을 못 뻗는다(grab) — Q·W로 끊는다
 const taranTangled = () => !!(boss && boss.type === TARAN && boss.tangle);
 
@@ -13380,6 +13667,7 @@ function bossCuts(){
   if(!b) return [];
   if(b.type === TARAN) return taranCuts(b);
   if(b.type === MIRAGE) return mirageCuts(b);
+  if(b.type === KRINO) return krinoCuts(b);
   return [];
 }
 // Q·W를 쓰는 순간 — 걸린 그물을 끊는다(바이스 사슬과 같은 규칙)
@@ -13544,6 +13832,8 @@ function drawBoss(){
     drawTaran(b, x, hurt);
   } else if(b.type === MIRAGE){
     drawMirage(b, x, hurt);
+  } else if(b.type === KRINO){
+    drawKrino(b, x, hurt);
   } else if(b.type === ANGLER){
     drawAngler(b, x, hurt);
   } else if(b.type === JELLYQ){
@@ -15373,6 +15663,8 @@ function drawEmblem(kind, x, y, s, col){
   c.save(); c.translate(x, y); c.scale(s, s);
   c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 0.15; c.lineCap = "round"; c.lineJoin = "round";
   switch(kind){
+    case "lily": L(0, 0.1, 0.06, 0.8); S(); O(0, 0.02, 0.16); S(); for(const an of [-2.6, -2.05, -1.57, -1.1, -0.55]){ L(Math.cos(an) * 0.16, 0.02 + Math.sin(an) * 0.16, Math.cos(an) * 0.74, 0.02 + Math.sin(an) * 0.74); S(); }
+      c.lineWidth = 0.08; for(const an of [-2.6, -1.57, -0.55]){ const mx = Math.cos(an) * 0.48, my = 0.02 + Math.sin(an) * 0.48; L(mx - 0.12, my, mx + 0.12, my); S(); } break;
     case "mirror": c.beginPath(); c.ellipse(0.06, 0, 0.6, 0.36, 0, 0, Math.PI*2); S(); L(-0.54, -0.06, -0.86, -0.2); S(); L(-0.54, 0.06, -0.86, 0.22); S();
       O(-0.3, -0.08, 0.07); F(); L(-0.1, -0.24, 0.1, 0.18); S(); L(0.18, -0.26, 0.36, 0.1); S(); break;
     case "crab": c.beginPath(); c.ellipse(0, 0.08, 0.42, 0.3, 0, 0, Math.PI*2); S(); for(const sx of [-1, 1]){ L(sx*0.36, 0, sx*0.62, -0.42, sx*0.86, 0.6); S(); L(sx*0.3, 0.2, sx*0.5, -0.12, sx*0.62, 0.72); S(); }
