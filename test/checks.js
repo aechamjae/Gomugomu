@@ -4661,6 +4661,56 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   a.toMenu();
 }
 
+/* --- v2.1.2 톱니턱이 물고 있던 돛대에 매달려 멈추던 것 --- */
+{
+  const a = A(), E = (x) => T().ev(x);
+  a.startMain(); H.step(); a.hold(true); H.step(); a.hold(false); T().teleport(22 * 300);
+  E("boss = null; shots = []; spawnBoss(false, SHARK); bossIntro = null; iframes = 1e9;");
+  // 앞 돛대에 이빨을 박은 상태를 만든다
+  E("(() => { const t = anchors.filter(q => !q.broken && !q.sky && q.x > p.x + 60).sort((u, v) => u.x - v.x)[0]; boss.mode = 'leap'; boss.lt = SH_LEAP; boss.a = t; boss.lx0 = t.x; boss.ly0 = t.y + 40; boss.ltx = t.x; boss.lty = t.y + 40; window.__bit = t; })()");
+  for(let i=0;i<3;i++){ E("p.y = 200; p.vy = 0;"); H.step(); }
+  ok("v2.1.2 톱니턱: 물고 있는 돛대는 한 프레임 뒤에도 잠겨 있다", E("boss.mode === 'stuck' && window.__bit.cut > 1"), "cut=" + E("window.__bit.cut"));
+  // 그래도 (예전처럼) 매달려 있다가 톱니턱이 놓으면 — 같이 떨어진다
+  E("rope = { a: window.__bit, len: 120 }; boss.cd = 0;");
+  E("p.y = 200; p.vy = 0;"); H.step();
+  ok("v2.1.2 톱니턱: 물린 돛대가 부러지면 매달린 줄도 풀린다", E("window.__bit.broken && rope === null"));
+  // 안전망 — 어떤 까닭이든 부러진 돛대에 매달려 있으면 놓는다
+  E("(() => { const t = anchors.find(q => !q.broken && !q.sky && q.x > p.x); rope = { a: t, len: 120 }; t.broken = true; })()");
+  H.step();
+  ok("v2.1.2 안전망: 부러진 돛대에 매달린 채로 남지 않는다", E("rope === null"));
+  E("boss = null; shots = [];");
+}
+
+/* --- v2.2.0 새 그림 · 해군 뒷거울 --- */
+{
+  const a = A(), E = (x) => T().ev(x);
+  ok("v2.2.0 그림: 새 그림 함수가 다 있다", E("[drawWhaler, drawBlackshipArt, drawBlackshipCannon, drawSawShark, drawSeaKing, drawViceArt, drawThunderArt, drawAnglerArt, drawNavyShipArt, drawNavyBehind].every(f => typeof f === 'function')"));
+  // 그림 함수가 상태마다 오류 없이 돈다(가짜 캔버스)
+  let err = "";
+  try{
+    E("drawHarpoon({ type:1, x:cam.x + 400, t:10, st:'aim', stT:40, angs:[-2.5], hp:3 }, 400, false)");
+    E("drawHarpoon({ type:1, x:cam.x + 400, t:10, st:'tumble', stT:40, angs:[], hp:1 }, 400, true)");
+    E("for(const md of ['hunt','climb','stuck','leap','drop']) drawShark({ mode:md, x:cam.x + 300, y:200, t:5, lt:10, hp:2 }, 300, false)");
+    E("drawSeaKing({ x:cam.x + 300, h:260 }, 300)");
+    E("drawVice({ type:10, x:cam.x + 300, y:220, t:5, open:0, hp:1 }, 300, false)");
+    E("drawThunder({ type:12, x:cam.x + 300, y:200, t:5, drums:[true,false,true], warn:0, boltT:0, hp:1 }, 300, false)");
+    for(const st of ["lure","warn","bite","gape","sink"]) E("drawAngler({ type:16, x:cam.x + 300, y:" + (st === "gape" ? "SEA - 62" : "SEA + 70") + ", tx:cam.x + 300, t:5, st:'" + st + "', stT:20, hp:2 }, 300, false)");
+  }catch(e){ err = String(e.message || e); }
+  ok("v2.2.0 그림: 상태마다 오류 없이 그린다", !err, err);
+  // 해군 뒷거울 — 화면 밖에 처져 있을 때만 뜬다
+  a.startPractice(E("PRACTICE_OPTIONS.findIndex(o => o.type === 'navy')")); H.step(); a.hold(true); H.step(); a.hold(false);
+  for(let i=0;i<80 && !E("navy");i++){ E("p.y = 200; p.vy = 0; iframes = 1e9;"); H.step(); }
+  ok("v2.2.0 해군: 연습에서 추격이 시작된다", !!E("navy"));
+  E("navy.x = cam.x - 340;");
+  let drew = false;
+  E("window.__nb = 0; { const o = drawNavyShipArt; drawNavyShipArt = function(){ window.__nb++; return o.apply(this, arguments); }; }");
+  E("drawNavyBehind()"); drew = E("window.__nb") > 0;
+  ok("v2.2.0 해군: 화면 밖에 처지면 왼쪽 뒷거울에 군함을 그린다", drew);
+  E("window.__nb = 0; navy.x = cam.x + 200; drawNavyBehind();");
+  ok("v2.2.0 해군: 화면에 보이면 뒷거울은 안 띄운다", E("window.__nb") === 0);
+  E("navy = null;");
+}
+
 /* --- v2.1.0 클래식 모드 --- */
 {
   const a = A(), E = (x) => T().ev(x);
