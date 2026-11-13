@@ -4711,6 +4711,18 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("navy = null;");
 }
 
+/* --- v2.2.1 라이플 보스 사거리 600 --- */
+{
+  const E = (x) => T().ev(x);
+  const eq0 = E("eqRanged");
+  E("eqRanged = 'rifle';");
+  ok("v2.2.1 라이플: 보스 약점 사거리 600", E("rangedBossRange()") === 600);
+  ok("v2.2.1 라이플: 550px 약점은 라이플 주먹 사거리 안", E("fistInRange({ rifle:true, ox:p.x, oy:p.y }, { x:p.x + 550, y:p.y })") === true);
+  E("eqRanged = 'pistol';");
+  ok("v2.2.1 피스톨: 보스 약점 사거리는 그대로 460", E("rangedBossRange()") === 460 && E("fistInRange({ rifle:false, ox:p.x, oy:p.y }, { x:p.x + 550, y:p.y })") === false);
+  E("eqRanged = " + JSON.stringify(eq0) + ";");
+}
+
 /* --- v2.1.0 클래식 모드 --- */
 {
   const a = A(), E = (x) => T().ev(x);

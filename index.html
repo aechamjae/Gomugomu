@@ -329,7 +329,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v2.2.0";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
+const GAME_VER = "v2.2.1";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -383,7 +383,8 @@ const AXE_W = 190, AXE_POW = 2, AXE_WAVE_SPD = 11, AXE_WAVE_R = 340, AXE_WAVE_H 
 const TOP_R = 150, TOP_T = 48, TOP_TICK = 6, TOP_FALL = 1.2;
 
 /* 원거리 기술(Q) */
-const RIFLE_SPD = 38, RIFLE_LIFE = 30;    // 라이플 — 비틀어 쏘는 주먹. 더 빠르고 멀리, 관통
+const RIFLE_SPD = 38, RIFLE_LIFE = 30, RIFLE_BOSS_RANGE = 600;   // v2.2.1: 라이플만 보스 약점 사거리 600(나머지 원거리는 PISTOL_BOSS_RANGE 460) — 장총답게
+const rangedBossRange = () => eqRanged === "rifle" ? RIFLE_BOSS_RANGE : PISTOL_BOSS_RANGE;    // 라이플 — 비틀어 쏘는 주먹. 더 빠르고 멀리, 관통
 const GATLING_RANGE = 440, GATLING_ARC = 0.42, GATLING_POW = 2;   // 개틀링 — 조준 방향 부채꼴(반각 rad) 안을 순식간에 연타. v60: 보스 피해 1→2
 // 별똥(v60 신규 원거리) — 주먹을 하늘로 쏘아 올렸다가 COMET_T프레임 뒤 표적 위로 내리꽂는다. 반경 COMET_R 안을 한꺼번에, 약점 한가운데(COMET_CORE)에 꽂히면 피해 2
 const COMET_RANGE = 640, COMET_R = 110, COMET_T = 28, COMET_CORE = 42, COMET_AFTER = 18;
@@ -776,7 +777,7 @@ const TECHS = [
   { id:"axe",     cat:"melee",  name:"고무고무 도끼",   short:"도끼",  cd:60*10, desc:"발밑 기둥을 바다까지 내리찍는다 · 보스 피해 2 · 수면을 따라 양옆으로 충격파" },
   { id:"top",     cat:"melee",  name:"고무고무 팽이",   short:"팽이",  cd:60*14, desc:"몸을 축으로 빙글빙글 — 등 뒤까지 둘레를 쓸고 탄을 튕겨 낸다 · 도는 동안 천천히 떨어진다" },
   { id:"pistol",  cat:"ranged", name:"고무고무 피스톨", short:"피스톨", cd:SKILL_CD, base:true, desc:"자동 조준 주먹 한 방" },
-  { id:"rifle",   cat:"ranged", name:"고무고무 라이플", short:"라이플", cd:60*12, desc:"비틀어 쏜 주먹 — 더 빠르고 멀리, 꿰뚫는다" },
+  { id:"rifle",   cat:"ranged", name:"고무고무 라이플", short:"라이플", cd:60*12, desc:"비틀어 쏜 주먹 — 더 빠르고 멀리, 꿰뚫는다 · 보스 약점 사거리 600(피스톨 460)" },
   { id:"gatling", cat:"ranged", name:"고무고무 개틀링", short:"개틀링", cd:60*18, desc:"조준 방향 부채꼴을 순식간에 연타 · 보스 피해 2" },
   { id:"comet",   cat:"ranged", name:"고무고무 별똥",   short:"별똥",  cd:60*14, desc:"주먹을 하늘로 쏘아 올려 표적 위로 내리꽂는다 — 둘레를 한꺼번에, 한가운데면 피해 2" },
   { id:"gcharge", cat:"gear",   name:"투지",   desc:"기어 게이지가 레벨당 10% 빨리 찬다" },
@@ -6890,7 +6891,7 @@ function pickAimTarget(spd, range, bossRange, noKing, fixedT){
 
 /* ---------- 원거리 기술 (Q) — 피스톨 / 라이플 / 개틀링 ---------- */
 function pistolAim(spd, range){
-  const t = pickAimTarget(spd || FIST_SPD, range || FIST_SPD*FIST_LIFE, PISTOL_BOSS_RANGE, true);   // 해왕류는 원거리로 못 쓰러뜨리니 노리지 않는다
+  const t = pickAimTarget(spd || FIST_SPD, range || FIST_SPD*FIST_LIFE, rangedBossRange(), true);   // 해왕류는 원거리로 못 쓰러뜨리니 노리지 않는다
   if(t) return Math.atan2(t.y - p.y, t.x - p.x);
   return p.face > 0 ? -0.10 : Math.PI + 0.10;      // 목표가 없으면 정면으로
 }
@@ -6912,7 +6913,7 @@ function firePistol(){
   // 쏜 순간의 가로 속도만 이어받는다 — 세로 속도는 중력·줄 때문에 금세 바뀌어서, 이어받으면 주먹이 하늘로 솟구쳐 버렸다
   const cvx = Math.max(-8, Math.min(MAXV, p.vx)), cvy = 0;
   fist = { x:p.x, y:p.y, px:p.x, py:p.y, cvx, cvy,
-           vx:Math.cos(a)*spd + cvx, vy:Math.sin(a)*spd + cvy, life: snake ? life + 18 : life, back:false, pierce:rifle || snake, hitBoss:false,
+           vx:Math.cos(a)*spd + cvx, vy:Math.sin(a)*spd + cvy, life: snake ? life + 18 : life, back:false, pierce:rifle || snake, rifle, hitBoss:false,
            snake, spd, hits:0, hitSet: [], ox:p.x, oy:p.y };
   pops.push({ x:p.x, y:p.y-54, t:56, text: techOf(eqRanged).name, color:"#f0a24e" });
   for(let i=0;i<10;i++) spark(p.x, p.y, "#f0a24e");
@@ -7056,7 +7057,7 @@ function steerSnake(f, dt){
 // v57 보정 유도 — 쏜 뒤 약점이 흔들리거나 예측이 조금 어긋나도, 주먹 앞쪽 부채꼴(FIST_HOME_ARC) 안의 보스 약점 쪽으로 살짝 휘어 간다.
 //   한 프레임에 FIST_HOME_TURN(라이플은 절반)까지만 꺾이니 등 뒤나 엉뚱한 쪽 약점으로 휘어 가진 않는다. 사거리는 쏜 자리 기준
 //   사거리는 쏜 자리와 지금 플레이어 자리 중 가까운 쪽으로 잰다 — 앞서 달아나는 보스를 쫓아가며 쏘든, 쏘고 지나쳐 가든 맞는다
-const fistInRange = (f, w) => Math.min(Math.hypot(w.x - f.ox, w.y - f.oy), Math.hypot(w.x - p.x, w.y - p.y)) <= PISTOL_BOSS_RANGE + FIST_BOSS_SLACK;
+const fistInRange = (f, w) => Math.min(Math.hypot(w.x - f.ox, w.y - f.oy), Math.hypot(w.x - p.x, w.y - p.y)) <= (f.rifle ? RIFLE_BOSS_RANGE : PISTOL_BOSS_RANGE) + FIST_BOSS_SLACK;
 function homeFist(f, dt){
   if(!boss || f.hitBoss || boss.invul > 0) return;
   // 이어받은 몸 속도(cvx, cvy)를 뺀 '주먹 자체의' 속도를 돌린다 — 크기는 그대로
@@ -15463,7 +15464,7 @@ function drawAimMark(){
     if(d < bd){ bd = d; best = w; }
   }
   if(!best) return;
-  const inR = bd <= PISTOL_BOSS_RANGE, x = best.x - cam.x, y = best.y, r = best.r + 10;
+  const inR = bd <= rangedBossRange(), x = best.x - cam.x, y = best.y, r = best.r + 10;
   const pulse = 1 + Math.sin(time * 0.25) * 0.08;
   ctx.save();
   ctx.translate(x, y); ctx.scale(pulse, pulse);
