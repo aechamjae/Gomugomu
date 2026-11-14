@@ -1,4 +1,4 @@
-const CACHE = "gomupal-v2.2.1";
+const CACHE = "gomupal-v2.2.2";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png?v=3", "./icon-512.png?v=3", "./icon-180.png?v=3", "./icon-maskable-512.png?v=3"];   // 아이콘은 주소에 ?v=를 붙인다 — 그림을 바꾸면 숫자를 올릴 것(사파리·홈 화면 캐시가 같은 주소면 옛 그림을 쓴다)
 
 self.addEventListener("install", (e)=>{

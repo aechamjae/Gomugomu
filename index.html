@@ -329,7 +329,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v2.2.1";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
+const GAME_VER = "v2.2.2";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -1479,7 +1479,7 @@ const STORY_CH = [
            ["음악가", "바다가… 갈라져요!"]],
       post:[["고무팔", "돌아가긴. 저 앞이 심연 입구야."]] },
     { id:"F-2", name:"외눈 바론", biome:3, sky:"night", goal:{ type:"race", rival:2 }, mods:{ rivalSpd:1.1 }, reward:2500, crew:"jack",
-      stars:[{ k:"stun", max:1, text:"휘청 1번 이하" }, { k:"lead", min:100, text:"100m 넘게 앞서 결승" }],
+      stars:[{ k:"stun", max:1, text:"휘청 1번 이하" }, { k:"lead", min:75, text:"75m 넘게 앞서 결승" }],   // v2.2.2: 100m → 75m
       pre:[["외눈 바론", "완성된 해도는 이 몸이 가져간다. 경주로 정하지!"],
            ["갈고리 잭", "(멀리서) …빚 갚을 때가 됐군."]],
       post:[["갈고리 잭", "이번만은 같은 배다, 고무 꼬맹이. 떨어지면 갈고리로 건져 주지."],
@@ -1532,6 +1532,18 @@ function storyRead(v){
 }
 const storyCleared = (id) => (storyBits(id) & 1) > 0;
 const starCount = (bits) => (bits & 1) + ((bits >> 1) & 1) + ((bits >> 2) & 1);
+// v2.2.2 별 보정 — 별 조건을 낮췄을 때, 그 전에 별 2개였던 저장분을 한 번만 3개로 올린다.
+//   저장에 적용한 보정 id(story.fx)를 남겨 두고, 목록에 없는 보정만 불러올 때 적용한다(새로 별 2개가 되는 판은 그대로 조건을 채워야 한다)
+const STORY_FIXES = [{ id:"F2lead75", stage:"F-2" }];
+let storyFixed = [];
+function applyStoryFixes(done){
+  storyFixed = Array.isArray(done) ? done.filter(id => STORY_FIXES.some(q => q.id === id)) : [];
+  for(const q of STORY_FIXES){
+    if(storyFixed.indexOf(q.id) >= 0) continue;
+    if(starCount(storyBits(q.stage)) === 2) storyStars[q.stage] = 7;
+    storyFixed.push(q.id);
+  }
+}
 const storyStarTotal = () => STORY_ALL.reduce((a, s) => a + starCount(storyBits(s.id)), 0);
 const chapterStars = (ci) => STORY_CH[ci].stages.reduce((a, s) => a + starCount(storyBits(s.id)), 0);
 // 앞 스테이지를 깨야 열린다(첫 스테이지는 늘 열려 있다)
@@ -8262,7 +8274,12 @@ const SAVE_KEYS = ["swing:best", "swing:bestChain", "swing:titles", "swing:shop"
 const SAVE_SHORT = ["b", "c", "t", "s", "l", "d"];             // 코드 안에서 쓰는 짧은 이름(SAVE_KEYS 순서)
 const SAVE_REC = () => [recBest, recBestChain, recTitles, recShop, recLog, recDaily];
 let SAVE_DEF = null;                                          // 새 계정 기본값 — 부팅 때 저장분을 읽기 전에 잡는다
-function captureSaveDefaults(){ SAVE_DEF = SAVE_REC().map(f => JSON.parse(f())); }
+function captureSaveDefaults(){
+  SAVE_DEF = SAVE_REC().map(f => JSON.parse(f()));
+  // v2.2.2 별 보정 표시(story.fx)는 기본값에서 뺀다 — 그래야 예전 코드(fx 없음)를 불러올 때 기본값이 덮이지 않고 보정이 적용된다
+  const sh = SAVE_DEF[SAVE_KEYS.indexOf("swing:shop")];
+  if(sh && sh.story) delete sh.story.fx;
+}
 const CODE_HEAD = "GOMU1-", CODE2_HEAD = "G2-";
 // 낱말표 — 코드 형식의 일부라 절대 고치지 않는다(순서를 바꾸면 예전 코드를 못 읽는다). 새 낱말은 끝에만 덧붙일 것
 const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","novice","gull20","hunter","perfect50","kraken1","ghost1","admiral1","veteran","dist10k","kraken3","ghost3","mapper","kraken10","ghost10","naturalist","sel","s","bank","up","reach","pistol","magnet","fusen","bounty","skins","red","navy","gold","black","bolt","horizon","jelly","dex","anchor","coral","tide","skin","parrot","mapPieces","mapsDone","blitz","blitzD","rush9","grade","A","gearU","gearS","tech","whip","bazooka","axe","rifle","gatling","gcharge","gtime","gstart","mats","melee","ranged","gear","eqR","eqM","crew","cook","nav","sword","sniper","doctor","arch","wright","music","helm","crewS","crewXp","mini","cannon","hop","m","n","diff","hard","bestDiff","easy","l","runs","dist","perfects","missions","gulls","barrels","skims","gears","golds","xp","recent","fish","king","gull","boss0","boss1","boss2","boss3","boss4","boss5","boss6","boss7","boss8","boss9","boss10","boss11","boss12","boss13","boss14","rot","port","barrel","meat","map","floe","geyser","biome0","biome1","biome2","wind","storm","fog","bonus","barrage","rival","skyroute","searoute","d","date","best","streakDate","streak","a","261022",
@@ -8271,7 +8288,8 @@ const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","n
   "rush5","top","comet",
   "hunt100","allboss","best2000","best5000","best8000","combo15","flawless","quick","duel","crewall","medals","rich","nofusen","rushfast",
   "boss21","boss22","boss23",
-  "classic"];
+  "classic",
+  "fx","F2lead75"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -8657,6 +8675,7 @@ function applyShopRecord(v){
       storySeen = Array.isArray(r.story.seen) ? r.story.seen.slice() : [];
       storyEnd = r.story.end || 0;
     }
+    applyStoryFixes(r.story && r.story.fx);
     artSel = r.art && artDef(r.art) && artOwned(r.art) ? r.art : null;
     if(r.mini){
       miniBest = Object.assign({ jelly:0, cannon:0, hop:0 }, r.mini.b);
@@ -8681,7 +8700,7 @@ function recShop(){
   return JSON.stringify({ bank, up: upgrades, bounty: bestBounty, skins: ownedSkins, skin, parrot: parrotOn, mapPieces, mapsDone, blitz: blitzBest, blitzD: blitzDate, classic: Math.floor(classicBest), rush9: rushBest9, rush5: rushBest, grade: bestGrade, gearU: gearUnlocked, gearS: gearSel,
                            tech: techLv, mats, eqR: eqRanged, eqM: eqMelee, crew: crewOwned, crewS: crewSel, crewXp,
                            mini: { b: miniBest, m: miniMedals, n: miniPlays }, diff: diffSel, bestDiff,
-                           story: { st: storyRec(), seen: storySeen, end: storyEnd }, art: artSel });
+                           story: { st: storyRec(), seen: storySeen, end: storyEnd, fx: STORY_FIXES.map(q => q.id) }, art: artSel });
 }
 async function saveShop(){
   const v = recShop();

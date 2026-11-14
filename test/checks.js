@@ -4723,6 +4723,26 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("eqRanged = " + JSON.stringify(eq0) + ";");
 }
 
+/* --- v2.2.2 외눈 바론 75m · 예전 별 2개는 3개로 --- */
+{
+  const E = (x) => T().ev(x);
+  ok("v2.2.2 F-2: 별 조건이 75m", E("STORY_ALL.find(q => q.id === 'F-2').stars.some(c => c.k === 'lead' && c.min === 75)"));
+  const saved = E("JSON.stringify(storyStars)");
+  // 예전 저장(fx 없음)에 F-2 별 2개 → 불러오면 3개
+  E("(() => { const r = JSON.parse(recShop()); r.story.st = r.story.st || ''; delete r.story.fx; storyStars = { 'F-2': 3 }; r.story.st = storyRec(); applyShopRecord(JSON.stringify(r)); })()");
+  ok("v2.2.2 F-2: 예전 저장의 별 2개(★·★★)는 3개가 된다", E("storyBits('F-2')") === 7);
+  E("(() => { const r = JSON.parse(recShop()); delete r.story.fx; storyStars = { 'F-2': 5 }; r.story.st = storyRec(); applyShopRecord(JSON.stringify(r)); })()");
+  ok("v2.2.2 F-2: 별 2개(★·★★★)여도 3개", E("storyBits('F-2')") === 7);
+  E("(() => { const r = JSON.parse(recShop()); delete r.story.fx; storyStars = { 'F-2': 1 }; r.story.st = storyRec(); applyShopRecord(JSON.stringify(r)); })()");
+  ok("v2.2.2 F-2: 별 1개는 그대로", E("storyBits('F-2')") === 1);
+  // 보정을 한 번 적용한 저장(fx 있음)은 다시 올리지 않는다 — 앞으로 새로 별 2개가 된 판은 조건을 채워야 한다
+  E("(() => { storyStars = { 'F-2': 3 }; const r = JSON.parse(recShop()); applyShopRecord(JSON.stringify(r)); })()");
+  ok("v2.2.2 F-2: 보정이 적용된 저장은 다시 올리지 않는다", E("storyBits('F-2')") === 3);
+  // 예전 저장 코드(fx 없음)도 불러오면 보정
+  ok("v2.2.2 저장 코드: 기본값에 fx가 없다(예전 코드도 보정된다)", E("!(SAVE_DEF[SAVE_KEYS.indexOf('swing:shop')].story || {}).fx"));
+  E("storyStars = " + saved + ";");
+}
+
 /* --- v2.1.0 클래식 모드 --- */
 {
   const a = A(), E = (x) => T().ev(x);
@@ -4751,7 +4771,7 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("iframes = 0; stun = 0; fire = 0; knockKing();");
   ok("v2.1.0 클래식: 해왕류에 닿으면 즉사", a.peek().state === 2 && a.peek().deathReason === "해왕류", "state=" + a.peek().state + " " + a.peek().deathReason);
   ok("v2.1.0 클래식: 기록은 따로 — 무한 모드 최고 기록은 그대로", E("classicBest") >= 3000);
-  ok("v2.1.0 클래식: 저장에 classic이 들어간다", JSON.parse(E("recShop()")).classic >= 3000 && E("CODE2_WORDS.indexOf('classic') === CODE2_WORDS.length - 1"));
+  ok("v2.1.0 클래식: 저장에 classic이 들어간다", JSON.parse(E("recShop()")).classic >= 3000 && E("CODE2_WORDS.indexOf('classic') > CODE2_WORDS.indexOf('boss23')"));
   // 다른 모드로 가면 꺼진다
   a.startMain(); H.step();
   ok("v2.1.0 클래식: 무한 모드로 가면 꺼진다", E("classicMode") === false);
