@@ -4743,6 +4743,20 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("storyStars = " + saved + ";");
 }
 
+/* --- v2.2.3 P-1 PERFECT 1번 · 깬 저장은 P-1 별 셋 --- */
+{
+  const E = (x) => T().ev(x);
+  ok("v2.2.3 P-1: ★★★ 조건이 PERFECT 1번", E("STORY_ALL.find(q => q.id === 'P-1').stars.some(c => c.k === 'perfect' && c.min === 1)"));
+  const saved = E("JSON.stringify(storyStars)");
+  for(const [b0, want, name] of [[1, 7, "깨기만 함(★)"], [3, 7, "★★"], [5, 7, "★·★★★"], [0, 0, "안 깸"]]){
+    E("(() => { const r = JSON.parse(recShop()); delete r.story.fx; storyStars = { 'P-1': " + b0 + " }; r.story.st = storyRec(); applyShopRecord(JSON.stringify(r)); })()");
+    ok("v2.2.3 P-1: 예전 저장 — " + name + " → 별 " + (want ? 3 : 0) + "개", E("storyBits('P-1')") === want, "bits=" + E("storyBits('P-1')"));
+  }
+  E("(() => { storyStars = { 'P-1': 1 }; const r = JSON.parse(recShop()); applyShopRecord(JSON.stringify(r)); })()");
+  ok("v2.2.3 P-1: 보정이 적용된 저장은 다시 올리지 않는다", E("storyBits('P-1')") === 1);
+  E("storyStars = " + saved + ";");
+}
+
 /* --- v2.1.0 클래식 모드 --- */
 {
   const a = A(), E = (x) => T().ev(x);

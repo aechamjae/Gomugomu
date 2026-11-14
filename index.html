@@ -329,7 +329,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v2.2.2";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
+const GAME_VER = "v2.2.3";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -1333,7 +1333,7 @@ const AWAKEN = 15;                                           // 최종 보스 �
 const STORY_CH = [
   { id:"P", name:"프롤로그", sub:"바람개비 섬", stages:[
     { id:"P-1", name:"첫 고리", biome:0, sky:"day", goal:{ type:"dist", m:150 }, mods:{ mobs:0 }, reward:300,
-      stars:[{ k:"fusen", max:0, text:"풍선 안 씀" }, { k:"perfect", min:5, text:"PERFECT 놓기 5번" }],
+      stars:[{ k:"fusen", max:0, text:"풍선 안 씀" }, { k:"perfect", min:1, text:"PERFECT 놓기 1번" }],   // v2.2.3: 5번 → 1번
       pre:[["할아버지 메모", "조각은 다섯. 다섯이 모여야 길이 된다."],
            ["고무팔", "할아버지 다락엔 빈 해도 껍데기랑 이 붉은 두건뿐이네."],
            ["할아버지 메모", "당길 땐 뒤로, 놓을 땐 앞으로. 돛대 줄부터 익혀라."]],
@@ -1534,13 +1534,15 @@ const storyCleared = (id) => (storyBits(id) & 1) > 0;
 const starCount = (bits) => (bits & 1) + ((bits >> 1) & 1) + ((bits >> 2) & 1);
 // v2.2.2 별 보정 — 별 조건을 낮췄을 때, 그 전에 별 2개였던 저장분을 한 번만 3개로 올린다.
 //   저장에 적용한 보정 id(story.fx)를 남겨 두고, 목록에 없는 보정만 불러올 때 적용한다(새로 별 2개가 되는 판은 그대로 조건을 채워야 한다)
-const STORY_FIXES = [{ id:"F2lead75", stage:"F-2" }];
+// rule: "two"(기본) — 별 2개였으면 3개로 · "cleared" — 깨기만 했으면 3개로
+const STORY_FIXES = [{ id:"F2lead75", stage:"F-2" }, { id:"P1perf1", stage:"P-1", rule:"cleared" }];   // v2.2.3: P-1 ★★★ PERFECT 5번 → 1번
 let storyFixed = [];
 function applyStoryFixes(done){
   storyFixed = Array.isArray(done) ? done.filter(id => STORY_FIXES.some(q => q.id === id)) : [];
   for(const q of STORY_FIXES){
     if(storyFixed.indexOf(q.id) >= 0) continue;
-    if(starCount(storyBits(q.stage)) === 2) storyStars[q.stage] = 7;
+    const b = storyBits(q.stage);
+    if(q.rule === "cleared" ? (b & 1) > 0 : starCount(b) === 2) storyStars[q.stage] = 7;
     storyFixed.push(q.id);
   }
 }
@@ -8289,7 +8291,7 @@ const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","n
   "hunt100","allboss","best2000","best5000","best8000","combo15","flawless","quick","duel","crewall","medals","rich","nofusen","rushfast",
   "boss21","boss22","boss23",
   "classic",
-  "fx","F2lead75"];
+  "fx","F2lead75","P1perf1"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
