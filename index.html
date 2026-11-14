@@ -329,7 +329,7 @@ const PUMP   = 0.115;
 const DIVE   = 0.30;
 const MAXV   = 27;
 
-const GAME_VER = "v2.2.3";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
+const GAME_VER = "v2.2.4";   // 화면 구석에 보이는 버전 — sw.js 캐시 버전(gomupal-vX.Y.Z)과 항상 같이 올린다. 규칙은 인수인계.md "버전 이름 규칙"(주.부.수 — MAJOR.MINOR.PATCH)
 
 const STUN_FRAMES = 45;  // 기본 휘청(스턴) 시간
 const STUN_STRONG  = 60; // 해왕류에 맞았을 때만 이 시간
@@ -383,6 +383,7 @@ const AXE_W = 190, AXE_POW = 2, AXE_WAVE_SPD = 11, AXE_WAVE_R = 340, AXE_WAVE_H 
 const TOP_R = 150, TOP_T = 48, TOP_TICK = 6, TOP_FALL = 1.2;
 
 /* 원거리 기술(Q) */
+const AW_ASSIST_STAR = 2;     // v2.2.4 F-5 ★★ 동료 협공 명중 횟수(예전 3) — STORY_CH보다 먼저 정의
 const RIFLE_SPD = 38, RIFLE_LIFE = 30, RIFLE_BOSS_RANGE = 600;   // v2.2.1: 라이플만 보스 약점 사거리 600(나머지 원거리는 PISTOL_BOSS_RANGE 460) — 장총답게
 const rangedBossRange = () => eqRanged === "rifle" ? RIFLE_BOSS_RANGE : PISTOL_BOSS_RANGE;    // 라이플 — 비틀어 쏘는 주먹. 더 빠르고 멀리, 관통
 const GATLING_RANGE = 440, GATLING_ARC = 0.42, GATLING_POW = 2;   // 개틀링 — 조준 방향 부채꼴(반각 rad) 안을 순식간에 연타. v60: 보스 피해 1→2
@@ -1495,7 +1496,7 @@ const STORY_CH = [
       post:[["고무팔", "쓰러뜨렸… 아니, 문 너머에 훨씬 큰 눈이…!"],
             ["고고학자", "지금까지 상대한 건 촉수 하나였어."]] },
     { id:"F-5", name:"각성한 크라켄", biome:3, sky:"night", goal:{ type:"boss", boss:AWAKEN }, mods:{}, reward:10000, end:true,
-      stars:[{ k:"assist", min:3, text:"동료 협공 때 3번 명중" }, { k:"stun", max:4, text:"휘청 4번 이하" }],
+      stars:[{ k:"assist", min:AW_ASSIST_STAR, text:"동료 협공 때 " + AW_ASSIST_STAR + "번 명중" }, { k:"stun", max:4, text:"휘청 4번 이하" }],   // v2.2.4: 3번 → 2번
       pre:[["각성한 크라켄", "백 년의 잠을 깨운 자가 누구냐."],
            ["고무팔", "촉수마다 칼자국이야… 저 솜씨, 할아버지다!"],
            ["각성한 크라켄", "붉은 두건… 삼십 년 전 그 칼자국이 아직도 쑤신다."],
@@ -1535,7 +1536,7 @@ const starCount = (bits) => (bits & 1) + ((bits >> 1) & 1) + ((bits >> 2) & 1);
 // v2.2.2 별 보정 — 별 조건을 낮췄을 때, 그 전에 별 2개였던 저장분을 한 번만 3개로 올린다.
 //   저장에 적용한 보정 id(story.fx)를 남겨 두고, 목록에 없는 보정만 불러올 때 적용한다(새로 별 2개가 되는 판은 그대로 조건을 채워야 한다)
 // rule: "two"(기본) — 별 2개였으면 3개로 · "cleared" — 깨기만 했으면 3개로
-const STORY_FIXES = [{ id:"F2lead75", stage:"F-2" }, { id:"P1perf1", stage:"P-1", rule:"cleared" }];   // v2.2.3: P-1 ★★★ PERFECT 5번 → 1번
+const STORY_FIXES = [{ id:"F2lead75", stage:"F-2" }, { id:"P1perf1", stage:"P-1", rule:"cleared" }, { id:"F5assist2", stage:"F-5" }];   // v2.2.4: F-5 협공 3번 → 2번   // v2.2.3: P-1 ★★★ PERFECT 5번 → 1번
 let storyFixed = [];
 function applyStoryFixes(done){
   storyFixed = Array.isArray(done) ? done.filter(id => STORY_FIXES.some(q => q.id === id)) : [];
@@ -5410,7 +5411,10 @@ function damageBoss(ranged, mark, power){
   if(b.type === TARAN && b.st !== "down"){ taranLegHit(b, ranged); return; }
   if(b.type === MIRAGE && ranged){ mirageReflect(b, mark); return; }   // v63: 거울 비늘은 기술·저격·되던지기를 비춰 튕겨 낸다 — 몸으로 부딪혀야 맞는다   // v62: 서 있는 타란은 관절을 맞으면 다리가 꺾인다(체력은 주저앉았을 때만)
   const amt = (power || 1) * (buff() ? buff().atk : 1) + (artOn("redhawk") ? 1 : 0);
-  if(b.type === AWAKEN && b.assistT > 0) storyCount("assist");
+  if(b.type === AWAKEN && b.assistT > 0){
+    storyCount("assist");
+    if(storyRun) pops.push({ x:p.x, y:p.y - 70, t:80, text:"협공 명중! " + Math.min(storyRun.assist, AW_ASSIST_STAR) + "/" + AW_ASSIST_STAR, color:"#9fe0a0" });   // v2.2.4 몇 번 맞혔는지 보인다
+  }
   if(b.type === AWAKEN || b.type === 5) awakenStruck(b, mark);
   if(b.type === THUNDER){ breakDrum(b); b.hp = b.drums.filter(Boolean).length + 0; }   // 북 하나 = 체력 1(공격력 배율과 상관없이)
   else b.hp = Math.max(0, b.hp - amt);
@@ -5894,7 +5898,7 @@ function updateBoss(dt){
    2페이즈 고유: 소용돌이(maw)가 고리를 삼킨다 · 3페이즈 고유: 먹물이 하늘을 덮고 심장이 드러난다(tired).
    페이즈가 넘어갈 때마다, 그리고 2페이즈부터는 주기적으로 데려온 적 있는 동료가 끼어들어 틈(b.assistT)을 만든다 — 그 틈에 맞히면 '협공 명중' */
 const KR_TENT_WARN = 34;
-const AW_MAW_CD = 300, AW_MAW_WARN = 60, AW_MAW_OPEN = 120, AW_TIRED = 110, AW_ASSIST = 260;
+const AW_MAW_CD = 300, AW_MAW_WARN = 60, AW_MAW_OPEN = 120, AW_TIRED = 110, AW_ASSIST = 360;   // v2.2.4: 협공 틈 260 → 360(6초)
 const AW_ATK_CD = [150, 125, 105];                                     // 페이즈별 패턴 간격
 const AW_SLAM_WARN = 52, AW_SLAM_STRIKE = 7, AW_SLAM_STUCK = 90, AW_SLAM_R = 38;   // 내려찍기 — 예고 · 내리꽂는 시간 · 박혀 있는 시간(칼자국 약점) · 닿는 폭
 const AW_SWEEP_WARN = 56, AW_SWEEP_SPD = 34, AW_SWEEP_HALF = 34;       // 휩쓸기 — 예고 · 쓸어 오는 속도 · 띠 반높이
@@ -8291,7 +8295,7 @@ const CODE2_WORDS = ["b","c","t","boss","kraken","ghost","admiral","unlocked","n
   "hunt100","allboss","best2000","best5000","best8000","combo15","flawless","quick","duel","crewall","medals","rich","nofusen","rushfast",
   "boss21","boss22","boss23",
   "classic",
-  "fx","F2lead75","P1perf1"];
+  "fx","F2lead75","P1perf1","F5assist2"];
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const utf8 = (s) => unescape(encodeURIComponent(s));
 const unutf8 = (s) => decodeURIComponent(escape(s));
@@ -12623,6 +12627,7 @@ function drawBossWarn(){
   else if(boss.type === WHALE && boss.st === "wave"){ text = "꼬리 해일! 높이 올라 넘어라"; left = boss.stT; col = "#bfe4ff"; }
   else if(boss.type === SERPENT && boss.st === "aim"){ text = "해룡이 겨눈다! 조준선에서 비켜라"; left = boss.stT; col = "#9fe0a0"; }
   else if(boss.type === SMITH && boss.st === "wind"){ text = "망치질! 끓는 자리에 용암 기둥이 솟는다"; left = boss.stT; col = "#ff8f60"; }
+  else if(boss.type === AWAKEN && boss.assistT > 0){ text = "동료 협공! 지금 맞히면 협공 명중" + (storyMode && storyRun ? " (" + Math.min(storyRun.assist, AW_ASSIST_STAR) + "/" + AW_ASSIST_STAR + ")" : ""); left = boss.assistT; col = "#9fe0a0"; }   // v2.2.4 틈이 보이게
   else if(boss.type === THUNDER && boss.warn > 0){ text = "낙뢰가 떨어질 자리를 피하라! (바위 기둥은 버틴다)"; left = boss.warn; col = "#ffe680"; }
   else if(boss.type === 4 && (boss.blowWarn > 0 || boss.blowT > 0)){
     text = boss.blowT > 0 ? "대돌풍! → 를 눌러 버텨라" : "대돌풍이 온다! 매달려 있어도 풀린다"; left = boss.blowT > 0 ? boss.blowT : boss.blowWarn; col = "#c7ecec";

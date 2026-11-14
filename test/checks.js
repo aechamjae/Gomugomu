@@ -4757,6 +4757,17 @@ const mkBoss = (P) => ({ type:0, big:false, hp:1, maxHp:1, t:0, fire:90, harpoon
   E("storyStars = " + saved + ";");
 }
 
+/* --- v2.2.4 F-5 동료 협공 2번 · 틈 6초 · 화면 표시 --- */
+{
+  const E = (x) => T().ev(x);
+  ok("v2.2.4 F-5: ★★ 조건이 협공 2번", E("STORY_ALL.find(q => q.id === 'F-5').stars.some(c => c.k === 'assist' && c.min === 2 && /2번/.test(c.text))"));
+  ok("v2.2.4 F-5: 협공 틈 6초", E("AW_ASSIST") === 360);
+  const saved = E("JSON.stringify(storyStars)");
+  E("(() => { const r = JSON.parse(recShop()); delete r.story.fx; storyStars = { 'F-5': 5 }; r.story.st = storyRec(); applyShopRecord(JSON.stringify(r)); })()");
+  ok("v2.2.4 F-5: 예전 저장의 별 2개는 3개로", E("storyBits('F-5')") === 7);
+  E("storyStars = " + saved + ";");
+}
+
 /* --- v2.1.0 클래식 모드 --- */
 {
   const a = A(), E = (x) => T().ev(x);
